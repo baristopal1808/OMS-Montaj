@@ -100,10 +100,17 @@ Kartlar son kutuya taşınmadan, bulundukları kutuda tamamlanıyor (örneğin S
 | Tür | Etiket (kart sayısı) |
 |---|---|
 | Ürün grubu | 01. PP (162), 02. SVR-NF (110), 02. SVR-VM (21), 03. OVR-S (100), 03. OVR-SG (16), 03. OVR-VM (7), 04. OVF (14), 05. WD (13), 06. SCN (176), 06. KCN (134) |
+| Ürün ailesi | .V (299): Vibrohammer; OVR ve SVR modellerinde kullanılır |
 | Kaynak | SİPARİŞ (420), STOK (127), SICAK SIPARİŞ (18), YEDEK PARCA (14) |
 | Durum | SEVKE HAZIR (44), Test Aşamasında (4), Volvo Bekleniyor (1) |
 | İş türü | Motor Pompa Hattı (18), Yarı Mamül (13), Bakım & Onarım (6), SG CENE (2), PP Pompa Montajı (1) |
-| Anlamı bilinmeyen | .V (299), DKM (27), BGM (4) |
+| Alt montaj | DKM (27): dişli kutusu montajı; BGM (4): balans grubu montajı |
+
+Anlamlar (kullanıcı, 20/10/2026):
+
+- **SCN ve KCN:** OVR-S, OVR-SG, SVR-NF ve SVR-VM'ye bağlanan hidrolik çeneler. Sipariş taleplerinde en az bir çene, bazen ikisi birden bulunur.
+- **DKM (dişli kutusu montajı):** OVR ve SVR modellerinin alt montajı; montajın yaklaşık yarısını kapsar.
+- **BGM (balans grubu montajı):** dişli kutusu montajında kullanılan alt montaj.
 
 "03.  OVR-SG" etiketi iki boşlukla yazılmış; aktarımda boşluklar sadeleştirilir.
 
@@ -131,6 +138,79 @@ Aynı madde farklı yazımlarla geçiyor ("Metal Etiket / Metal Etiketi / Metal 
 
 **Aktarım için anlamı.** Kart, kutu, durum, etiketler, kişiler, tarihler, kontrol listesi maddeleri ve notlar aktarılabilir. Notlardaki ve kontrol listesindeki İEN, sipariş no ve seri no'lar ayrıştırılıp ERP kayıtlarıyla eşleştirilebilir. Sohbet ve ekler bu dosyadan gelmez.
 
+### 2.2 Sipariş talebi formu (20/10/2026 incelemesi)
+
+Kaynak: kullanıcının sohbette paylaştığı dört sipariş talebi görüntüsü (`OMS Veri/erp/` klasöründe): iki makine, bir servis, bir yedek parça. Form ERP'den çıkıyor. Burada yalnızca yapı var.
+
+- **Üst kısım:** tarih (talebin onaylanıp sisteme girildiği gün), sayfa; sipariş no (proje kodu biçiminde), sipariş tipi, teslim tarihi (müşteriyle anlaşılan son sevk tarihi).
+- **Sipariş tipi üç tane:** makine, yedek parça, servis.
+- **Satırlar:** ürün kodu, ürün adı, miktar, seri no, açıklama.
+- **Alt kısım:** serbest bir "Not" alanı ve talebi veren ile alan kişilerin adları.
+
+**Makine talebi**
+
+- **Seri no talep anında veriliyor:** "<sipariş no>-<tür>-<sıra>" biçiminde. Türler VH (vibrohammer), PP (güç ünitesi), HC (hidrolik çene). 2 adetlik satırda iki seri no yazılı.
+- **Kiriş satırı:** seri no'su yok. Ürün adında kirişin hangi vibrohammer modeli için olduğu yazıyor; bazen çene modeli de yazıyor.
+- **Kablosuz kumanda seti ve uzaktan erişim modülü:** kendi ürün kodlarıyla ayrı satır.
+- **Aksesuar satırları:** seri no'suz (örneğin hortum seti).
+- **Renk:** vibrohammer satırının açıklamasında "Renk: …".
+- **Yağ:** PP satırının açıklamasında; yazımı değişiyor: "yağsız sevk edilecektir", "<yağ adı> yağlı sevk" ya da yalnızca yağın adı ("<yağ adı> - Hidrolik Yağ"). Bazen hiç yazmıyor.
+
+**Servis talebi.** Satırlar bakım-onarım ürün kodları (kodun sonunda "-MNT"; örneğin güç ünitesi ve vibro çakıcı bakım-onarımı). Seri no sütunu boş; bakımı yapılacak makinelerin seri no'ları Not alanında serbest metinle yazıyor. Eski makinelerin seri no'su yalnızca sayıdan oluşabiliyor.
+
+**Yedek parça talebi.** Çok sayıda parça satırı, adetleri yüksek, seri no yok. Nakliye gibi hizmet satırları da var.
+
+### 2.3 ERP örnek dosyaları (20/10/2026 incelemesi)
+
+Dosyalar `OMS Veri/erp/` klasöründe. Burada yalnızca yapı ve sayılar var. Dosyalar eski Excel biçiminde (.xls); yalnızca çıkış yapılamayan malzeme raporu .xlsx. Tarihlerin çoğu Excel gün sayısı olarak geliyor.
+
+| Dosya | Boyut | İçerik |
+|---|---|---|
+| Sipariş talepleri | 136 satır, 37 sipariş, 115 sütun | Açık siparişlerin satırları; her satır bir sipariş kalemi |
+| Siparişi tamamlanan sipariş talepleri | 283 satır, 94 sipariş | Aynı rapor, kapalı siparişler |
+| Açık iş emirleri | 227 satır, 83 iş emri, 75 sütun | Her iş emrinin alt satırları var (sıra no) |
+| Kapalı iş emirleri listesi | 1.316 satır, 471 iş emri, 75 sütun | Açık iş emirleriyle aynı biçim; kapatma tarihleri Temmuz 2024'ten başlıyor |
+| Çıkış yapılamayan malzeme | 3.305 satır, 26 sütun | Açık iş emirlerinin malzeme satırları |
+| Stok raporları: montaj depo, montaj üretim depo, sevk depo | her biri yaklaşık 7.700 satır, 17 sütun | Bütün malzemeler; miktarı 0'dan büyük olan 2.306 / 26 / 52 |
+
+**Sipariş talepleri listesi**
+
+- Formun (2.2) bilgileri satır satır var: sipariş no ve sıra no, ürün kodu ve adı, miktar, sevk edilen miktar ve bakiye, uzlaşılan sevk tarihi, onay tarihi, açıklama (renk, yağ), sipariş açıklaması (formdaki "Not").
+- Seri no'lar "Planlama Bilgisi" sütununda; birden çok adet varsa " & " ile ayrılmış.
+- "Bağlı İşemri No" bazı satırlarda dolu: açık listede 31/136, tamamlanan listede 90/283.
+- Sipariş durumu: açık listede Onaylı, Beklemede, İptal; tamamlanan listede Kapalı.
+- Sipariş detay türü formdaki sipariş tipidir: MAKİNA, YEDEK P., SERVİS. İptal satırlarda boş.
+- ERP'nin kendi "Ürün Durumu" sütunu var: İmalatta, Montajda, Hazır, Sevke Hazır.
+- Tamamlanan listede ilk ve son sevk tarihi dolu.
+- Müşteri adı ve satış temsilcisi de var (uygulama ekranda gösterebilir; belgelere yazılmaz).
+
+**Açık iş emirleri**
+
+- Her iş emrinin sıra no 0 satırı ana üründür; diğer sıralar alt montajlar ve işlemlerdir (dişli kutusu, balans, hortum hatları, kumlama, astar, boya, PP alt montajları…). Bir iş emrinde 100'den fazla alt satır olabiliyor.
+- Dişli kutusu ve balans montajları çoğunlukla ana makinenin iş emrinin alt satırı; bazen stok için ayrı iş emri. Motor-pompa hattı ayrı iş emri.
+- Kaynak tipi: Montaj, Üretim, Bakım-Onarım. Envanter tipi: Son Ürün, Yarı Mamul.
+- Proje bağlantısı: dolu 169 açıklamanın 136'sında proje kodu geçiyor ("… projesi için üretilecektir" gibi; yazımı değişiyor), 32'sinde "stok" geçiyor. "Sip. No" sütunu 76 satırda dolu, gerisinde "---".
+- PP iş emirlerinin açıklamasında motor seri no'ları da yazılabiliyor.
+- Planlanan, gerçekleşen ve kalan miktar; açılış, başlama ve tahmini bitiş tarihi; ilk ve son stok giriş tarihi var.
+- Tamamlanmış iş emirleri ayrı dosyada (kapalı iş emirleri listesi). Orada kapatma tarihi ve ilk/son stok giriş tarihi neredeyse her satırda dolu; açıklamaların çoğunda proje kodu, bir kısmında "stok" geçiyor. Birkaç kapatma tarihi ileri bir güne düşüyor.
+
+**Çıkış yapılamayan malzeme raporu**
+
+- Başlığı "Montaj açık iş emri raporu"; açık iş emirlerinin bütün malzeme satırlarını veriyor. 906 satırda planlanan takip miktarı gerçekleşen çıkıştan büyük (217 iş emri/sıra).
+- Malzemenin her depodaki miktarı da var (ana ürün, üretim, montaj, montaj üretim, sevk).
+- İş emri no "no / sıra" biçiminde tek sütunda; iş emri açıklaması ve rota da var.
+
+**Stok raporları**
+
+- Her depo ayrı dosya; dosyada depo kodu boş, depo dosyadan anlaşılıyor.
+- Bütün malzemeler listeleniyor, çoğunun miktarı 0. Bitmiş ürünler montaj üretim deposunda (26 kalem) ve sevk deposunda (52 kalem); montaj deposunda çoğunlukla parça var.
+
+**Ürün kodu önekleri**
+
+- SVR, OVR, OVF, WD, PP, SCN, KCN: ürün aileleri. Sonu "-MNT" ile biten kod bakım-onarımdır.
+- CB: kiriş. CP ve P: yarı mamul ve alt montajlar (P: PP alt montajları). Sonu "-HH" ile biten: hidrolik hortum seti.
+- OZ: malzeme ve aksesuar; "OZ-<proje>-PR-0x" biçimindeki kodlar projeye özel ürün (bağlantı çatalı, uzatma bomu, mandrel…).
+
 ## 3. Yapı önerisi (taslak; uygulama planıyla kesinleşir)
 
 - Planner'ın pano mantığını taşıyan, verisini ERP'den alan ayrı bir web uygulaması. Fabrikanın iç ağında çalışır; bilgisayardan ve telefondan tarayıcıyla açılır. Teknolojisi ve kurulumu eski portalla aynı ailedendir (Python, SQLite, Docker; bat dosyasıyla başlatma); kodu ve veritabanı ayrıdır.
@@ -139,6 +219,44 @@ Aynı madde farklı yazımlarla geçiyor ("Metal Etiket / Metal Etiketi / Metal 
 - Kontrol listesindeki bilgiler (seri no, RAL, yağ…) ayrı alanlar olur; "yapıldı mı?" soruları kontrol maddesi olarak kalır.
 - **Veri kaynağı katmanı.** ERP verisini getiren kısım uygulamanın geri kalanından ayrıdır. Bugün buraya Excel yüklemesi, ileride doğrudan ERP bağlantısı takılır. Uygunsuzluk ve DÖF uyarıları da sonradan aynı biçimde, iş emri numarasıyla bağlanan bir "uyarı kaynağı" olarak eklenir.
 - **Elenen seçenek:** Planner'da kalıp ERP'den Planner'ı güncelleyen bir köprü. IT'den Microsoft 365 izni gerekir ve Planner'a kendi alanlarımız (seri no, uygunsuzluk uyarısı) eklenemez. Ayrı uygulamada ise Teams bildirimleri olmaz (soru 7).
+
+### 3.1 Aşamalar (soru 4; denemelerde kesinleşir)
+
+Aşamaların adı ve sırası Ayarlar'dan düzenlenir.
+
+**Son ürün** (vibrohammer, PP, çene, kiriş…)
+
+| Aşama | Kart buraya nasıl gelir |
+|---|---|
+| Sipariş | ERP: sipariş talebi geldi, iş emri henüz yok |
+| Malzeme hazırlık | ERP: iş emri açıldı (siparişe bağlı ya da stok) |
+| Montaj | Elle |
+| Teste hazır | Elle |
+| Test | Elle |
+| Temizlik | Elle |
+| Sevke hazır | Elle; temizlik ve motor açılışı yapılınca |
+| Sevk edildi | Elle, irsaliye sonrası (soru 9) |
+
+- **Stok için yapılan ürün** montaj bitince "Stokta" aşamasına geçer (Planner'daki "Sevke hazır / Stok"). Test edilmediyse kartında "Test bekliyor" uyarısı olur. Siparişe atanınca kalan aşamalardan devam eder: test edilmediyse teste, sonra temizliğe.
+- **İş emrinin ERP'de tamamlanması** kartı kendiliğinden taşımaz; zaman akışında olay olarak görünür. Ürün sevk deposunda değilse uygulama "Testi yapıldı mı?" diye sorar.
+- **Motor açılışı** kontrol maddesi olarak kalır; "Volvo açılış için bekleniyor" bekleme etiketidir. Motor açılışı işaretlenmemiş kart sevke hazıra geçirilmek istenirse uygulama uyarır.
+
+**Yarı mamul** (DKM, BGM, motor-pompa hattı): Malzeme hazırlık → Montaj → Hazır. Makineye takılınca kart kapanır. Planner'daki yarı mamul kutusu ayrıca gerekmez; yarı mamuller filtreyle ayrılır.
+
+### 3.2 ERP raporları (soru 8)
+
+Uygulama ERP'den yalnızca okur. Örnekler `OMS Veri/erp/` klasöründe; yapıları 2.3'te.
+
+| Rapor | Ne için | Örnek |
+|---|---|---|
+| Sipariş talepleri (açık) | Sipariş ve ürün kartları; seri no, teslim tarihi, renk, yağ, aksesuar | Var |
+| Siparişi tamamlanan sipariş talepleri | "Sevk edildi, kartı kapatayım mı?" | Var |
+| Açık iş emirleri | Kartın malzeme hazırlığa geçmesi, bağlantı, alt montajlar | Var |
+| Kapalı iş emirleri | İş emrinin ERP'de tamamlanması | Var |
+| Çıkış yapılamayan malzeme | Açık kalem uyarısı | Var |
+| Stok raporları (montaj depo, montaj üretim depo, sevk depo) | İlk stok kaydı, "depoda stok mevcut", test sorusu | Var |
+
+Uygulamanın .xls ve .xlsx dosyalarını okuyabilmesi için Python'a Excel okuma kütüphaneleri eklenmesi gerekecek. Uygulama planında onaya sunulur.
 
 ## 4. Açık sorular
 
@@ -150,38 +268,49 @@ Cevaplanan soru 5. bölüme taşınır; numaralar değişmez.
 
 **Kapsam**
 
-2. Hangi ürünler takip edilecek? Etiketlerde 10 ürün grubu var (2.1): hepsi mi takip edilecek? KCN ve SCN ne demek? Anlamı bilinmeyen etiketler ne anlatıyor: ".V" (299 kart), DKM, BGM? Bakım ve onarım işleri bu uygulamaya girecek mi?
-3. "Ürün bazında" derken bir kart bir fiziksel ürün mü demek? 2 adetlik bir siparişe 2 kart mı açılıyor? Sipariş kartının kontrol listesinde siparişteki ürünler "1X ürün (İEN:…)" diye sıralanıyor ve Siparişler kutusunda 130 tamamlanmış kart var. Sipariş kartı, ürünlerin kartları açılınca mı tamamlanıyor?
-4. Kutular ve geçişler. Dışa aktarımda görülen: STOK etiketli kartlar da sipariş kartlarıyla aynı kutulardan geçiyor; altıncı kutuda ("Üretilmesi planlanan veya Üretilen Yarı Mamüller") yalnızca 6 kart var ve hepsi tamamlanmış. Öneri:
-
-   | Olay | Kartın gideceği kutu | Nasıl |
-   |---|---|---|
-   | Sipariş geldi, iş emri yok | Siparişler | ERP'den |
-   | Siparişe bağlı iş emri açıldı | Malzemeler hazırlık | ERP'den |
-   | Siparişe bağlı olmayan stok iş emri açıldı | Malzemeler hazırlık, "STOK" işaretiyle | ERP'den |
-   | Montaja başlandı | Montajı devam edenler | Elle |
-   | Son montaja ve teste geçildi | Son montaj & test | Elle |
-   | İş emri ERP'de tamamlandı | Sevke hazır / Stok | ERP'den |
-   | Sevk edildi | Tamamlandı | Soru 9'a bağlı |
-
-   Yarı mamul kutusu hâlâ kullanılıyor mu, yeni sistemde kalsın mı?
-5. Kontrol listeleri bugün standart değil: aynı madde farklı yazılıyor, kartların bir kısmında hiç yok (2.1). Her ürün grubu için sabit bir şablon belirleyelim mi? PP için öneri:
-   - alanlar: motor seri no, kabin rengi, yağ
-   - kontrol maddeleri: motor açılışı, metal etiket, pompa montajı, uzaktan erişim modülü, kablosuz kumanda
-6. Karttaki son tarih siparişin sevk tarihi mi, montaj hedefi mi? Dışa aktarımda yalnızca 104 kartta dolu. Sevk tarihiyse ERP'den kendiliğinden dolabilir.
-7. Uygulamayı kimler, kaç kişi kullanacak? Planda bugün 5 kişi var. Kim değişiklik yapacak, kim yalnızca bakacak? Telefondan kullanım ve "kart size atandı" gibi Teams bildirimleri ne kadar önemli?
+2. ~~Hangi ürünler takip edilecek?~~ Cevaplandı (5. bölüm).
+15. ~~Etiketlerin yapısı~~ Cevaplandı (5. bölüm).
+3. ~~Kart ve ürün ilişkisi~~ Cevaplandı (5. bölüm).
+16. ~~Bağlama ayrıntıları~~ Cevaplandı (5. bölüm).
+18. ~~Kirişler~~ Cevaplandı (5. bölüm).
+4. ~~Aşamalar ve geçişler~~ Cevaplandı (5. bölüm; aşama listesi 3.1'de).
+5. ~~Kontrol listesi şablonları~~ Cevaplandı (5. bölüm).
+22. Vibrohammer ailesinin (SVR, OVR) ve diğerlerinin (OVF, WD, çene, kiriş, DKM, BGM, motor-pompa hattı) şablonları. Kullanıcı kararıyla ileriye bırakıldı. Kesin olan: vibrohammer'da "Metal etiket yapıştırıldı mı?" maddesi. Başlangıç önerisi: her son üründe seri no alanı, çenede çene no, motor-pompa hattında motor seri no; gerisi Ayarlar'dan eklenir. Planner notlarında sık geçen bilgiler: çene no, şanzıman (seri) no, motor seri no, etiket seri no, şasi no, renk.
+23. ~~Motor eksperi~~ Cevaplandı (5. bölüm).
+24. ~~Sipariş talebi formu~~ Cevaplandı (5. bölüm).
+25. ~~Yedek parça siparişi~~ Cevaplandı (5. bölüm).
+26. ~~Servis siparişi~~ Cevaplandı (5. bölüm; denemelerde çalışılacak).
+6. ~~Karttaki son tarih~~ Cevaplandı (5. bölüm).
+7. ~~Kullanıcılar ve yetkiler~~ Cevaplandı (5. bölüm).
+28. ~~Ana ekran ve pano~~ Cevaplandı (5. bölüm).
+34. ~~Kart olan satırlar~~ Cevaplandı (5. bölüm).
+35. ~~Yazı boyutu~~ Cevaplandı (5. bölüm).
 
 **ERP verisi**
 
-8. Eski projede kullanılan iki ERP raporunun (iş emirleri listesi, sipariş satırları listesi) yapı bilgisi kullanılabilir mi? Kod kopyalanmaz, yalnızca raporların yapısı kullanılır. Bu kez raporlar takip edilen bütün ürünler için alınır.
-9. Sevkiyat ERP'de nereden anlaşılıyor: sipariş satırlarındaki "Ürün durumu"ndan mı, irsaliye ya da sevk raporundan mı?
-10. "Sipariş talebi" ERP'de satış siparişinin kendisi mi (örneğin durumu "Beklemede" olan sipariş), yoksa siparişten önce açılan ayrı bir belge mi?
-11. İş emrinin hangi siparişe ait olduğu ERP'de yalnızca açıklamaya mı yazılıyor, yoksa raporda ayrı bir "sipariş no" sütunu çıkarılabiliyor mu? Ayrı sütun varsa eşleştirme çok daha güvenilir olur.
-12. ERP bağlantısı geldiğinde de yalnızca okunacak, ERP'ye hiçbir şey yazılmayacak; doğru mu?
+8. ~~ERP raporları~~ Cevaplandı (5. bölüm; rapor listesi 3.2'de).
+9. ~~Sevkiyat~~ Cevaplandı (5. bölüm).
+10. ~~Sipariş talebi ERP'de nedir?~~ Cevaplandı: ERP'deki sipariş talebi belgesi; formu Excel olarak alınır (5. bölüm, soru 24b ve 27).
+11. ~~İş emri ile sipariş bağlantısı~~ Cevaplandı (5. bölüm).
+12. ~~ERP'ye yazma~~ Cevaplandı (5. bölüm).
+17. ~~Açık kalem raporu~~ Cevaplandı (5. bölüm).
+19. ~~Çene no ve stoğa alınış tarihi~~ Cevaplandı (5. bölüm).
+20. ~~Ürünün hangi depoda olduğu~~ Cevaplandı (5. bölüm).
+29. ~~Toplu liste~~ Cevaplandı (5. bölüm).
+30. ~~Beklemede siparişler~~ Cevaplandı (5. bölüm).
+31. ~~ERP ürün durumu~~ Cevaplandı (5. bölüm).
+32. ~~Tamamlanan iş emirleri~~ Cevaplandı (5. bölüm).
+33. ~~Eksik miktar~~ Cevaplandı (5. bölüm).
+21. ~~Kablosuz kumanda, uzaktan erişim ve yağ sipariş talebinde nasıl yazılıyor?~~ Cevaplandı (5. bölüm).
+27. ~~Sipariş talebinin Excel hali~~ Cevaplandı (5. bölüm).
 
 **Geçmiş veri**
 
-13. Dışa aktarımda Şubat 2025'ten bu yana 638 kart var, 500'ü tamamlanmış. Hepsi aktarılsın mı, yoksa belli bir tarihten sonrası mı? Planner bir süre yeni uygulamayla birlikte kullanılacak mı, geçiş tek seferde mi olacak? Kontrol listesi kısmen işaretli 63 kartta hangi maddenin yapıldığı bilinmiyor. Bu maddeler "bilinmiyor" olarak mı aktarılsın, yoksa açık kartlarda ekip bir kez gözden mi geçirsin?
+13. Dışa aktarımda Şubat 2025'ten bu yana 638 kart var, 500'ü tamamlanmış. Öneri:
+   - (a) Açık 138 kart canlı kayıt olarak aktarılır ve ERP kayıtlarıyla (İEN, sipariş no) eşleştirilir. Eşleşmeyenler kullanıcıya sorulur.
+   - (b) Tamamlanmış 500 kart "Planner arşivi" olarak aktarılır: değiştirilmez, ama İEN, seri no ya da sipariş no ile aranabilir. Servis kartı bir makinenin geçmişini buradan da bulur.
+   - (c) Kontrol listesi kısmen işaretli kartlarda maddeler "bilinmiyor" olarak gelir; açık kartlarda ekip bir kez gözden geçirir.
+   - (d) Denemeler süresince Planner da kullanılır; uygulama oturunca Planner tek seferde bırakılır. Bu süre ne kadar olsun?
 14. Görev sohbeti dışa aktarımda yok. Seçenekler:
     - (a) Eski sohbetler Planner'da arşiv olarak kalır; açık kartların (138) önemli notları yeni uygulamaya elle girilir.
     - (b) Sohbetler Microsoft'un programlama arayüzüyle (Graph) okunmaya çalışılır. IT izni gerekir ve yeni Planner sohbetinin bu yolla okunup okunamadığı belirsiz.
@@ -199,3 +328,57 @@ Cevaplanan soru 5. bölüme taşınır; numaralar değişmez.
 | 19/10/2026 | Gerçek adlar | Müşteri ve çalışan adları `OMS Veri/yasakli-kelimeler.txt` listesinde kalır ve git'e giren hiçbir dosyada geçmez. Uygulama çalışırken gerçek veriden gelen adları (atanan kişi, müşteri) ekranda aksamadan gösterir (kullanıcı teyit etti, 20/10/2026). |
 | 19/10/2026 | Veri yedeği | `OMS Veri/` sunucuya yedeklenir (`yedekle.bat`, `/kaydet`). 20/10/2026: kullanıcı kararıyla şimdilik ertelendi; araç hazır, `yedek-hedefi.txt` yazılınca çalışır. Aday klasör kullanıcının sunucudaki kişisel klasörü (Ortak_Alan altında; başkalarının görüp göremediği netleşmeli). |
 | 19/10/2026 | Oturum düzeni | `/devam`, `/kaydet`, oturum açılış hatırlatması, git kapı bekçisi ve Claude koruması kuruldu (CLAUDE.md, Korumalar). `/kaydet` yazmak commit ve push onayıdır. |
+| 20/10/2026 | Takip kapsamı | Etiketlerdeki 10 ürün grubunun hepsi takip edilir; alt montajlar (DKM, BGM), yedek parça ve bakım-onarım işleri de. Etiketlerin anlamları 2.1'de. |
+| 20/10/2026 | Etiketleri kullanıcı yönetir | Kullanıcı etiketleri uygulamanın içinden ekler ve adlarını değiştirir. Bu yalnızca ürün grupları için değil; sevke hazır, teste hazır, Volvo açılış için bekleniyor, temizlik aşamasında, sipariş, bakım-onarım gibi etiketler için de geçerlidir. Yapı önerisi: soru 15. |
+| 20/10/2026 | Filtre | Kartlar montaj grubuna göre (OVR, SVR, PP…) filtrelenip görüntülenebilmeli. |
+| 20/10/2026 | Etiket yapısı (soru 15) | Etiketler gruplanır (ürün grubu, kaynak, iş türü, bekleme) ve Ayarlar'dan yönetilir. Adı değişen etiket bütün kartlarda yeni adla görünür; kullanılmayan etiket silinmez, pasif yapılır. Ürün grubu iki basamaklıdır: aile (PP, SVR, OVR, OVF, WD, Çene) ve model. Planner'daki numaralar yalnızca sıralama içindi; adlara numara eklenmez, sıra Ayarlar'dan verilir. ".V" etiketi kalkar; SVR ile OVR'nin hepsi vibrohammer (vibroçakıcı) ailesindedir ve bunları birlikte gösteren hazır bir "Vibrohammer" filtresi olur. |
+| 20/10/2026 | Elle ilerleyen aşamalar | Teste hazır, temizlik ve sevke hazır etiket değil, aşamadır. Ekip gözleme dayanarak elle ilerletir; ERP'de karşılıkları yoktur. Temizlik ve motor açılışı yapılınca ürün sevke hazır olur. Aşama listesini kullanıcı Ayarlar'dan düzenler. |
+| 20/10/2026 | Bağlı kartlar (soru 3'ün bir kısmı) | Çene (SCN, KCN), dişli kutusu montajı (DKM), balans grubu montajı (BGM) ve PP'nin motor-pompa hattı ayrı kartlarla izlenir. DKM, BGM ve motor-pompa hattı yarı mamuldür; çene ise vibrohammer ve powerpack gibi son üründür. Ana ürünün kartında bağlı kartların durumu görünür ("Çene: hazır", "Motor-pompa hattı: hazır"). |
+| 20/10/2026 | Bir kart bir ürün (soru 3) | Her fiziksel ürünün ayrı kartı olur; 2 adetlik siparişe 2 kart açılır. Bağlı kart son aşamasına gelince ana kartta "Hazır" yazar; öncesinde bulunduğu aşama yazar. |
+| 20/10/2026 | Bağlantı kuralı (soru 3) | ERP'de bağlantı varsa kartlar kendiliğinden bağlanır (PP alt montajları ERP'de her zaman projeye bağlanıyor). Bağlantı yoksa (vibro tarafında iş emri bazen stok olarak açılıyor) uygulama kendisi bağlamaz, kullanıcıya sorar. Adaylar iş emri no ve açılış tarihiyle listelenir. İş emrinde depodan çıkışı yapılmamış malzeme (açık kalem) varsa o da gösterilir ve sorulur: "5 adet cıvatanın çıkışı yapılmamış, bilginiz var mı?" Ayrıntılar: soru 16 ve 17. |
+| 20/10/2026 | Stok eşleştirme (soru 16) | (1) Bağlantısız bir stok iş emri tamamlanınca, aynı ürünü bekleyen bir sipariş varsa uygulama bağlamayı sorar. (2) Yeni sipariş yüklenince, depoda aynı üründen stok varsa ürünün yanında "depoda stok mevcut" ibaresi çıkar. Stokların çene no'su, iş emri açılış tarihi ve stoğa alınış tarihi listelenir; atamayı kullanıcı yapar. Çene no ve stoğa alınış tarihi uygulamadaki stok kaydından, iş emri açılış tarihi İEN girilmişse ERP'den gelir (soru 19). |
+| 20/10/2026 | Çene ve kiriş (soru 16) | Çene siparişe değil, belirli bir vibrohammer'a bağlanır. Montajda kiriş SVR'ye, çeneler kirişe bağlanır. SVR ürünlerinde çeneler demonte sevk edilir. Kirişin takibi: soru 18. |
+| 20/10/2026 | Açık kalem raporu (soru 17) | ERP'den alınabilir: rapor, çıkış yapılamayan malzemeyi iş emri ve eksik miktarla gösterir. |
+| 20/10/2026 | Kirişler (soru 18) | Kirişler ürünlerden bağımsız iş emriyle yapılır ve müşteri talebine göre eklenir. Standart değildir: 6-7 farklı kiriş montajı var ve her kiriş her vibrohammer'a uymaz. Hangi kirişin istendiği sipariş talebinden izlenir. |
+| 20/10/2026 | Seri numaraları (soru 19) | Çene no, motor-pompa hattındaki Volvo motorunun seri no'su ve son ürünlerin seri no'su iş emri tamamlanırken yazılır; ürün seri no'suyla stoğa alınır. ERP bunları bugün tek tek veremiyor (değişirse kullanıcı haber verecek). Bu yüzden seri no'lar uygulamada tutulur: ürün stoğa alınırken ekip İEN'yi ve seri/çene no'yu uygulamaya girer. |
+| 20/10/2026 | İlk stok kaydı (soru 19) | Sistemin oturması için eldeki stoklar bir kez kaydedilir. Kullanıcı ERP stok raporunu verir; uygulama malzemeyi, depo konumunu (sevk depo, montaj depo, montaj üretim depo…) ve adedi çıkarır, her adet için çene/seri no ve gerekirse İEN girilecek bir alan sunar. |
+| 20/10/2026 | Kiriş ve çene görünümü (soru 18) | Kiriş ve çene vibrohammer kartında bağlı kart olarak görünür; şimdilik yeterli. Montajda kiriş SVR'ye, çene kirişe bağlanır. |
+| 20/10/2026 | Aşamalar (soru 4) | Başlangıç listesi 3.1'deki gibidir; aşamalar denemelerde kesinleşir ve Ayarlar'dan düzenlenir. DKM, BGM ve motor-pompa hattı kartları makineye takılınca kapanır. |
+| 20/10/2026 | Test edilmeden stok (soru 4) | Ürün test edilmeden stoğa alınabilir; özellikle OVR'ler. Müşteri yoksa test için powerpack ya da zaman olmayabiliyor. Müşteri talep edince ürün teste alınır, temizlenir, sevke hazır olur ve sevk edilir. Test edilmemiş ürünün kartında "Test bekliyor" uyarısı görünür. |
+| 20/10/2026 | ERP tamamlaması (soru 4) | İş emri yüzde 90 oranında montaj bitince ERP'de tamamlanır; ürün sevk deposuna değil, montaj üretim deposuna alınır. Ürün sevk deposunda değilse uygulama "Testi yapıldı mı?" diye sorar; ürün cevaba göre stokta "test edildi" ya da "test bekliyor" olarak bekler. Depo bilgisinin kaynağı: soru 20. |
+| 20/10/2026 | Kontrol listesi şablonları (soru 5) | Her ürün ailesinin, kullanıcının Ayarlar'dan düzenlediği bir şablonu olur: bilgi alanları ve "yapıldı mı?" maddeleri. Bir madde koşullu olabilir: yalnızca sipariş talebinde ilgili kalem varsa karta gelir. |
+| 20/10/2026 | PP şablonu (soru 5) | Alanlar: PP seri no, kabin seri no (müşterinin verdiği), motor seri no, kabin rengi (RAL), yağ (yağlı sevk ve yağ türü, ya da yağsız sevk). Kontrol maddeleri: motor açılışı tamamlandı mı, motor eksper işlemi yapılacak mı, metal etiket yapıştırıldı mı, pompa montajı tamamlandı mı. Uzaktan erişim modülü ve kablosuz kumanda seti yalnızca sipariş talebinde varsa gelir. Ayrıntılar: soru 21 ve 23. |
+| 20/10/2026 | Vibrohammer şablonu (soru 5) | İleriye bırakıldı (soru 22). Kesin olan: "Metal etiket yapıştırıldı mı?" maddesi. |
+| 20/10/2026 | Motor eksperi (soru 23) | "Motor eksper işlemi yapılacak mı?" cevabı evetse kartta "Eksper bekleniyor" ibaresi çıkar. Kullanıcı eksper bölümünden "Eksper yapıldı"yı seçer; yapıldığı tarih görünür. Motor açılışıyla sırası fark etmez: test edilmiş ve motor açılışı yapılmış ürünün eksperi sonradan yapılabilir. Motor milli ise eksper yapılmaz. Eksperin yakında tamamen kalkması planlanıyor; madde Ayarlar'dan pasif yapılabilmeli. |
+| 20/10/2026 | Tarihler (soru 6) | Kartın son tarihi müşteriyle anlaşılan son sevk tarihidir; yaklaşınca turuncu, geçince kırmızı görünür. Kartın açılış tarihi de bilgi olarak görünür. Kullanıcı montaja başlarken kartın notuna bilgi yazıyor; yeni sistemde bu notlar kartın zaman akışına yazılır. Son sevk tarihinin kaynağı: sipariş talebindeki teslim tarihi (soru 24c). |
+| 20/10/2026 | Seri no ve çene no (soru 24a) | Sipariş talebindeki seri no (sipariş anında verilir, "<sipariş no>-HC-01" gibi) çene ürününün seri numarasıdır. Çene no ise çene montajında kullanılan parçanın numarasıdır ve iş emri tamamlanırken yazılır. İkisi farklıdır; kartta ayrı ayrı görünür. |
+| 20/10/2026 | Sipariş talebinin kaynağı (soru 24b) | Sipariş talebi formu ERP'den çıkıyor. Kullanıcı formun Excel halini verecek; siparişler buradan okunur. |
+| 20/10/2026 | Form tarihleri (soru 24c) | Sağ üstteki tarih, sipariş talebinin onaylanıp sisteme girildiği tarihtir. Teslim tarihi, müşteriyle anlaşılan son sevk tarihidir; kartın son tarihi buradan gelir. |
+| 20/10/2026 | Aksesuarlar (soru 24d) | Hortum seti gibi aksesuarlar sipariş kartında listelenir. Aksesuar için ERP'de ayrı bir sipariş talebi açılıyor ve yanına hangi proje için ya da stok için istendiği not olarak yazılıyor; bu not ERP'den çekilemeyebilir. Aksesuar, ait olduğu proje ve ERP sipariş no ile izlenir. Takibin ayrıntısı: soru 24 (f). |
+| 20/10/2026 | Yağ (soru 21) | PP satırının açıklamasında "yağsız sevk edilecektir", "<yağ adı> yağlı sevk" ya da yalnızca yağın adı yazıyor; bazen hiç yazmıyor. Uygulama yağ bilgisini açıklamadan okur. Yağ ibaresi yoksa kartta bilginin netleştirilmesini ister. |
+| 20/10/2026 | Kablosuz kumanda ve uzaktan erişim (soru 21) | Sipariş talebinde kendi ürün kodlarıyla ayrı satır olarak geçiyor. Bu satırlar varsa PP kartına ilgili kontrol maddesi kendiliğinden eklenir. Hangi ürün kodunun hangi maddeyi getireceği Ayarlar'dan tanımlanır. |
+| 20/10/2026 | Sipariş tipleri (soru 24e) | Üç tip var: makine, yedek parça, servis. Tip, kartın etiketini kendiliğinden verir: makine → sipariş, yedek parça → yedek parça, servis → bakım-onarım. |
+| 20/10/2026 | Aksesuar takibi (soru 24f) | Şimdilik yeterli: sipariş kartında aksesuar satırının yanında ERP talep no ve durum (bekleniyor / hazır) görünür. Talep no ERP'den eşleşemezse kullanıcı yazar. Stok raporunda aynı ürün kodu varsa depodaki adet gösterilir. Denemelerde yeniden bakılır. |
+| 20/10/2026 | Yedek parça siparişi (soru 25) | Sipariş başına tek kart açılır; parçalar kartın içinde liste olarak görünür. Aşamalar: Sipariş → Hazırlanıyor → Sevke hazır → Sevk edildi. Nakliye gibi hizmet satırları gösterilmez. |
+| 20/10/2026 | Servis siparişi (soru 26) | Servis siparişi seyrek geliyor. Takibi denemelerde birlikte çalışılacak; kullanıcı görmek istediği verileri o zaman paylaşacak. Başlangıç taslağı: bakıma gelen her makine bir kart; seri no Not alanından okunur ya da elle yazılır; seri no kayıtlı bir makineye aitse servis kartı o makinenin geçmişine bağlanır. Aşamalar: Makine geldi → Bakım-onarım → Test → Sevke hazır → Sevk edildi. |
+| 20/10/2026 | Sipariş talebinin Excel hali (soru 27) | ERP sipariş talebi formunu Excel olarak da veriyor. Soru 29 ile değişti: tek tek form yerine toplu sipariş talepleri listesi yüklenir. |
+| 20/10/2026 | Kullanıcılar (soru 7a) | Uygulamayı Planner'daki 5 kişi kullanır; değişirse kullanıcı haber verir. |
+| 20/10/2026 | Giriş ve yetkiler (soru 7b) | Herkes kendi kullanıcı adı ve şifresiyle girer; zaman akışında kimin ne yaptığı görünür. Deneme süresince yetki ayrımı yok, herkes her şeyi yapabilir. Yetkiler ileride kullanıcının isteğiyle kişi kişi tanımlanır; yapı buna hazır kurulur. |
+| 20/10/2026 | Telefon ve fotoğraf (soru 7c) | Uygulama telefondan rahat kullanılmalı. Ürünle ilgili bir hata ya da bekleme durumu için karta fotoğraf eklenebilmeli; fotoğraf o karta aittir. Fotoğraflar gerçek veridir, git'e girmez. |
+| 20/10/2026 | E-posta bildirimi (soru 7d) | Denemelerden sonra karar verilecek: hangi olayların kime e-postayla gideceği değerlendirilecek. |
+| 20/10/2026 | Sipariş kartı ana kalemdir | Ana giriş noktası sipariş kartıdır. Sipariş kartında ürünler bölüm bölüm görünür (vibrohammer, PP, çene…); her ürünün içinde konuşulan her şey yer alır: aşama, kontrol listesi, seri no'lar, bağlı kartlar, notlar, fotoğraflar. ERP örnek Excel'lerinden gelen bilgiler de buraya işlenir. Ana ekran ve pano: soru 28. |
+| 20/10/2026 | Sevk ve kapanış (soru 9) | ERP'de sipariş sevk edilip irsaliyeli çıkışı yapılınca "tamamlandı" gibi bir durum görünüyor; uygulama bunu okur. Kartı kendisi kapatmaz, "Sevk edildi, kartı kapatayım mı?" diye sorar. |
+| 20/10/2026 | ERP'ye yazma (soru 12) | Şimdilik ERP'ye hiçbir müdahale yok; uygulama yalnızca okur. |
+| 20/10/2026 | İş emri ile sipariş bağlantısı (soru 11) | İş emrinin hangi proje için açıldığı çoğunlukla iş emrinin açıklamasında yazıyor; uygulama bağlantıyı oradan okur. Siparişte bir ürün talebi varken ERP'de bağlantı görünmüyorsa uygulama sorar: örneğin aynı üründen farklı iş emirleriyle üretilmiş 3 adet varsa hangisinin siparişe ekleneceğini kullanıcı seçer. |
+| 20/10/2026 | Örnek dosyalar (soru 8) | Eski projeye bakılmaz. Kullanıcı 3.2'deki raporların örnek Excel'lerini `OMS Veri/erp/` klasörüne koyar. Örnekler geldi; yapıları 2.3'te. |
+| 20/10/2026 | Ana ekran ve pano (soru 28) | Ana ekran siparişler listesidir. Ayrıca aşama sütunlarından oluşan bir Pano ekranı olur; her ürün kendi aşamasının sütununda durur. Şimdilik ihtiyacı karşılıyor. |
+| 20/10/2026 | Yazı tipi (soru 28) | Uygulama Inter yazı tipini kullanır. Yazı tipi dosyası uygulamanın içine konur, internet gerekmez. Boyut: soru 35. |
+| 20/10/2026 | Depo bilgisi (soru 20) | Depo stok raporlarından anlaşılır; her depo ayrı dosyadır. ERP'de tamamlanan ürün montaj üretim deposunda görünür. Ürün sevk deposunda değilse uygulama "Testi yapıldı mı?" diye sorar (3.1). |
+| 20/10/2026 | Toplu yükleme (soru 29) | Her sipariş için ayrı form yerine toplu listeler yüklenir: açık ve tamamlanan sipariş talepleri, açık ve kapalı iş emirleri, çıkış yapılamayan malzeme raporu, stok raporları. Yükleme her sabah ya da istenen an yapılır. |
+| 20/10/2026 | Beklemede siparişler (soru 30) | ERP'de "Beklemede" olan sipariş satırları uygulamada soluk renkte, "onay bekliyor" diye görünür. Önemsiz ya da yanlış bir değer olduğu anlaşılırsa kullanıcı bildirecek. |
+| 20/10/2026 | ERP ürün durumu (soru 31) | ERP'deki "Ürün Durumu"nu planlama birimi elle güncelliyor. Kartta "Planlama birimi ürün üretim durumu: …" diye gösterilir; yanında daha küçük yazıyla verinin hangi tarihte alındığı yazar. Uygulamanın kendi aşamasını değiştirmez. |
+| 20/10/2026 | Kapalı iş emirleri (soru 32) | Kapalı iş emirleri listesi alınabiliyor; örneği geldi (2.3). |
+| 20/10/2026 | Eksik miktar (soru 33) | Eksik = planlanan takip miktarı − gerçekleşen çıkış miktarı. |
+| 20/10/2026 | Kart olan satırlar (soru 34) | SVR, OVR, OVF, WD, PP, SCN, KCN ve CB satırları kart olur; sonu "-MNT" ile bitenler servis kartı olur. OZ malzemeleri, hortum setleri, CP kitleri ve projeye özel ürünler (bağlantı çatalı, uzatma bomu…) sipariş kartında listelenir. İleride güncellenebilir; kural Ayarlar'dan değişir. |
+| 20/10/2026 | Yazı boyutu (soru 35) | Yazılar çok küçük olmaz; telefonda ve atölyede rahat okunur. |
+| 20/10/2026 | Kartların kapanışı (bugün) | Kartlar, ürün sevk edilip irsaliyeli çıkış belgesi hazırlandıktan sonra elle kapatılıyor. Yeni sistemdeki kapanış: soru 9. |

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Gerçek verinin commit'e girmesini engeller (ayrıntı: veri_kontrol.py).
+# Python bulunamazsa commit durur; koruma sessizce devre dışı kalmaz.
+kok="$(git rev-parse --show-toplevel)" || exit 1
+if command -v py >/dev/null 2>&1; then
+    exec py -3 -I "$kok/.githooks/veri_kontrol.py" "$@"
+fi
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 -I "$kok/.githooks/veri_kontrol.py" "$@"
+fi
+echo "Veri kontrolü çalışmadı: Python bulunamadı. Commit durduruldu." >&2
+exit 1

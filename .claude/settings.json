@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/oturum_acilis.py\"",
+            "timeout": 20,
+            "statusMessage": "Git durumu okunuyor"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/koruma.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "skillOverrides": {
+    "kaydet": "user-invocable-only"
+  }
+}

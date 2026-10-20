@@ -1,0 +1,38 @@
+# Gerçek veriler: hiçbir zaman git'e girmez (CLAUDE.md, Veri güvenliği)
+OMS Veri/
+yedek-hedefi.txt
+
+# Veri taşıyabilecek dosya türleri. ornek-veri/ içindeki uydurma dosyalar
+# en altta adlarıyla tek tek izinlenir.
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.bak
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.webp
+*.pdf
+*.docx
+~$*
+
+# Gizli ayarlar (.env.example serbest)
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Claude'un kişisel ayarları
+.claude/settings.local.json
+
+# İzinli örnek dosyalar (yalnızca uydurma veri; her yeni dosya buraya adıyla yazılır)
+# !ornek-veri/ornek_dosya.xlsx

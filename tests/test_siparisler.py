@@ -9,6 +9,7 @@ from pathlib import Path
 
 import openpyxl
 import pytest
+from PIL import Image
 
 from oms_montaj.erp_okuyucu import OkumaHatasi, rapor_turu, siparis_satirlari, tablo_oku, tarih
 from oms_montaj.urun_kurallari import model, renk, satir_turu, seri_nolar, yag
@@ -250,12 +251,28 @@ def gecikmis_ve_ileri_siparis():
     ]
 
 
+def onay_bekleyen_siparis():
+    return [satir(1, "PP-536-NF", "Guc Unitesi", siparis_no="OZ-TS0004", durum="Beklemede", teslim=datetime(2020, 1, 1))]
+
+
 def test_acik_siparisler_teslim_sutunlarinda(istemci, ekip, yukle):
-    yukle(excel(gecikmis_ve_ileri_siparis()))
+    yukle(excel(gecikmis_ve_ileri_siparis() + onay_bekleyen_siparis()))
     sayfa = istemci.get("/siparisler").get_data(as_text=True)
-    gecikenler, sonra = sayfa.index("Gecikenler"), sayfa.index("Daha sonra")
-    assert gecikenler < sayfa.index("OZ-TS0003") < sonra < sayfa.index("OZ-TS0001")
+    gecikenler, planlanan, onay = (sayfa.index(ad) for ad in ("Gecikenler", "Planlananlar", "Onay bekleyen projeler"))
+    # Onay bekleyen sipariş teslimi geçmiş olsa da gecikenlerde değil, en sağdaki sütunda durur.
+    assert gecikenler < sayfa.index("OZ-TS0003") < planlanan < sayfa.index("OZ-TS0001") < onay < sayfa.index("OZ-TS0004")
     assert 'href="/siparisler/OZ-TS0001#aile-SVR"' in sayfa
+    yalniz_onay = istemci.get("/siparisler?durum=onay_bekliyor").get_data(as_text=True)
+    assert "OZ-TS0004" in yalniz_onay and "Gecikenler" not in yalniz_onay and "OZ-TS0001" not in yalniz_onay
+
+
+def test_onay_bekleyenler_sevk_edileceklere_girmez(istemci, ekip, yukle):
+    yukle(excel(gecikmis_ve_ileri_siparis() + onay_bekleyen_siparis()))
+    makineler = istemci.get("/makineler").get_data(as_text=True)
+    assert "OZ-TS0003" in makineler and "OZ-TS0004" not in makineler
+    ozet = istemci.get("/").get_data(as_text=True)
+    assert '<span class="gosterge-deger">3</span>' in ozet  # sevk edilecek makine: onay bekleyen PP sayılmaz
+    assert "sipariş · 1 makine" in ozet  # teslimi geçen: onay bekleyen sayılmaz
 
 
 def test_ozet_sayilari_ve_grafikleri(istemci, ekip, yukle):
@@ -264,8 +281,9 @@ def test_ozet_sayilari_ve_grafikleri(istemci, ekip, yukle):
     assert '<span class="gosterge-deger">2</span>' in sayfa  # açık sipariş
     assert '<span class="gosterge-deger">3</span>' in sayfa  # sevk edilecek makine: SVR + PP + PP; çene, kiriş sayılmaz
     assert "sipariş · 1 makine" in sayfa  # teslimi geçen
-    assert 'href="/siparisler?aile=PP"' in sayfa and 'href="/siparisler?aile=Çene"' not in sayfa
-    assert 'href="/siparisler?teslim=gecikti"' in sayfa and 'href="/siparisler?bas=' in sayfa
+    assert 'href="/makineler?aile=PP"' in sayfa and 'aile=Çene' not in sayfa
+    assert 'href="/siparisler?teslim=gecikti"' in sayfa and 'href="/makineler?bas=' in sayfa
+    assert 'href="/makineler?planlama=' in sayfa and 'href="/makineler?teslim=gecikti"' in sayfa
     assert "İmalatta" in sayfa and "Haftalık teslim takvimi" in sayfa
     tablo = sayfa[sayfa.index('<table class="tablo">'):]
     assert "OZ-TS0003" in tablo and "OZ-TS0001" not in tablo
@@ -364,6 +382,63 @@ def test_yanlis_girilip_iptal_edilen_satirlar_siparisi_bozmaz(istemci, uygulama,
     assert "OZ-TS0001-PP-01" in bolumler and "Yağsız sevk" in bolumler
     assert "2. satır" in iptaller and "ERP açıklaması: Yanlış" in iptaller
     assert "Not:</strong> Yanlış" not in sayfa
+
+
+def test_dis_tedarik_kalemde_erp_durumu_gosterilmez(istemci, ekip, yukle):
+    yukle(excel(makine_siparisi()))
+    sayfa = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    aksesuar = sayfa[sayfa.index("Aksesuarlar ve diğer kalemler"):]
+    assert "Dış tedarik" in aksesuar and "Planlama birimi ürün üretim durumu" not in aksesuar
+    assert "Planlama birimi ürün üretim durumu" in sayfa[:sayfa.index("Aksesuarlar ve diğer kalemler")]
+
+
+def test_ozet_satirlari_tiklanir_ve_kutucuklar_renkli(istemci, ekip, yukle):
+    yukle(excel(gecikmis_ve_ileri_siparis()))
+    sayfa = istemci.get("/").get_data(as_text=True)
+    assert 'data-adres="/siparisler/OZ-TS0003"' in sayfa
+    assert 'class="sk-urun renkli" style="--renk: #1baf7a"' in sayfa  # PP her yerde aynı renk
+
+
+def test_makineler_sayfasi_suzgecleri(istemci, ekip, yukle):
+    yukle(excel(gecikmis_ve_ileri_siparis()))
+    tumu = istemci.get("/makineler").get_data(as_text=True)
+    assert "3 makine · 2 proje" in tumu  # çene ve kiriş sayılmaz
+    assert "OZ-TS0001-VH-01" in tumu and "OZ-TS0001-HC-01" not in tumu
+    gecikmis = istemci.get("/makineler?teslim=gecikti").get_data(as_text=True)
+    assert "OZ-TS0003" in gecikmis and "OZ-TS0001" not in gecikmis
+    hafta = istemci.get("/makineler?bas=2030-01-14&bit=2030-01-20").get_data(as_text=True)
+    assert "OZ-TS0001" in hafta and "OZ-TS0003" not in hafta
+    assert "OZ-TS0003" in istemci.get("/makineler?aile=PP").get_data(as_text=True)
+    assert "Bu seçime uyan makine yok" in istemci.get("/makineler?planlama=Montajda").get_data(as_text=True)
+    imalatta = istemci.get("/makineler?planlama=İmalatta").get_data(as_text=True)
+    assert "3 makine" in imalatta and 'class="etkin" aria-current="page">\n    İmalatta' in imalatta
+
+
+def test_musteriye_ozel_renk_ve_logo(istemci, uygulama, ekip, yukle):
+    marka = Path(uygulama.config["VERI_KLASORU"]) / "marka"
+    (marka / "musteriler.txt").write_text("# deneme\nTS0;#0e518d\n", encoding="utf-8")
+    resim = Image.new("RGBA", (40, 20), (0, 0, 0, 255))
+    resim.save(marka / "musteri-TS0.png")
+    yukle(excel(makine_siparisi()))
+    liste = istemci.get("/siparisler").get_data(as_text=True)
+    assert "musterili" in liste and "--musteri-renk: #0e518d" in liste and "/marka/musteri/TS0?s=" in liste
+    assert "musterili" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    assert istemci.get("/marka/musteri/TS0").mimetype == "image/png"
+    assert istemci.get("/marka/musteri/XX9").status_code == 404
+    # Logo dosyasının adı ayar satırına yazılabilir; klasör adı yazılamaz.
+    (marka / "musteri-TS0.png").rename(marka / "test-firma-logo.png")
+    (marka / "musteriler.txt").write_text("TS0;#0e518d;test-firma-logo.png\n", encoding="utf-8")
+    assert istemci.get("/marka/musteri/TS0").mimetype == "image/png"
+    (marka / "musteriler.txt").write_text("TS0;#0e518d;../test-firma-logo.png\n", encoding="utf-8")
+    assert istemci.get("/marka/musteri/TS0").status_code == 404
+    assert "--musteri-renk: #0e518d" in istemci.get("/siparisler").get_data(as_text=True)
+    # Dosyada olmayan müşteriler: OMS logosu ve OMS kırmızısı; "*" satırı rengi değiştirir.
+    resim.save(marka / "oms-logo.png")
+    (marka / "musteriler.txt").write_text("XX9;#0e518d\n", encoding="utf-8")
+    liste = istemci.get("/siparisler").get_data(as_text=True)
+    assert "--musteri-renk: #c41e24" in liste and "/marka/logo?s=" in liste
+    (marka / "musteriler.txt").write_text("XX9;#0e518d\n*;#16181d\n", encoding="utf-8")
+    assert "--musteri-renk: #16181d" in istemci.get("/siparisler").get_data(as_text=True)
 
 
 def test_bilinmeyen_siparis_404(istemci, ekip):

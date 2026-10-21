@@ -3,7 +3,9 @@
 Siparişin durumu ve teslim tarihi kalemlerinden hesaplanır: iptal edilmemiş
 kalemlerin hepsi ERP'de kapandıysa sipariş "ERP'de kapandı", açık kalemlerin
 hepsi onay bekliyorsa "Onay bekliyor" sayılır. Teslim tarihi açık kalemlerin
-en yakın uzlaşılan sevk tarihidir.
+en yakın uzlaşılan sevk tarihidir; onay bekleyen kalemler kesin olmadığından
+başka açık kalem varsa sayılmaz. Onay bekleyen siparişler listede teslim
+sütunlarına değil, en sağdaki ayrı sütuna dizilir.
 """
 
 from collections import Counter, defaultdict
@@ -11,8 +13,8 @@ from datetime import date
 
 from flask import Blueprint, abort, render_template, request
 
-from .erp_aktarim import IPTAL, eksik_siralar, kapali_mi
-from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, renk, yag
+from .erp_aktarim import BEKLEMEDE, IPTAL, eksik_siralar, kapali_mi
+from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, dis_tedarik_mi, renk, yag
 from .veritabani import baglanti
 
 bp = Blueprint("siparisler", __name__)
@@ -29,7 +31,8 @@ TIPLER = {"makine": "Makine", "yedek_parca": "Yedek parça", "servis": "Servis"}
 AILE_SUZGECLERI = {"vibrohammer": "Vibrohammer (SVR + OVR)", **{aile: aile for aile in AILE_SIRASI}}
 YAKLASAN_GUN = 14  # teslimine bu kadar gün kalan sipariş turuncu görünür
 # Açık siparişler bu üç sütunda, her sütunda teslim tarihine göre yukarıdan aşağı dizilir.
-TESLIM_SUTUNLARI = (("gecikti", "Gecikenler"), ("yaklasan", f"{YAKLASAN_GUN} gün içinde"), ("", "Daha sonra"))
+TESLIM_SUTUNLARI = (("gecikti", "Gecikenler"), ("yaklasan", f"{YAKLASAN_GUN} gün içinde"), ("", "Planlananlar"))
+ONAY_SUTUNU = ("onay", "Onay bekleyen projeler")
 
 
 def siparis_durumu(kalemler):
@@ -39,7 +42,7 @@ def siparis_durumu(kalemler):
     acik = [k for k in etkin if not kapali_mi(k)]
     if not acik:
         return "kapali"
-    if all(k["erp_durum"] == "Beklemede" for k in acik):
+    if all(k["erp_durum"] == BEKLEMEDE for k in acik):
         return "onay_bekliyor"
     return "acik"
 
@@ -64,7 +67,8 @@ def ozetle(siparis, kalemler):
         durum = "listede_yok"  # en son yüklenen ERP listesinde yok
     etkin = [k for k in gorunen if k["erp_durum"] != IPTAL] or gorunen
     acik = [k for k in etkin if not kapali_mi(k)]
-    teslim = min((k["teslim_tarihi"] for k in (acik or etkin) if k["teslim_tarihi"]), default=None)
+    kesin = [k for k in acik if k["erp_durum"] != BEKLEMEDE]
+    teslim = min((k["teslim_tarihi"] for k in (kesin or acik or etkin) if k["teslim_tarihi"]), default=None)
     urunler = Counter()
     for kalem in etkin:
         if kalem["aile"]:
@@ -79,7 +83,7 @@ def ozetle(siparis, kalemler):
         "diger_kalem": sum(1 for k in etkin if not k["aile"]),
         "aileler": set(urunler),
         # Haftalık takvimden gelen tarih süzgeci için: açık makine kalemlerinin teslim tarihleri
-        "makine_teslimleri": {k["teslim_tarihi"] for k in acik if k["aile"] in ANA_URUNLER and k["teslim_tarihi"]},
+        "makine_teslimleri": {k["teslim_tarihi"] for k in kesin if k["aile"] in ANA_URUNLER and k["teslim_tarihi"]},
     }
 
 
@@ -164,11 +168,14 @@ def liste():
     ozetler.sort(key=sira_anahtari)
     sutunlar = None
     if secim["durum"] in ("acik", "onay_bekliyor"):
+        kesin = [o for o in ozetler if o["durum"] == "acik"]
         sutunlar = [
-            (sinif, ad, [o for o in ozetler if (o["kalan"][1] if o["kalan"] else "") == sinif])
+            (sinif, ad, [o for o in kesin if (o["kalan"][1] if o["kalan"] else "") == sinif])
             for sinif, ad in TESLIM_SUTUNLARI
-            if teslim_sutunu is None or sinif == secim["teslim"]
+            if secim["durum"] == "acik" and (teslim_sutunu is None or sinif == secim["teslim"])
         ]
+        if teslim_sutunu is None:
+            sutunlar.append((*ONAY_SUTUNU, [o for o in ozetler if o["durum"] == "onay_bekliyor"]))
     return render_template(
         "siparisler.html",
         ozetler=ozetler,
@@ -218,6 +225,7 @@ def kart(siparis_no):
             "pp": kalem["aile"] == "PP",
             "yag": yag(kalem["aciklama"]) if kalem["aile"] == "PP" else None,
             "kapali": kapali_mi(kalem),
+            "dis_tedarik": dis_tedarik_mi(kalem["urun_kodu"]),
         }
         if kalem["erp_durum"] == IPTAL and ozet["durum"] != "iptal":
             # Devam eden siparişte iptal edilmiş (çoğu zaman yanlış girilip düzeltilmiş) satır

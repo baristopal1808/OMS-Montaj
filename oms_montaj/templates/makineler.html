@@ -1,0 +1,70 @@
+{% extends "taban.html" %}
+{% block baslik %}Makineler{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik %}
+{% set diger = dict(aile=secim.aile or None, teslim=secim.teslim or None, bas=secim.bas or None, bit=secim.bit or None) %}
+<p class="geri"><a href="{{ url_for('ozet.ana') }}">← Özet</a></p>
+<div class="baslik-satiri">
+  <h1>Sevk edilecek makineler</h1>
+  <span class="soluk">{{ toplam }} makine · {{ gruplar | length }} proje</span>
+</div>
+
+<p class="suzgec-notu">
+  {% if secim.teslim == 'gecikti' %}Teslimi geçmiş makineler{% endif %}
+  {% if tarih_araligi %}Teslimi {{ tarih_araligi[0] | tarih }}{% if tarih_araligi[1] %}–{{ tarih_araligi[1] | tarih }} arasında{% else %} ve sonrasında{% endif %} olan makineler{% endif %}
+  {% if secim.aile %}{% if secim.teslim or tarih_araligi %} · {% endif %}Yalnızca {{ secim.aile }}{% endif %}
+  {% if secim.teslim or tarih_araligi or secim.aile %} · <a href="{{ url_for('makineler.liste', planlama=secim.planlama or None) }}">bütün makineler</a>{% endif %}
+</p>
+
+<nav class="secici" aria-label="Planlama birimi üretim durumu">
+  <a href="{{ url_for('makineler.liste', **diger) }}"{% if not secim.planlama %} class="etkin" aria-current="page"{% endif %}>
+    Bütün durumlar <span class="cs-sayi">{{ planlama_sayilari.values() | sum }}</span>
+  </a>
+  {% for durum in planlama_secenekleri %}
+  <a href="{{ url_for('makineler.liste', planlama=durum, **diger) }}"{% if secim.planlama == durum %} class="etkin" aria-current="page"{% endif %}>
+    {{ durum }} <span class="cs-sayi">{{ planlama_sayilari[durum] }}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+{% if aileler %}
+<div class="aile-ozeti">
+  {% for aile, adet in aileler %}<span class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[aile] }}"><strong>{{ adet }}</strong> {{ aile }}</span>{% endfor %}
+</div>
+{% endif %}
+
+{% for g in gruplar %}
+{% set adres = url_for('siparisler.kart', siparis_no=g.siparis_no) %}
+<section class="pano-karti makine-grubu">
+  <a class="mg-baslik" href="{{ adres }}">
+    <span class="mg-no">{{ g.siparis_no }}</span>
+    <span class="mg-musteri">{{ g.musteri or '' }}</span>
+    <span class="mg-teslim">
+      {% if g.teslim %}Teslim {{ g.teslim | tarih }}{% endif %}
+      {% if g.kalan %}<span class="etiket {{ g.kalan[1] }}">{{ g.kalan[0] }}</span>{% endif %}
+    </span>
+  </a>
+  <div class="kaydirilabilir">
+    <table class="tablo mg-tablo">
+      <colgroup><col style="width: 25%"><col style="width: 22%"><col style="width: 11%"><col style="width: 10%"><col style="width: 13%"><col style="width: 9%"><col style="width: 10%"></colgroup>
+      <thead><tr><th>Ürün</th><th>Ürün adı</th><th>Seri no</th><th>Aşama</th><th>Planlama durumu</th><th>İş emri</th><th>Teslim</th></tr></thead>
+      <tbody>
+        {% for m in g.makineler %}
+        <tr class="tiklanir" data-adres="{{ adres }}#aile-{{ m.aile }}">
+          <td><span class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[m.aile] }}">{{ m.aile }}</span> <strong>{{ m.urun_kodu }}</strong></td>
+          <td>{{ m.urun_adi or '' }}</td>
+          <td class="sayisal">{{ m.seri_no or '—' }}</td>
+          <td><span class="etiket asama">{{ ASAMALAR[m.asama] }}</span></td>
+          <td>{{ m.erp_urun_durumu or 'Belirtilmemiş' }}</td>
+          <td class="sayisal">{{ m.bagli_is_emri_no or '—' }}</td>
+          <td class="sayisal">{{ m.teslim_tarihi | tarih }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<div class="kutu bos"><p>Bu seçime uyan makine yok.</p></div>
+{% endfor %}
+{% endblock %}

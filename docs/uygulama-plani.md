@@ -101,7 +101,7 @@ Her adımın sonunda kullanıcı deneyebileceği bir şey görür. Kullanıcı d
 İlerleme:
 
 - 1. adım bitti (21/10/2026). Kullanıcının isteğiyle giriş ekranı, logo ve yan menü eklendi.
-- 2. adım yazıldı (21/10/2026); kullanıcının denemesini bekliyor. Gerçek listelerle denendi: 131 sipariş, 419 kalem, 331 ürün kartı.
+- 2. adım bitti (21/10/2026). Gerçek listelerle denendi. Kullanıcının isteğiyle Özet ana ekranı, sevk edilecek makineler, Sevkiyat ve Yedek parça ekranları eklendi.
 
 | Adım | Ne yapılır | Kullanıcı ne dener |
 |---|---|---|

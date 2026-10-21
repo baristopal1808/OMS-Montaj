@@ -8,8 +8,8 @@
         stroke-dasharray="{{ d.uzunluk }} {{ h.cevre }}" stroke-dashoffset="{{ -d.kayma }}" transform="rotate(-90 70 70)"><title>{{ d.ad }}: {{ d.sayi }} {{ birim }} (%{{ d.yuzde }})</title></circle>{% endset %}
     {% if d.adres %}<a href="{{ d.adres }}">{{ dilim }}</a>{% else %}{{ dilim }}{% endif %}
     {% endfor %}
-    <text x="70" y="70" text-anchor="middle" class="halka-toplam">{{ h.toplam }}</text>
-    <text x="70" y="88" text-anchor="middle" class="halka-birim">{{ birim }}</text>
+    <text x="70" y="69" text-anchor="middle" class="halka-toplam">{{ h.toplam }}</text>
+    <text x="70" y="89" text-anchor="middle" class="halka-birim">{{ birim }}</text>
   </svg>
   <ul class="halka-aciklama">
     {% for d in h.dilimler %}

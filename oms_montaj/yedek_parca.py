@@ -11,6 +11,7 @@ from flask import Blueprint, render_template, request
 
 from .erp_aktarim import IPTAL
 from .siparisler import DURUMLAR, acik_mi, sira_anahtari, son_siparis_yuklemesi, tum_ozetler
+from .urun_kurallari import dis_tedarik_mi
 from .veritabani import baglanti
 
 bp = Blueprint("yedek_parca", __name__)
@@ -36,13 +37,15 @@ def liste():
         if ozet["siparis"]["tip"] != "yedek_parca" or ozet["durum"] == "iptal" and secim != "tumu":
             continue
         parcalar = kalemler[ozet["siparis"]["id"]]
-        durumlar = Counter(k["erp_urun_durumu"] for k in parcalar if k["erp_urun_durumu"])
+        # Dış tedarik (OZ + rakam) parçaların ERP "Ürün Durumu" anlamsızdır; yalnızca burada üretilenler sayılır.
+        uretilen = [k for k in parcalar if not dis_tedarik_mi(k["urun_kodu"])]
+        durumlar = Counter(k["erp_urun_durumu"] for k in uretilen if k["erp_urun_durumu"])
         satirlar.append({
             **ozet,
             "kalem": len(parcalar),
             "adet": round(sum(k["miktar"] or 0 for k in parcalar)),
             "sevk_adet": round(sum(k["sevk_miktari"] or 0 for k in parcalar)),
-            "planlama": durumlar.most_common(1)[0][0] if durumlar else None,
+            "planlama": durumlar.most_common(1)[0][0] if durumlar else ("Dış tedarik" if parcalar and not uretilen else None),
         })
 
     sayilar = {

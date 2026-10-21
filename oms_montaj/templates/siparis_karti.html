@@ -22,7 +22,9 @@
       {% endif %}
     {% endif %}
     {% if k.bagli_is_emri_no %}<span class="cip">İş emri {{ k.bagli_is_emri_no }}</span>{% endif %}
-    {% if k.erp_urun_durumu %}
+    {% if satir.dis_tedarik %}
+    <span class="cip">Dış tedarik</span>
+    {% elif k.erp_urun_durumu %}
     <span class="cip">Planlama birimi ürün üretim durumu: <strong>{{ k.erp_urun_durumu }}</strong>
       <small>ERP verisi {{ k.veri_zamani | tarih }}</small></span>
     {% endif %}
@@ -61,7 +63,9 @@
 
 <p class="geri"><a href="{{ url_for('siparisler.liste') }}">← Siparişler</a></p>
 
-<div class="kutu kart-baslik">
+{% set marka = musteri_markasi(s.siparis_no) %}
+<div class="kutu kart-baslik{% if marka %} musterili{% endif %}"
+  {%- if marka %} style="--musteri-renk: {{ marka.renk }};{% if marka.logo %} --musteri-logo: url('{{ marka.logo }}');{% endif %}"{% endif %}>
   <div class="baslik-satiri">
     <h1>{{ s.siparis_no }}</h1>
     <span class="rozetler">

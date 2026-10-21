@@ -17,6 +17,7 @@ from .urun_kurallari import KARTLI_TURLER, satir_turu, seri_nolar, siparis_tipi
 
 IPTAL = "İptal"
 KAPALI = "Kapalı"
+BEKLEMEDE = "Beklemede"  # onay bekleyen sipariş satırı
 KALEM_ALANLARI = (
     "urun_kodu", "urun_adi", "miktar", "sevk_miktari", "birim", "aciklama", "planlama_bilgisi",
     "bagli_is_emri_no", "erp_durum", "erp_genel_durum", "erp_urun_durumu", "detay_turu",

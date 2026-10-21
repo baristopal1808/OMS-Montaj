@@ -13,9 +13,12 @@ from pathlib import Path
 
 from flask import Flask, render_template
 
-from . import ekranlar, erp, kimlik, kullanicilar, marka, ozet, sevkiyat, siparisler, veritabani, yedek_parca
+from . import (
+    ekranlar, erp, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, veritabani, yedek_parca,
+)
 from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
+from .grafik import AILE_RENKLERI
 from .simgeler import simge
 
 SURUM = "0.1"
@@ -65,12 +68,13 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(siparisler.bp)
     uygulama.register_blueprint(sevkiyat.bp)
     uygulama.register_blueprint(yedek_parca.bp)
+    uygulama.register_blueprint(makineler.bp)
     uygulama.register_blueprint(erp.bp)
     uygulama.register_blueprint(ekranlar.bp)
     uygulama.register_blueprint(marka.bp)
     for kod in HATA_METINLERI:
         uygulama.register_error_handler(kod, hata_sayfasi)
     uygulama.jinja_env.filters.update(SUZGECLER)
-    uygulama.jinja_env.globals.update(simge=simge, SURUM=SURUM, ASAMALAR=ASAMALAR)
+    uygulama.jinja_env.globals.update(simge=simge, SURUM=SURUM, ASAMALAR=ASAMALAR, AILE_RENKLERI=AILE_RENKLERI)
     uygulama.context_processor(lambda: {"YIL": date.today().year})
     return uygulama

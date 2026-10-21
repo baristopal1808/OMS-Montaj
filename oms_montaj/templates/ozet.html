@@ -15,13 +15,15 @@
 </div>
 {% else %}
 
+{% set logo = logo_adresi() %}
+{% set logo_stili = ("--logo: url('" ~ logo ~ "')") if logo else "" %}
 <div class="gosterge-satiri">
-  <a class="gosterge" href="{{ url_for('siparisler.liste') }}">
+  <a class="gosterge{% if logo %} logolu{% endif %}" style="{{ logo_stili }}" href="{{ url_for('siparisler.liste') }}">
     <span class="gosterge-ad">Açık sipariş</span>
     <span class="gosterge-deger">{{ sayilar.acik }}</span>
-    <span class="gosterge-alt">sevk edilmemiş siparişler</span>
+    <span class="gosterge-alt">onaylı, sevk edilmemiş</span>
   </a>
-  <a class="gosterge" href="{{ url_for('siparisler.liste') }}">
+  <a class="gosterge{% if logo %} logolu{% endif %}" style="{{ logo_stili }}" href="{{ url_for('makineler.liste') }}">
     <span class="gosterge-ad">Sevk edilecek ürün</span>
     <span class="gosterge-deger">{{ sayilar.urun }}</span>
     <span class="gosterge-alt">makine · çene ve kiriş hariç</span>
@@ -50,17 +52,17 @@
 
 <div class="ozet-izgara">
   <section class="pano-karti">
-    <header><h2>Sevk edilecek ürünler</h2><span>makineler · dilime tıklayın</span></header>
+    <header><h2>Sevk edilecek ürünler</h2></header>
     <div class="pano-icerik">{{ halka_grafigi(aile_grafigi, 'makine', 'Sevk edilecek makineler') }}</div>
   </section>
 
   <section class="pano-karti">
-    <header><h2>Planlama birimi üretim durumu</h2><span>ERP "Ürün Durumu"</span></header>
+    <header><h2 title='ERP siparişindeki "Ürün Durumu" sütunu'>Planlama birimi üretim durumu</h2></header>
     <div class="pano-icerik">{{ halka_grafigi(planlama_grafigi, 'makine', 'Planlama birimi üretim durumu') }}</div>
   </section>
 
   <section class="pano-karti">
-    <header><h2>Haftalık teslim takvimi</h2><span>makine adedi · haftaya tıklayın</span></header>
+    <header><h2>Haftalık teslim takvimi</h2><span>makine adedi</span></header>
     <div class="pano-icerik">
       <div class="kaydirilabilir">
         <div class="sutun-grafigi">
@@ -93,13 +95,13 @@
       <tbody>
         {% for o in yaklasanlar %}
         {% set adres = url_for('siparisler.kart', siparis_no=o.siparis.siparis_no) %}
-        <tr{% if o.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>
+        <tr class="tiklanir{% if o.durum == 'onay_bekliyor' %} onay-bekliyor{% endif %}" data-adres="{{ adres }}">
           <td><a class="tablo-baglanti" href="{{ adres }}">{{ o.siparis.siparis_no }}</a>{% if o.durum == 'onay_bekliyor' %} <span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}</td>
           <td>{{ o.siparis.musteri or '' }}</td>
           <td class="sayisal">{{ o.teslim | tarih }}</td>
           <td><span class="etiket {{ o.kalan[1] }}">{{ o.kalan[0] }}</span></td>
           <td><div class="tablo-urunler">
-            {% for aile, adet in o.urunler %}<a class="sk-urun" href="{{ adres }}#aile-{{ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
+            {% for aile, adet in o.urunler %}<a class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[aile] }}" href="{{ adres }}#aile-{{ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
             {% if o.diger_kalem %}<span class="sk-urun soluk">{{ o.diger_kalem }} diğer kalem</span>{% endif %}
           </div></td>
         </tr>

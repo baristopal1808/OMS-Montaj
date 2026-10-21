@@ -53,6 +53,13 @@ def onek(urun_kodu):
     return eslesme.group().upper() if eslesme else ""
 
 
+def dis_tedarik_mi(urun_kodu):
+    """"OZ" + rakam kodlu kalemler satın alınır (dış tedarik): burada üretilmez, iş emri açılmaz;
+    ERP'deki "Ürün Durumu" onlar için anlamsızdır. "OZ-<proje>-PR-01" gibi projeye özel ürünler
+    ise burada üretilir ve iş emri açılır; dış tedarik sayılmaz."""
+    return bool(re.match(r"OZ\d", (urun_kodu or "").upper()))
+
+
 def siparis_tipi(detay_turu):
     return SIPARIS_TIPLERI.get(sade(detay_turu)) if detay_turu else None
 

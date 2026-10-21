@@ -3,6 +3,14 @@ document.querySelectorAll("form.suzgec select").forEach(function (kutu) {
   kutu.addEventListener("change", function () { kutu.form.submit(); });
 });
 
+// Tablolarda satırın tamamı tıklanır; satırdaki bağlantılar (ürün kutucukları) kendi yerine gider.
+document.querySelectorAll("tr[data-adres]").forEach(function (satir) {
+  satir.addEventListener("click", function (olay) {
+    if (olay.target.closest("a")) return;
+    window.location.href = satir.dataset.adres;
+  });
+});
+
 // Dosya bırakma alanı: seçilen dosyaların adlarını gösterir, üstüne dosya sürüklenince renklenir.
 document.querySelectorAll("[data-dosya-alani]").forEach(function (alan) {
   var girdi = alan.querySelector("input[type=file]");

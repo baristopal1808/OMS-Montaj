@@ -24,7 +24,7 @@
       </thead>
       <tbody>
         {% for s in satirlar %}
-        <tr{% if s.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>
+        <tr class="tiklanir{% if s.durum == 'onay_bekliyor' %} onay-bekliyor{% endif %}" data-adres="{{ url_for('siparisler.kart', siparis_no=s.siparis.siparis_no) }}">
           <td><a class="tablo-baglanti" href="{{ url_for('siparisler.kart', siparis_no=s.siparis.siparis_no) }}">{{ s.siparis.siparis_no }}</a></td>
           <td>{{ s.siparis.musteri or '' }}</td>
           <td class="sayisal">{{ s.siparis.talep_tarihi | tarih }}</td>

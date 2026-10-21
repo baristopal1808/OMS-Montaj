@@ -1,0 +1,28 @@
+{% extends "taban.html" %}
+{% block baslik %}Ayarlar{% endblock %}
+{% block icerik %}
+<h1>Ayarlar</h1>
+<ul class="satirlar">
+  <li>
+    <div class="satir-ana">
+      <a class="satir-baslik" href="{{ url_for('kullanicilar.liste') }}">Kullanıcılar</a>
+      <span class="soluk">Hesaplar, roller ve geçici şifreler</span>
+    </div>
+  </li>
+  {% for ad, aciklama in [
+    ('Etiketler', 'Ürün grubu, kaynak, iş türü ve bekleme etiketleri'),
+    ('Aşamalar', 'Kartların geçtiği aşamaların adı ve sırası'),
+    ('Kontrol listesi şablonları', 'Her ürün ailesinin bilgi alanları ve "yapıldı mı?" maddeleri'),
+    ('Kart kuralları', 'Hangi ürün kodunun kart, hangisinin aksesuar olacağı'),
+    ('Varsayılan atama', 'Hangi ürün ailesinin kime atanacağı'),
+  ] %}
+  <li>
+    <div class="satir-ana">
+      <span class="satir-baslik">{{ ad }}</span>
+      <span class="soluk">{{ aciklama }}</span>
+    </div>
+    <span class="etiket">6. adımda</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

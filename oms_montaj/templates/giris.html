@@ -1,0 +1,22 @@
+{% extends "taban.html" %}
+{% block baslik %}Giriş{% endblock %}
+{% block icerik %}
+<div class="tek-kutu">
+  <p class="marka buyuk">OMS Montaj</p>
+  <div class="kutu">
+    <h1>Giriş</h1>
+    {% if hata %}<p class="hata-kutusu" role="alert">{{ hata }}</p>{% endif %}
+    <form method="post" class="form">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <label>Kullanıcı adı
+        <input type="text" name="kullanici_adi" value="{{ request.form.kullanici_adi }}" autocomplete="username" autocapitalize="none" required autofocus>
+      </label>
+      <label>Şifre
+        <input type="password" name="sifre" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="dugme">Giriş yap</button>
+    </form>
+  </div>
+  <p class="soluk kucuk">Şifrenizi unuttuysanız ekipten birine söyleyin; Ayarlar > Kullanıcılar'dan size geçici şifre verebilir.</p>
+</div>
+{% endblock %}

@@ -4,7 +4,8 @@ OMS Pile Driving Equipment montaj fabrikasının iş takip uygulaması. Bugün M
 
 Eski "PP-Tarafi-Is-Takip-Portali" projesinden tamamen bağımsızdır: o projenin klasörüne ve reposuna dokunulmaz, kodu kopyalanmaz.
 
-Proje ihtiyaç netleştirme aşamasında; henüz uygulama kodu yok. İhtiyaçlar, açık sorular ve kararlar: @docs/ihtiyaclar.md
+Proje geliştirme aşamasında; uygulama planı onaylandı (21/10/2026) ve adım adım kodlanıyor. Plan: @docs/uygulama-plani.md
+İhtiyaçlar, açık sorular ve kararlar: @docs/ihtiyaclar.md
 Kaldığımız yer: @docs/kaldigimiz-yer.md
 
 ## Çalışma şekli
@@ -14,6 +15,14 @@ Kaldığımız yer: @docs/kaldigimiz-yer.md
 - Kararlar sohbette bırakılmaz: cevaplanan soru `docs/ihtiyaclar.md` içindeki "Kararlar" tablosuna yazılır.
 - Yeni bir bağımlılık eklemeden önce sor. Commit mesajları Türkçe ve kısa olur.
 - Commit ve push kullanıcı `/kaydet` yazınca yapılır; komutu yazmak onay sayılır. Bunun dışında önerilir, sormadan yapılmaz.
+
+## Uygulama
+
+- Kod `oms_montaj/` klasöründe: Python 3.12, Flask, SQLite; sunucu olarak Waitress. Kütüphaneler projeye özel `.venv` klasöründe (`kurulum.bat` kurar). Yeni kütüphane eklemeden önce sor.
+- Başlatma: `baslat.bat` (port 8090; telefondan açılacak adresi ekrana yazar). Testler: `.venv\Scripts\python -m pytest`.
+- Gerçek veri (veritabanı, oturum anahtarı) geliştirmede `OMS Veri/uygulama/` klasöründe; sunucuda `OMS_VERI_KLASORU` ortam değişkeninin gösterdiği klasörde.
+- Şema değişikliği `oms_montaj/veritabani.py` içindeki `GOCLER` listesinin sonuna yeni göç olarak eklenir; yayınlanmış göç değiştirilmez.
+- Resim dosyaları (.png, .jpg) git'e giremez; simgeler .svg yapılır.
 
 ## Oturum düzeni
 

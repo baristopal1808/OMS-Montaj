@@ -22,7 +22,7 @@ Hedefler:
 
 **Çalışma şekli.** Önce soru-cevapla ihtiyaçlar netleşir, sonra uygulama planı çıkar ve kullanıcı onaylar, sonra geliştirme başlar. Eski projenin dosyalarına ve reposuna dokunulmaz.
 
-## 2. Planner'dan anlaşılanlar (kullanıcı onayı bekliyor)
+## 2. Planner'dan anlaşılanlar (kullanıcı onayladı, 21/10/2026; denemelerde aksi söylenmedikçe geçerli)
 
 Kaynak: `OMS Veri/planner/` içindeki iki ekran görüntüsü ve dışa aktarım Excel'i (2.1).
 
@@ -306,17 +306,18 @@ Cevaplanan soru 5. bölüme taşınır; numaralar değişmez.
 
 **Geçmiş veri**
 
-13. Dışa aktarımda Şubat 2025'ten bu yana 638 kart var, 500'ü tamamlanmış. Öneri:
-   - (a) Açık 138 kart canlı kayıt olarak aktarılır ve ERP kayıtlarıyla (İEN, sipariş no) eşleştirilir. Eşleşmeyenler kullanıcıya sorulur.
-   - (b) Tamamlanmış 500 kart "Planner arşivi" olarak aktarılır: değiştirilmez, ama İEN, seri no ya da sipariş no ile aranabilir. Servis kartı bir makinenin geçmişini buradan da bulur.
-   - (c) Kontrol listesi kısmen işaretli kartlarda maddeler "bilinmiyor" olarak gelir; açık kartlarda ekip bir kez gözden geçirir.
-   - (d) Denemeler süresince Planner da kullanılır; uygulama oturunca Planner tek seferde bırakılır. Bu süre ne kadar olsun?
-14. Görev sohbeti dışa aktarımda yok. Seçenekler:
-    - (a) Eski sohbetler Planner'da arşiv olarak kalır; açık kartların (138) önemli notları yeni uygulamaya elle girilir.
-    - (b) Sohbetler Microsoft'un programlama arayüzüyle (Graph) okunmaya çalışılır. IT izni gerekir ve yeni Planner sohbetinin bu yolla okunup okunamadığı belirsiz.
-    - (c) Sohbetler hiç aktarılmaz.
+13. ~~Geçmiş Planner kartları~~ Cevaplandı (5. bölüm).
 
-    Öneri: (a).
+**Plandan önce**
+
+36. ~~Kişi atama~~ Cevaplandı (5. bölüm).
+37. ~~Öncelik~~ Cevaplandı (5. bölüm).
+38. ~~Görünümler~~ Cevaplandı (5. bölüm).
+39. ~~Uygulamanın çalışacağı yer~~ Cevaplandı (5. bölüm).
+40. ~~Atamanın kalanı ve müdürlerin yetkisi~~ Cevaplandı (5. bölüm).
+41. ~~Sunucu kurulumu~~ Cevaplandı (5. bölüm). Sunucunun işletim sistemi kurulum adımında öğrenilecek.
+42. ~~Hata bildiriminin WhatsApp'a nasıl gideceği~~ Cevaplandı (5. bölüm).
+14. ~~Görev sohbeti~~ Cevaplandı (5. bölüm).
 
 ## 5. Kararlar
 
@@ -381,4 +382,16 @@ Cevaplanan soru 5. bölüme taşınır; numaralar değişmez.
 | 20/10/2026 | Eksik miktar (soru 33) | Eksik = planlanan takip miktarı − gerçekleşen çıkış miktarı. |
 | 20/10/2026 | Kart olan satırlar (soru 34) | SVR, OVR, OVF, WD, PP, SCN, KCN ve CB satırları kart olur; sonu "-MNT" ile bitenler servis kartı olur. OZ malzemeleri, hortum setleri, CP kitleri ve projeye özel ürünler (bağlantı çatalı, uzatma bomu…) sipariş kartında listelenir. İleride güncellenebilir; kural Ayarlar'dan değişir. |
 | 20/10/2026 | Yazı boyutu (soru 35) | Yazılar çok küçük olmaz; telefonda ve atölyede rahat okunur. |
+| 21/10/2026 | Planner'dan geçiş (soru 13) | Planner, uygulamaya tam geçilene kadar kullanılmaya devam eder; geçilince tamamen bırakılır. Kartlar ERP listelerinden oluşur. Planner Excel'i iki iş için kullanılır: açık kartların notlarındaki bilgiler (çene no, şanzıman no, motor seri no…) ERP'de eşleşen kartların boş alanlarına doldurulur; tamamlanmış kartlar değiştirilemeyen, aranabilir bir "Planner arşivi" olarak alınır. |
+| 21/10/2026 | Planner özeti (2. bölüm) | Kullanıcı onayladı; denemelerde aksi söylenmedikçe geçerli. |
+| 21/10/2026 | Kişi atama (soru 36) | Kartlara kişi atanır; "bana atananlar" süzgeci olur. Ürün ailesine göre varsayılan atama: vibrohammer, çene, kiriş ve bunların yarı mamulleri montaj ekibindeki iki kişiye; PP ve yarı mamulleri kullanıcıya (ekip lideri). Genel müdür ve montaj fabrikası müdürü kartlara atanmaz, ama her şeyi görür. Adlar git'e girmez; `OMS Veri/kurulum/atama-ve-roller.txt` dosyasında. Kalanlar: soru 40. |
+| 21/10/2026 | Öncelik (soru 37) | Öncelik alanı olmaz; aciliyet "Sıcak sipariş" etiketiyle gösterilir. |
+| 21/10/2026 | Görünümler (soru 38) | İlk sürümde siparişler listesi ve pano olur. Takvim ve grafikler sonraki sürüme kalır. |
+| 21/10/2026 | Çalışma yeri (soru 39) | Eski portal gibi şirket sunucusunda çalışan, tarayıcıdan açılan bir web sitesi olur (adresi 192.168 ile başlar). Şirket ağına bağlıyken bilgisayardan ve telefondan açılır. Kullanıcıya telefonda açacağı bir bağlantı verilir. Kurulum ayrıntıları: soru 41. |
+| 21/10/2026 | Atamanın kalanı (soru 40) | OVF, WD, servis ve yedek parça kartları da montaj ekibindeki iki kişiye atanır. |
+| 21/10/2026 | Müdürler izleyicidir (soru 40) | Genel müdür ve fabrika müdürü her şeyi görür ama değiştiremez (7b'deki "yetki ayrımı yok" kararının istisnası). Hata görürlerse (yanlış iş emri, eksik ürün…) kartta "Atanan kişiye hata bildir" düğmesiyle atanan kişiye WhatsApp'tan mesaj gönderebilirler. Hazır mesaj örneği: "<sipariş no> siparişinde bulunan <ürün kodu> kartında hata ile karşılaştım, ilgilenir misin?" Gönderim yolu: soru 42. |
+| 21/10/2026 | Sunucu kurulumu (soru 41) | Uygulama eski portalla aynı şirket sunucusunda, ayrı bir adreste çalışır. Eski portal Docker ile çalışıyor; yenisi de öyle kurulur. Kurulumu kullanıcı yapar; IT de ilgileniyor. Telefonlar şirket Wi-Fi'ına bağlanabiliyor. |
+| 21/10/2026 | Uygulama planı | `docs/uygulama-plani.md` onaylandı; eksik görülmedi. Bağımlılıklar onaylandı: Flask, Waitress, openpyxl, xlrd, Pillow, Inter yazı tipi dosyaları, pytest (yalnızca geliştirmede). |
+| 21/10/2026 | WhatsApp ile hata bildirimi (soru 42) | (a) WhatsApp bağlantısı: düğme WhatsApp'ı hazır mesajla açar, gönderen yalnızca "Gönder"e basar. Kurulum ve ücret yok; telefon numaraları uygulamaya bir kez girilir. Bildirim kartın zaman akışına yazılır ve atanan kişinin Yapılacaklar listesine düşer. |
+| 21/10/2026 | Görev sohbetleri (soru 14) | Sohbetler otomatik aktarılmaz. Kullanıcı önemli notları (hepsini değil) elle gönderir; bunlar ilgili kartın zaman akışına girer. Gerçek veri olduklarından git'e girmez. |
 | 20/10/2026 | Kartların kapanışı (bugün) | Kartlar, ürün sevk edilip irsaliyeli çıkış belgesi hazırlandıktan sonra elle kapatılıyor. Yeni sistemdeki kapanış: soru 9. |

@@ -1,0 +1,10 @@
+{% extends "taban.html" %}
+{% block baslik %}Hata {{ kod }}{% endblock %}
+{% block icerik %}
+<div class="tek-kutu">
+  <div class="kutu">
+    <h1>{{ metin }}</h1>
+    <p><a href="{{ url_for('ekranlar.siparisler') }}">Ana ekrana dön</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "taban.html" %}
+{% block baslik %}Kullanıcılar{% endblock %}
+{% block icerik %}
+<p class="geri"><a href="{{ url_for('ekranlar.ayarlar') }}">← Ayarlar</a></p>
+<div class="baslik-satiri">
+  <h1>Kullanıcılar</h1>
+  {% if g.kullanici.rol == 'ekip' %}
+  <a class="dugme" href="{{ url_for('kullanicilar.yeni') }}">Kullanıcı ekle</a>
+  {% endif %}
+</div>
+<ul class="satirlar">
+  {% for k in kullanicilar %}
+  <li{% if not k.aktif %} class="pasif"{% endif %}>
+    <div class="satir-ana">
+      <span class="satir-baslik">{{ k.ad_soyad }}</span>
+      <span class="soluk">{{ k.kullanici_adi }}</span>
+    </div>
+    <span class="etiket{% if k.rol == 'izleyici' %} vurgulu{% endif %}">{{ ROLLER[k.rol] }}</span>
+    {% if not k.aktif %}<span class="etiket">Pasif</span>
+    {% elif k.sifre_degismeli %}<span class="etiket">İlk girişi bekliyor</span>{% endif %}
+    {% if g.kullanici.rol == 'ekip' %}
+    <a href="{{ url_for('kullanicilar.duzenle', kullanici_id=k.id) }}">Düzenle</a>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

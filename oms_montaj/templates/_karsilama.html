@@ -1,0 +1,37 @@
+{# Logo bloğu, açılış canlandırması ve giriş ekranının kırmızı paneli. #}
+
+{% macro logo_blok(sinif="") -%}
+<div class="logo-blok {{ sinif }}">
+  {% set adres = logo_adresi() %}
+  {% if adres %}<img class="logo" src="{{ adres }}" alt="OMS">{% else %}<span class="logo-yazi">OMS</span>{% endif %}
+  <span class="logo-alt">MONTAJ</span>
+</div>
+{%- endmacro %}
+
+{# Logo ortadan ikiye bölünür, üst yarısı yukarı, alt yarısı aşağı çekilerek sayfa açılır.
+   Yalnızca sayfa ilk açıldığında (form gönderilince değil) ve tarayıcı oturumu başına bir kez oynar. #}
+{% macro acilis() -%}
+{% if request.method == 'GET' %}
+<div class="acilis" id="acilis" aria-hidden="true">
+  <div class="acilis-yarim acilis-ust">{{ logo_blok() }}</div>
+  <div class="acilis-yarim acilis-alt">{{ logo_blok() }}</div>
+</div>
+<script>
+  try {
+    if (sessionStorage.getItem("acilis-goruldu")) document.getElementById("acilis").remove();
+    else sessionStorage.setItem("acilis-goruldu", "1");
+  } catch (e) {}
+</script>
+{% endif %}
+{%- endmacro %}
+
+{% macro giris_paneli() -%}
+<section class="giris-sol">
+  {{ logo_blok("beyaz") }}
+  <div class="giris-tanitim">
+    <h2>OMS Montaj Portalı</h2>
+    <p>Siparişten sevke kadar montaj fabrikasındaki her ürünün takibi.</p>
+  </div>
+  <p class="giris-alt">© {{ YIL }} OMS · Sürüm {{ SURUM }}</p>
+</section>
+{%- endmacro %}

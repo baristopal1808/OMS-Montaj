@@ -3,48 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#b3121f">
+  <meta name="theme-color" content="#16181d">
   <title>{% block baslik %}{% endblock %} · OMS Montaj</title>
   <link rel="icon" href="{{ url_for('static', filename='simge.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='uygulama.css') }}">
 </head>
-<body>
-  {% if g.kullanici %}
-  <header class="ust">
-    <a class="marka" href="{{ url_for('ekranlar.siparisler') }}">OMS Montaj</a>
-    <div class="kullanici">
-      <span class="ad">{{ g.kullanici.ad_soyad }}</span>
-      {% if g.kullanici.rol == 'izleyici' %}<span class="etiket">İzleyici</span>{% endif %}
-      <a href="{{ url_for('kimlik.sifre') }}">Şifre</a>
-      <form method="post" action="{{ url_for('kimlik.cikis') }}">
-        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-        <button type="submit" class="metin-dugme">Çıkış</button>
-      </form>
-    </div>
-  </header>
-  {% if not g.kullanici.sifre_degismeli %}
+<body class="{% block govde_sinifi %}{% endblock %}">
+{% macro bildirimler() -%}
+  {% for mesaj in get_flashed_messages() %}
+  <p class="bildirim" role="status">{{ mesaj }}</p>
+  {% endfor %}
+{%- endmacro %}
+{% if g.kullanici and not g.kullanici.sifre_degismeli %}
+  {% from "_karsilama.html" import logo_blok with context %}
   {% set menu = [
-    ('ekranlar.siparisler', 'Siparişler'),
-    ('ekranlar.pano', 'Pano'),
-    ('ekranlar.stok', 'Stok'),
-    ('ekranlar.yapilacaklar', 'Yapılacaklar'),
-    ('ekranlar.erp_yukleme', 'ERP yükleme'),
-    ('ekranlar.arsiv', 'Arşiv'),
-    ('ekranlar.ayarlar', 'Ayarlar'),
+    ('ekranlar.siparisler', 'siparisler', 'Siparişler'),
+    ('ekranlar.pano', 'pano', 'Pano'),
+    ('ekranlar.stok', 'stok', 'Stok'),
+    ('ekranlar.yapilacaklar', 'yapilacaklar', 'Yapılacaklar'),
+    ('ekranlar.erp_yukleme', 'erp_yukleme', 'ERP yükleme'),
+    ('ekranlar.arsiv', 'arsiv', 'Arşiv'),
+    ('ekranlar.ayarlar', 'ayarlar', 'Ayarlar'),
   ] %}
-  <nav class="menu" aria-label="Ana menü">
-    {% for uc, ad in menu %}
-    {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar') %}
-    <a href="{{ url_for(uc) }}"{% if etkin %} class="etkin" aria-current="page"{% endif %}>{{ ad }}</a>
-    {% endfor %}
-  </nav>
+  <div class="duzen">
+    <aside class="yan" id="yan-menu">
+      <a class="yan-marka" href="{{ url_for('ekranlar.siparisler') }}" aria-label="Siparişler">{{ logo_blok("beyaz kucuk") }}</a>
+      <nav class="yan-menu" aria-label="Ana menü">
+        {% for uc, simge_adi, ad in menu %}
+        {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar') %}
+        <a href="{{ url_for(uc) }}"{% if etkin %} class="etkin" aria-current="page"{% endif %}>{{ simge(simge_adi) }}<span>{{ ad }}</span></a>
+        {% endfor %}
+      </nav>
+      <div class="yan-alt">
+        <div class="yan-kullanici">
+          <span class="yan-ad">{{ g.kullanici.ad_soyad }}</span>
+          <span class="yan-rol">{{ ROLLER[g.kullanici.rol] }}</span>
+        </div>
+        <a href="{{ url_for('kimlik.sifre') }}"{% if request.endpoint == 'kimlik.sifre' %} class="etkin" aria-current="page"{% endif %}>{{ simge('anahtar') }}<span>Şifre değiştir</span></a>
+        <form method="post" action="{{ url_for('kimlik.cikis') }}">
+          <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+          <button type="submit">{{ simge('cikis') }}<span>Çıkış</span></button>
+        </form>
+      </div>
+    </aside>
+    <div class="perde" data-menu-kapat></div>
+    <div class="ana">
+      <header class="ust-mobil">
+        <button type="button" class="menu-dugme" aria-controls="yan-menu" aria-expanded="false" aria-label="Menüyü aç">{{ simge('menu') }}</button>
+        <a class="ust-marka" href="{{ url_for('ekranlar.siparisler') }}">OMS Montaj</a>
+      </header>
+      <main class="icerik">
+        {{ bildirimler() }}
+        {% block icerik %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='uygulama.js') }}" defer></script>
+{% else %}
+  {% if g.kullanici %}
+  <header class="ust-sade">
+    <span class="ust-marka">OMS Montaj</span>
+    <form method="post" action="{{ url_for('kimlik.cikis') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <button type="submit" class="metin-dugme">Çıkış</button>
+    </form>
+  </header>
   {% endif %}
-  {% endif %}
-  <main class="icerik">
-    {% for mesaj in get_flashed_messages() %}
-    <p class="bildirim" role="status">{{ mesaj }}</p>
-    {% endfor %}
-    {% block icerik %}{% endblock %}
+  <main class="{% block ana_sinifi %}icerik{% endblock %}">
+    {{ bildirimler() }}
+    {{ self.icerik() }}
   </main>
+{% endif %}
 </body>
 </html>

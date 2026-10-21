@@ -109,7 +109,7 @@ Her adımın sonunda kullanıcı deneyebileceği bir şey görür. Kullanıcı d
 | 5. Stok, test ve sevk | Stok raporları, ilk stok kaydı, "depoda stok mevcut", test sorusu ve "test bekliyor" uyarısı, eksik malzeme uyarısı, "sevk edildi, kapatayım mı?" | Stokları kaydeder, bir stok ürününü siparişe atar |
 | 6. Ayarlar ve izleyici | Etiket, aşama, şablon, kart kuralı, atama ve kullanıcı ekranları; izleyici rolü ve hata bildirimi | Bir etiket ekler; müdür hesabıyla hata bildirir |
 | 7. Planner'dan alım | Açık kartların notlarındaki numaralar, Planner arşivi, önemli sohbet notları | Arşivde eski bir makineyi arar |
-| 8. Sunucuya kurulum | Docker, adres, veri klasörü ve yedek; telefon için bağlantı | Ekip şirket ağında kullanmaya başlar |
+| 8. Sunucuya kurulum | Docker, adres, veri klasörü (logo dahil) ve yedek; telefon için bağlantı | Ekip şirket ağında kullanmaya başlar |
 
 ## 9. Deneme ve geçiş
 

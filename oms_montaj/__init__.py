@@ -8,13 +8,15 @@ gösterdiği klasör. İkisi de git'in dışındadır.
 
 import os
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from flask import Flask, render_template
 
-from . import ekranlar, kimlik, kullanicilar, veritabani
+from . import ekranlar, kimlik, kullanicilar, marka, veritabani
+from .simgeler import simge
 
+SURUM = "0.1"
 KOK = Path(__file__).resolve().parent.parent
 VARSAYILAN_VERI_KLASORU = KOK / "OMS Veri" / "uygulama"
 
@@ -47,7 +49,7 @@ def uygulama_olustur(ayarlar=None):
     uygulama.config.update(ayarlar or {})
 
     klasor = Path(uygulama.config["VERI_KLASORU"])
-    klasor.mkdir(parents=True, exist_ok=True)
+    (klasor / "marka").mkdir(parents=True, exist_ok=True)
     uygulama.config["VERITABANI"] = klasor / "oms-montaj.db"
     if not uygulama.config.get("SECRET_KEY"):
         uygulama.config["SECRET_KEY"] = gizli_anahtar(klasor)
@@ -56,6 +58,9 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(kimlik.bp)
     uygulama.register_blueprint(kullanicilar.bp)
     uygulama.register_blueprint(ekranlar.bp)
+    uygulama.register_blueprint(marka.bp)
     for kod in HATA_METINLERI:
         uygulama.register_error_handler(kod, hata_sayfasi)
+    uygulama.jinja_env.globals.update(simge=simge, SURUM=SURUM)
+    uygulama.context_processor(lambda: {"YIL": date.today().year})
     return uygulama

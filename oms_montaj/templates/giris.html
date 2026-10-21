@@ -1,22 +1,27 @@
 {% extends "taban.html" %}
 {% block baslik %}Giriş{% endblock %}
+{% block govde_sinifi %}koyu{% endblock %}
+{% block ana_sinifi %}giris-ana{% endblock %}
 {% block icerik %}
-<div class="tek-kutu">
-  <p class="marka buyuk">OMS Montaj</p>
-  <div class="kutu">
+{% from "_karsilama.html" import acilis, giris_paneli with context %}
+{{ acilis() }}
+<div class="giris-kart">
+  {{ giris_paneli() }}
+  <section class="giris-sag">
     <h1>Giriş</h1>
+    <p class="soluk">Devam etmek için bilgilerinizi girin.</p>
     {% if hata %}<p class="hata-kutusu" role="alert">{{ hata }}</p>{% endif %}
-    <form method="post" class="form">
+    <form method="post" class="form giris-form">
       <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-      <label>Kullanıcı adı
-        <input type="text" name="kullanici_adi" value="{{ request.form.kullanici_adi }}" autocomplete="username" autocapitalize="none" required autofocus>
+      <label>KULLANICI ADI
+        <input type="text" name="kullanici_adi" value="{{ request.form.kullanici_adi }}" placeholder="Kullanıcı adınız" autocomplete="username" autocapitalize="none" required autofocus>
       </label>
-      <label>Şifre
-        <input type="password" name="sifre" autocomplete="current-password" required>
+      <label>ŞİFRE
+        <input type="password" name="sifre" placeholder="Şifreniz" autocomplete="current-password" required>
       </label>
-      <button type="submit" class="dugme">Giriş yap</button>
+      <button type="submit" class="dugme siyah">Giriş yap <span aria-hidden="true">→</span></button>
     </form>
-  </div>
-  <p class="soluk kucuk">Şifrenizi unuttuysanız ekipten birine söyleyin; Ayarlar > Kullanıcılar'dan size geçici şifre verebilir.</p>
+    <p class="soluk kucuk giris-not">Şifrenizi unuttuysanız ekipten birine söyleyin; Ayarlar > Kullanıcılar'dan size geçici şifre verebilir.</p>
+  </section>
 </div>
 {% endblock %}

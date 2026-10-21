@@ -23,7 +23,7 @@ bp = Blueprint("kimlik", __name__)
 ROLLER = {"ekip": "Ekip", "izleyici": "İzleyici"}
 EN_KISA_SIFRE = 8
 KULLANICI_ADI = re.compile(r"^[\w.\-]{2,40}$")
-ACIK_SAYFALAR = {"kimlik.giris", "kimlik.kurulum", "static"}
+ACIK_SAYFALAR = {"kimlik.giris", "kimlik.kurulum", "marka.logo", "static"}
 SIFRE_ONCESI_SAYFALAR = {"kimlik.sifre", "kimlik.cikis", "static"}
 
 

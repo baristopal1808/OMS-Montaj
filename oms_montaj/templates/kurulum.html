@@ -1,30 +1,34 @@
 {% extends "taban.html" %}
 {% block baslik %}İlk kurulum{% endblock %}
+{% block govde_sinifi %}koyu{% endblock %}
+{% block ana_sinifi %}giris-ana{% endblock %}
 {% block icerik %}
-<div class="tek-kutu">
-  <p class="marka buyuk">OMS Montaj</p>
-  <div class="kutu">
+{% from "_karsilama.html" import acilis, giris_paneli with context %}
+{{ acilis() }}
+<div class="giris-kart">
+  {{ giris_paneli() }}
+  <section class="giris-sag">
     <h1>Hoş geldiniz</h1>
     <p class="soluk">Uygulamada henüz hesap yok. İlk hesabı açın; ekibin diğer hesaplarını sonra Ayarlar > Kullanıcılar'dan eklersiniz.</p>
     {% if hata %}<p class="hata-kutusu" role="alert">{{ hata }}</p>{% endif %}
-    <form method="post" class="form">
+    <form method="post" class="form giris-form">
       <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-      <label>Ad soyad
+      <label>AD SOYAD
         <input type="text" name="ad_soyad" value="{{ request.form.ad_soyad }}" autocomplete="name" required autofocus>
       </label>
-      <label>Kullanıcı adı
+      <label>KULLANICI ADI
         <span class="ipucu">Girişte kullanacağınız ad; boşluksuz. Örnek: ad.soyad</span>
         <input type="text" name="kullanici_adi" value="{{ request.form.kullanici_adi }}" autocomplete="username" autocapitalize="none" required>
       </label>
-      <label>Şifre
+      <label>ŞİFRE
         <span class="ipucu">En az 8 karakter.</span>
         <input type="password" name="sifre" autocomplete="new-password" required>
       </label>
-      <label>Şifre (tekrar)
+      <label>ŞİFRE (TEKRAR)
         <input type="password" name="sifre_tekrar" autocomplete="new-password" required>
       </label>
-      <button type="submit" class="dugme">Hesabı aç</button>
+      <button type="submit" class="dugme siyah">Hesabı aç <span aria-hidden="true">→</span></button>
     </form>
-  </div>
+  </section>
 </div>
 {% endblock %}

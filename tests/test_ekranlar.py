@@ -25,6 +25,23 @@ def test_ekranlar_acilir(istemci, ekle, giris, adres, baslik):
     assert f"<h1>{baslik}</h1>" in yanit.get_data(as_text=True)
 
 
+def test_yan_menu_giristen_sonra_gorunur(istemci, ekle, giris):
+    ekle()
+    giris()
+    sayfa = istemci.get("/pano").get_data(as_text=True)
+    assert 'class="yan"' in sayfa
+    assert 'href="/pano" class="etkin" aria-current="page"' in sayfa
+    assert 'href="/arsiv"' in sayfa
+
+
+def test_gecici_sifreyle_menu_gosterilmez(istemci, ekle, giris):
+    ekle(degismeli=True)
+    giris()
+    sayfa = istemci.get("/sifre").get_data(as_text=True)
+    assert 'class="yan"' not in sayfa
+    assert "Kendi şifrenizi belirleyin" in sayfa
+
+
 def test_yazi_tipi_ve_gorunum_sunulur(istemci):
     assert istemci.get("/static/uygulama.css").status_code == 200
     assert istemci.get("/static/yazitipi/InterVariable.woff2").status_code == 200

@@ -1,0 +1,69 @@
+{% extends "taban.html" %}
+{% block baslik %}Siparişler{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik %}
+<div class="baslik-satiri">
+  <h1>Siparişler</h1>
+  {% if son_yukleme %}<span class="soluk kucuk">ERP verisi: {{ son_yukleme | zaman }}</span>{% endif %}
+</div>
+
+{% if not toplam %}
+<div class="kutu bos">
+  <p>Henüz sipariş yok.</p>
+  <p class="soluk">ERP'den aldığınız "Sipariş talepleri" Excel'ini <a href="{{ url_for('erp.yukleme') }}">ERP yükleme</a> ekranından yükleyin; açık siparişler burada teslim tarihine göre sıralanır.</p>
+</div>
+{% else %}
+<form class="suzgec" method="get" role="search">
+  <input type="search" name="ara" value="{{ secim.ara }}" placeholder="Sipariş no, müşteri, ürün, seri no, iş emri no" aria-label="Ara">
+  <select name="durum" aria-label="Durum">
+    {% for anahtar, ad in DURUM_SUZGECLERI.items() %}
+    <option value="{{ anahtar }}"{% if secim.durum == anahtar %} selected{% endif %}>{{ ad }} ({{ sayilar[anahtar] or 0 }})</option>
+    {% endfor %}
+  </select>
+  <select name="tip" aria-label="Sipariş tipi">
+    <option value="">Bütün tipler</option>
+    {% for anahtar, ad in TIPLER.items() %}
+    <option value="{{ anahtar }}"{% if secim.tip == anahtar %} selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <select name="aile" aria-label="Ürün ailesi">
+    <option value="">Bütün ürünler</option>
+    {% for anahtar, ad in AILE_SUZGECLERI.items() %}
+    <option value="{{ anahtar }}"{% if secim.aile == anahtar %} selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="dugme ikincil">Uygula</button>
+</form>
+
+{% from "_siparis_kutusu.html" import siparis_kutusu with context %}
+{% if teslim_sutunu or tarih_araligi %}
+<p class="suzgec-notu">
+  {% if teslim_sutunu %}Yalnızca "{{ teslim_sutunu }}" gösteriliyor{% endif %}
+  {% if tarih_araligi %}Makine teslimi {{ tarih_araligi[0] | tarih }}{% if tarih_araligi[1] != '9999-12-31' %}–{{ tarih_araligi[1] | tarih }} arasında{% else %} ve sonrasında{% endif %} olan siparişler{% endif %}
+  · <a href="{{ url_for('siparisler.liste', ara=secim.ara or None, durum=secim.durum, tip=secim.tip or None, aile=secim.aile or None) }}">bütün siparişler</a>
+</p>
+{% endif %}
+{% if sutunlar %}
+<div class="teslim-sutunlari">
+  {% for sinif, ad, liste in sutunlar %}
+  <section class="teslim-sutunu {{ sinif or 'sonra' }}">
+    <h2><span class="sutun-isaret" aria-hidden="true"></span>{{ ad }} <span class="soluk">({{ liste | length }})</span></h2>
+    {% if liste %}
+    <ul class="kutu-sutunu">
+      {% for o in liste %}<li{% if o.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>{{ siparis_kutusu(o) }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="soluk kucuk bos-sutun">Bu sütunda sipariş yok.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% elif ozetler %}
+<ul class="siparis-kutulari">
+  {% for o in ozetler %}<li{% if o.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>{{ siparis_kutusu(o) }}</li>{% endfor %}
+</ul>
+{% else %}
+<div class="kutu bos"><p>Bu süzgeçlere uyan sipariş yok.</p></div>
+{% endif %}
+{% endif %}
+{% endblock %}

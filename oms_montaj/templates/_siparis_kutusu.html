@@ -1,0 +1,29 @@
+{# Siparişler listesinde ve özet sayfasında bir siparişin kutusu. Kutunun tamamı sipariş kartını açar;
+   ürün kutucukları kartta o ürün ailesinin bölümüne gider. #}
+{% macro siparis_kutusu(o) -%}
+{% set s = o.siparis %}
+{% set adres = url_for('siparisler.kart', siparis_no=s.siparis_no) %}
+<div class="sk{% if o.kalan and o.kalan[1] %} {{ o.kalan[1] }}{% endif %}">
+  <span class="sk-ust">
+    <a class="sk-no" href="{{ adres }}">{{ s.siparis_no }}</a>
+    <span class="sk-rozetler">
+      {% if s.tip %}<span class="etiket">{{ TIPLER[s.tip] }}</span>{% endif %}
+      {% if o.durum == 'onay_bekliyor' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>
+      {% elif o.durum == 'kapali' %}<span class="etiket durum-kapali">ERP'de kapandı</span>
+      {% elif o.durum == 'iptal' %}<span class="etiket durum-iptal">İptal</span>
+      {% elif o.durum == 'listede_yok' %}<span class="etiket durum-listede_yok">ERP listesinde yok</span>{% endif %}
+    </span>
+  </span>
+  <span class="sk-musteri">{{ s.musteri or '' }}</span>
+  <span class="sk-tarih">
+    {% if o.durum in ('acik', 'onay_bekliyor') %}
+      {% if o.teslim %}Teslim {{ o.teslim | tarih }}{% else %}<span class="soluk">Teslim tarihi yok</span>{% endif %}
+      {% if o.kalan %}<span class="etiket {{ o.kalan[1] }}">{{ o.kalan[0] }}</span>{% endif %}
+    {% elif o.son_sevk %}Sevk {{ o.son_sevk | tarih }}{% endif %}
+  </span>
+  <span class="sk-urunler">
+    {% for aile, adet in o.urunler %}<a class="sk-urun" href="{{ adres }}#aile-{{ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
+    {% if o.diger_kalem %}<span class="sk-urun soluk">{{ o.diger_kalem }} diğer kalem</span>{% endif %}
+  </span>
+</div>
+{%- endmacro %}

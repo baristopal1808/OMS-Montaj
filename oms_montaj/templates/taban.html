@@ -17,20 +17,24 @@
 {% if g.kullanici and not g.kullanici.sifre_degismeli %}
   {% from "_karsilama.html" import logo_blok with context %}
   {% set menu = [
-    ('ekranlar.siparisler', 'siparisler', 'Siparişler'),
+    ('ozet.ana', 'ozet', 'Özet'),
+    ('siparisler.liste', 'siparisler', 'Siparişler'),
+    ('yedek_parca.liste', 'yedek_parca', 'Yedek parça'),
     ('ekranlar.pano', 'pano', 'Pano'),
     ('ekranlar.stok', 'stok', 'Stok'),
     ('ekranlar.yapilacaklar', 'yapilacaklar', 'Yapılacaklar'),
-    ('ekranlar.erp_yukleme', 'erp_yukleme', 'ERP yükleme'),
+    ('sevkiyat.liste', 'sevkiyat', 'Sevkiyat'),
+    ('erp.yukleme', 'erp_yukleme', 'ERP yükleme'),
     ('ekranlar.arsiv', 'arsiv', 'Arşiv'),
     ('ekranlar.ayarlar', 'ayarlar', 'Ayarlar'),
   ] %}
   <div class="duzen">
     <aside class="yan" id="yan-menu">
-      <a class="yan-marka" href="{{ url_for('ekranlar.siparisler') }}" aria-label="Siparişler">{{ logo_blok("beyaz kucuk") }}</a>
+      <a class="yan-marka" href="{{ url_for('ozet.ana') }}" aria-label="Özet">{{ logo_blok("beyaz kucuk") }}</a>
       <nav class="yan-menu" aria-label="Ana menü">
         {% for uc, simge_adi, ad in menu %}
-        {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar') %}
+        {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar')
+             or (uc == 'siparisler.liste' and request.endpoint == 'siparisler.kart') %}
         <a href="{{ url_for(uc) }}"{% if etkin %} class="etkin" aria-current="page"{% endif %}>{{ simge(simge_adi) }}<span>{{ ad }}</span></a>
         {% endfor %}
       </nav>
@@ -50,9 +54,9 @@
     <div class="ana">
       <header class="ust-mobil">
         <button type="button" class="menu-dugme" aria-controls="yan-menu" aria-expanded="false" aria-label="Menüyü aç">{{ simge('menu') }}</button>
-        <a class="ust-marka" href="{{ url_for('ekranlar.siparisler') }}">OMS Montaj</a>
+        <a class="ust-marka" href="{{ url_for('ozet.ana') }}">OMS Montaj</a>
       </header>
-      <main class="icerik">
+      <main class="icerik {% block icerik_sinifi %}{% endblock %}">
         {{ bildirimler() }}
         {% block icerik %}{% endblock %}
       </main>

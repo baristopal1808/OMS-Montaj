@@ -1,0 +1,53 @@
+{% extends "taban.html" %}
+{% block baslik %}Yedek parça{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik %}
+<div class="baslik-satiri">
+  <h1>Yedek parça</h1>
+  {% if son_yukleme %}<span class="soluk kucuk">ERP verisi: {{ son_yukleme | zaman }}</span>{% endif %}
+</div>
+
+<nav class="secici" aria-label="Durum">
+  {% for anahtar, ad in SUZGECLER.items() %}
+  <a href="{{ url_for('yedek_parca.liste', durum=anahtar) }}"{% if secim == anahtar %} class="etkin" aria-current="page"{% endif %}>
+    {{ ad }} <span class="cs-sayi">{{ sayilar[anahtar] }}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+{% if satirlar %}
+<section class="pano-karti">
+  <div class="kaydirilabilir">
+    <table class="tablo">
+      <thead>
+        <tr><th>Sipariş</th><th>Müşteri</th><th>Talep tarihi</th><th>Teslim</th><th>Durum</th><th>Kalem</th><th>Adet</th><th>Planlama durumu</th></tr>
+      </thead>
+      <tbody>
+        {% for s in satirlar %}
+        <tr{% if s.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>
+          <td><a class="tablo-baglanti" href="{{ url_for('siparisler.kart', siparis_no=s.siparis.siparis_no) }}">{{ s.siparis.siparis_no }}</a></td>
+          <td>{{ s.siparis.musteri or '' }}</td>
+          <td class="sayisal">{{ s.siparis.talep_tarihi | tarih }}</td>
+          <td class="sayisal">{{ s.teslim | tarih }}</td>
+          <td>
+            {% if s.durum == 'kapali' %}<span class="etiket durum-kapali">Sevk edildi{% if s.son_sevk %} · {{ s.son_sevk | tarih }}{% endif %}</span>
+            {% elif s.durum == 'iptal' %}<span class="etiket durum-iptal">İptal</span>
+            {% else %}
+              {% if s.durum == 'onay_bekliyor' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}
+              {% if s.kalan %}<span class="etiket {{ s.kalan[1] }}">{{ s.kalan[0] }}</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="sayisal">{{ s.kalem }}</td>
+          <td class="sayisal">{% if s.sevk_adet and s.durum != 'kapali' %}{{ s.sevk_adet }} / {% endif %}{{ s.adet }}</td>
+          <td>{{ s.planlama or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<p class="soluk kucuk aciklama-notu">Adet sütununda kısmen sevk edilmiş siparişler "sevk edilen / toplam" olarak yazar. Hazırlanıyor ve sevke hazır aşamaları planın 4. adımında eklenecek.</p>
+{% else %}
+<div class="kutu bos"><p>Bu süzgece uyan yedek parça siparişi yok.</p></div>
+{% endif %}
+{% endblock %}

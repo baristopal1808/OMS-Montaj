@@ -1,0 +1,41 @@
+{% extends "taban.html" %}
+{% block baslik %}ERP yükleme{% endblock %}
+{% block icerik %}
+<h1>ERP yükleme</h1>
+
+{% if g.kullanici.rol == 'ekip' %}
+<div class="kutu dar">
+  <form method="post" enctype="multipart/form-data" class="form">
+    <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+    <label class="dosya-alani" data-dosya-alani>
+      <input type="file" name="dosyalar" accept=".xls,.xlsx" multiple required>
+      <span class="da-simge">{{ simge('erp_yukleme') }}</span>
+      <span class="da-baslik">Excel dosyalarını buraya sürükleyin</span>
+      <span class="da-alt">ya da seçmek için tıklayın · .xls ve .xlsx · birden çok dosya seçilebilir</span>
+      <span class="da-secilen" data-secilen></span>
+    </label>
+    <p class="ipucu">Dosyaları ERP'nin verdiği gibi bırakın; türleri kendiliğinden tanınır.</p>
+    <button type="submit" class="dugme">{{ simge('erp_yukleme') }} Yükle</button>
+  </form>
+</div>
+<p class="soluk kucuk aciklama-notu">Şimdilik işlenen raporlar: "Sipariş talepleri" ve "Siparişi tamamlanan sipariş talepleri". İş emirleri planın 3. adımında, stok ve çıkış yapılamayan malzeme raporları 5. adımında eklenecek.</p>
+{% endif %}
+
+<h2>Son yüklemeler</h2>
+{% if yuklemeler %}
+<ul class="satirlar">
+  {% for y in yuklemeler %}
+  <li>
+    <div class="satir-ana">
+      <span class="satir-baslik">{{ y.dosya_adi }}</span>
+      <span class="soluk kucuk">{{ y.zaman | zaman }}{% if y.ad_soyad %} · {{ y.ad_soyad }}{% endif %}</span>
+      {% if y.ozet %}<span class="kucuk">{{ y.ozet }}</span>{% endif %}
+    </div>
+    <span class="etiket{% if not y.tur %} durum-iptal{% endif %}">{{ RAPORLAR[y.tur].ad if y.tur else 'Tanınmadı' }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="soluk">Henüz yükleme yapılmadı.</p>
+{% endif %}
+{% endblock %}

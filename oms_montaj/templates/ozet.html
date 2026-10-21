@@ -1,0 +1,115 @@
+{% extends "taban.html" %}
+{% block baslik %}Özet{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik %}
+{% from "_grafik.html" import halka_grafigi with context %}
+<div class="baslik-satiri">
+  <h1>Özet</h1>
+  {% if son_yukleme %}<span class="soluk kucuk">ERP verisi: {{ son_yukleme | zaman }}</span>{% endif %}
+</div>
+
+{% if not sayilar.acik and not sevk.urun %}
+<div class="kutu bos">
+  <p>Henüz açık sipariş yok.</p>
+  <p class="soluk">ERP'den aldığınız "Sipariş talepleri" Excel'ini <a href="{{ url_for('erp.yukleme') }}">ERP yükleme</a> ekranından yükleyin; özet buraya gelir.</p>
+</div>
+{% else %}
+
+<div class="gosterge-satiri">
+  <a class="gosterge" href="{{ url_for('siparisler.liste') }}">
+    <span class="gosterge-ad">Açık sipariş</span>
+    <span class="gosterge-deger">{{ sayilar.acik }}</span>
+    <span class="gosterge-alt">sevk edilmemiş siparişler</span>
+  </a>
+  <a class="gosterge" href="{{ url_for('siparisler.liste') }}">
+    <span class="gosterge-ad">Sevk edilecek ürün</span>
+    <span class="gosterge-deger">{{ sayilar.urun }}</span>
+    <span class="gosterge-alt">makine · çene ve kiriş hariç</span>
+  </a>
+  <a class="gosterge" href="{{ url_for('siparisler.liste', teslim='gecikti') }}">
+    <span class="gosterge-ad"><span class="durum-isaret kritik" aria-hidden="true">!</span>Teslimi geçen</span>
+    <span class="gosterge-deger">{{ sayilar.geciken }}</span>
+    <span class="gosterge-alt">sipariş · {{ sayilar.geciken_urun }} makine</span>
+  </a>
+  <a class="gosterge" href="{{ url_for('siparisler.liste', teslim='yaklasan') }}">
+    <span class="gosterge-ad"><span class="durum-isaret uyari" aria-hidden="true">!</span>{{ YAKLASAN_GUN }} gün içinde</span>
+    <span class="gosterge-deger">{{ sayilar.yaklasan }}</span>
+    <span class="gosterge-alt">sipariş teslim edilecek</span>
+  </a>
+  <a class="gosterge" href="{{ url_for('siparisler.liste', durum='onay_bekliyor') }}">
+    <span class="gosterge-ad">Onay bekleyen</span>
+    <span class="gosterge-deger">{{ sayilar.onay }}</span>
+    <span class="gosterge-alt">sipariş talebi</span>
+  </a>
+  <a class="gosterge" href="{{ url_for('sevkiyat.liste') }}">
+    <span class="gosterge-ad">Sevk edildi</span>
+    <span class="gosterge-deger">{{ sevk.urun }}</span>
+    <span class="gosterge-alt">makine · {{ sevk.siparis }} sipariş · {{ bu_ceyrek[0] }} {{ bu_ceyrek[1] }}. çeyrek</span>
+  </a>
+</div>
+
+<div class="ozet-izgara">
+  <section class="pano-karti">
+    <header><h2>Sevk edilecek ürünler</h2><span>makineler · dilime tıklayın</span></header>
+    <div class="pano-icerik">{{ halka_grafigi(aile_grafigi, 'makine', 'Sevk edilecek makineler') }}</div>
+  </section>
+
+  <section class="pano-karti">
+    <header><h2>Planlama birimi üretim durumu</h2><span>ERP "Ürün Durumu"</span></header>
+    <div class="pano-icerik">{{ halka_grafigi(planlama_grafigi, 'makine', 'Planlama birimi üretim durumu') }}</div>
+  </section>
+
+  <section class="pano-karti">
+    <header><h2>Haftalık teslim takvimi</h2><span>makine adedi · haftaya tıklayın</span></header>
+    <div class="pano-icerik">
+      <div class="kaydirilabilir">
+        <div class="sutun-grafigi">
+          {% for s in takvim %}
+          <a class="sg-sutun{% if s.geciken %} geciken{% endif %}" href="{{ s.adres }}" title="{{ s.ad }} ({{ s.aralik }}): {{ s.sayi }} makine">
+            <span class="sg-alan">
+              <span class="sg-deger{% if not s.sayi %} soluk{% endif %}">{{ s.sayi }}</span>
+              <span class="sg-cubuk" style="height: {{ s.yukseklik }}px"></span>
+            </span>
+            <span class="sg-ad">{{ s.ad }}</span>
+            <span class="sg-alt">{{ s.alt or '&nbsp;' | safe }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% if tarihsiz %}<p class="soluk kucuk">Teslim tarihi olmayan: {{ tarihsiz }} ürün.</p>{% endif %}
+    </div>
+  </section>
+</div>
+
+<section class="pano-karti">
+  <header>
+    <h2>Teslimi geçen ve {{ YAKLASAN_GUN }} gün içinde teslim edilecek siparişler</h2>
+    <span>{% if yaklasan_toplam > yaklasanlar | length %}{{ yaklasan_toplam }} siparişin en acil {{ yaklasanlar | length }}'sı · <a class="baslik-baglanti" href="{{ url_for('siparisler.liste') }}">tümü</a>{% else %}{{ yaklasan_toplam }} sipariş{% endif %}</span>
+  </header>
+  {% if yaklasanlar %}
+  <div class="kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>Sipariş</th><th>Müşteri</th><th>Teslim</th><th>Durum</th><th>Ürünler</th></tr></thead>
+      <tbody>
+        {% for o in yaklasanlar %}
+        {% set adres = url_for('siparisler.kart', siparis_no=o.siparis.siparis_no) %}
+        <tr{% if o.durum == 'onay_bekliyor' %} class="onay-bekliyor"{% endif %}>
+          <td><a class="tablo-baglanti" href="{{ adres }}">{{ o.siparis.siparis_no }}</a>{% if o.durum == 'onay_bekliyor' %} <span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}</td>
+          <td>{{ o.siparis.musteri or '' }}</td>
+          <td class="sayisal">{{ o.teslim | tarih }}</td>
+          <td><span class="etiket {{ o.kalan[1] }}">{{ o.kalan[0] }}</span></td>
+          <td><div class="tablo-urunler">
+            {% for aile, adet in o.urunler %}<a class="sk-urun" href="{{ adres }}#aile-{{ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
+            {% if o.diger_kalem %}<span class="sk-urun soluk">{{ o.diger_kalem }} diğer kalem</span>{% endif %}
+          </div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="pano-icerik soluk">Teslimi geçen ya da {{ YAKLASAN_GUN }} gün içinde teslim edilecek sipariş yok.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

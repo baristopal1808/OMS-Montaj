@@ -79,7 +79,7 @@ def guvenli_adres(adres):
     """Girişten sonra yalnızca bu sitenin bir sayfasına dönülür."""
     if adres and adres.startswith("/") and not adres.startswith("//") and "\\" not in adres:
         return adres
-    return url_for("ekranlar.siparisler")
+    return url_for("ozet.ana")
 
 
 def csrf_anahtari():
@@ -165,7 +165,7 @@ def kurulum():
         if not hata:
             oturum_ac(kullanici_ekle(kullanici_adi, ad_soyad, "ekip", sifre, sifre_degismeli=False))
             flash("Hesabınız açıldı. Ekibin diğer hesaplarını Ayarlar > Kullanıcılar'dan ekleyebilirsiniz.")
-            return redirect(url_for("ekranlar.siparisler"))
+            return redirect(url_for("ozet.ana"))
     return render_template("kurulum.html", hata=hata)
 
 
@@ -184,7 +184,7 @@ def sifre():
         if not hata:
             sifreyi_degistir(g.kullanici["id"], yeni, sifre_degismeli=False)
             flash("Şifreniz değiştirildi.")
-            return redirect(url_for("ekranlar.siparisler"))
+            return redirect(url_for("ozet.ana"))
     return render_template("sifre.html", hata=hata, zorunlu=bool(g.kullanici["sifre_degismeli"]))
 
 

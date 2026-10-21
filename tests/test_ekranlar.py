@@ -7,7 +7,10 @@ from oms_montaj.veritabani import GOCLER, ac
 @pytest.mark.parametrize(
     "adres, baslik",
     [
-        ("/", "Siparişler"),
+        ("/", "Özet"),
+        ("/siparisler", "Siparişler"),
+        ("/sevkiyat", "Sevkiyat"),
+        ("/yedek-parca", "Yedek parça"),
         ("/pano", "Pano"),
         ("/stok", "Stok"),
         ("/yapilacaklar", "Yapılacaklar"),

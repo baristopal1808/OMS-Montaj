@@ -1,0 +1,27 @@
+{# Pasta (halka) grafik ve yanında açıklama listesi. Dilim ve liste satırı, adresi varsa tıklanır. #}
+{% macro halka_grafigi(h, birim, baslik) -%}
+<div class="halka-kutusu">
+  <svg class="halka" viewBox="0 0 140 140" role="img" aria-label="{{ baslik }}: toplam {{ h.toplam }} {{ birim }}">
+    <circle cx="70" cy="70" r="{{ h.yaricap }}" fill="none" stroke="var(--zemin)" stroke-width="22"/>
+    {% for d in h.dilimler %}
+    {% set dilim %}<circle cx="70" cy="70" r="{{ h.yaricap }}" fill="none" stroke="{{ d.renk }}" stroke-width="22"
+        stroke-dasharray="{{ d.uzunluk }} {{ h.cevre }}" stroke-dashoffset="{{ -d.kayma }}" transform="rotate(-90 70 70)"><title>{{ d.ad }}: {{ d.sayi }} {{ birim }} (%{{ d.yuzde }})</title></circle>{% endset %}
+    {% if d.adres %}<a href="{{ d.adres }}">{{ dilim }}</a>{% else %}{{ dilim }}{% endif %}
+    {% endfor %}
+    <text x="70" y="70" text-anchor="middle" class="halka-toplam">{{ h.toplam }}</text>
+    <text x="70" y="88" text-anchor="middle" class="halka-birim">{{ birim }}</text>
+  </svg>
+  <ul class="halka-aciklama">
+    {% for d in h.dilimler %}
+    <li>
+      {% if d.adres %}<a href="{{ d.adres }}">{% else %}<span>{% endif %}
+        <span class="renk-kutusu" style="background: {{ d.renk }}"></span>
+        <span class="ha-ad">{{ d.ad }}</span>
+        <span class="ha-sayi">{{ d.sayi }}</span>
+        <span class="ha-yuzde">%{{ d.yuzde }}</span>
+      {% if d.adres %}</a>{% else %}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{%- endmacro %}

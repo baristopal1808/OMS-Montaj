@@ -98,7 +98,10 @@ Kütüphaneler projeye özel bir klasöre (sanal ortam) kurulur; bilgisayardaki 
 
 Her adımın sonunda kullanıcı deneyebileceği bir şey görür. Kullanıcı dener, düzeltmeler yapılır, `/kaydet` ile kaydedilir.
 
-İlerleme: 1. adım yazıldı (21/10/2026); kullanıcının denemesini bekliyor.
+İlerleme:
+
+- 1. adım bitti (21/10/2026). Kullanıcının isteğiyle giriş ekranı, logo ve yan menü eklendi.
+- 2. adım yazıldı (21/10/2026); kullanıcının denemesini bekliyor. Gerçek listelerle denendi: 131 sipariş, 419 kalem, 331 ürün kartı.
 
 | Adım | Ne yapılır | Kullanıcı ne dener |
 |---|---|---|

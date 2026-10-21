@@ -1,4 +1,4 @@
-"""Ana ekranlar. Planın 1. adımında yalnızca iskelet: her ekran hangi adımda dolacağını söyler."""
+"""Henüz dolmamış ekranlar ve Ayarlar. Her boş ekran, planın hangi adımında dolacağını söyler."""
 
 from flask import Blueprint, render_template
 
@@ -6,12 +6,6 @@ bp = Blueprint("ekranlar", __name__)
 
 # uç: (adres, başlık, açıklama, planın hangi adımında dolacağı)
 BOS_EKRANLAR = {
-    "siparisler": (
-        "/",
-        "Siparişler",
-        "ERP'nin sipariş talepleri listesi yüklenince açık siparişler burada, teslim tarihine göre sıralanır.",
-        2,
-    ),
     "pano": ("/pano", "Pano", "Ürünler bulundukları aşamanın sütununda görünecek.", 4),
     "stok": ("/stok", "Stok", "Siparişe bağlanmamış ürünler, depoları ve test durumlarıyla burada listelenecek.", 5),
     "yapilacaklar": (
@@ -20,7 +14,6 @@ BOS_EKRANLAR = {
         "Uygulamanın size soracağı her şey burada toplanacak: bağlanamayan iş emirleri, test soruları, sevk onayları.",
         3,
     ),
-    "erp_yukleme": ("/erp-yukleme", "ERP yükleme", "ERP'den aldığınız Excel listelerini buradan yükleyeceksiniz.", 2),
     "arsiv": ("/arsiv", "Planner arşivi", "Tamamlanmış Planner kartları burada İEN, seri no ya da sipariş no ile aranacak.", 7),
 }
 

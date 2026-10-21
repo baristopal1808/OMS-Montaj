@@ -1,6 +1,6 @@
 # Kaldığımız yer
 
-**21/10/2026, 16:35.** 2. adım (siparişler) kullanıcının düzeltmeleriyle tamamlandı; sırada 3. adım (iş emirleri) var.
+**21/10/2026, 16:57.** 2. adım (siparişler) kullanıcının düzeltmeleriyle tamamlandı; 3a (iş emirlerinin yüklenmesi ve siparişe bağlanması) başlıyor.
 
 ## Bu oturumda yapılanlar
 
@@ -21,6 +21,8 @@
   - Pastalar, takvim ve "Sevk edilecek ürün" kutusu bu sayfayı açar.
   - Makineler proje proje listelenir; planlama durumuna göre seçilir.
 - Onay bekleyen siparişler sevk edilecek, teslim ve açık sipariş sayılarına girmez.
+- Sipariş talebi revizyonları: her yüklemede değişen alanlar kaydedilir; sipariş kartında tablo ve "Revize edildi" etiketi.
+- Seri no'su olmayan OVF ve WD satırları makine sayılmaz (göç 5 mevcut kayıtları da düzeltir).
 - Sevkiyat (çeyrek dönemler) ve Yedek parça ekranları.
 - Kurallar:
   - En son yüklenen ERP listesi gerçeği gösterir.
@@ -29,19 +31,17 @@
 - Görünüm:
   - Müşteri markası: sipariş kutusunun üzerine gelince müşterinin rengi ve logosu görünür. Tanımlı olmayan müşterilerde OMS logosu ve OMS kırmızısı kullanılır.
   - Özet kutularında OMS logosu filigranı.
-- 73 otomatik test geçiyor.
+- 77 otomatik test geçiyor.
 
 ## Sıradaki iş
 
-1. 3. adım, yavaş yavaş:
-   - Açık ve kapalı iş emirlerinin yüklenmesi ve siparişe bağlanması.
-   - Ürüne tıklayınca ürün sayfası: iş emri durumu, kırılımlar (tamamlanan ve bekleyen), eksik malzeme.
-   - "İş emri tamamlandı ama ERP'de İmalatta" uyarısı (`ihtiyaclar.md`, Kararlar).
-   - Yapılacaklar listesi.
-2. Ardından test → motor açılışı → eksper → metal etiket sırası (4. adımla birlikte).
+1. 3a: açık ve kapalı iş emirlerinin yüklenmesi, siparişe kendiliğinden bağlanması (sipariş satırındaki "Bağlı İşemri No", iş emri açıklamasındaki proje kodu, "Sip. No"), sipariş kartında gösterilmesi, "Malzeme hazırlık" geçişi; ardından bağlanamayanların kullanıcıya sorulması.
+2. 3b: ürün sayfası (iş emrinin kırılımları: tamamlanan ve bekleyen).
+3. 3c: çıkış yapılamayan malzeme, "İş emri tamamlandı ama ERP'de İmalatta" uyarısı, Yapılacaklar listesi.
+4. Ardından test → motor açılışı → eksper → metal etiket sırası (4. adımla birlikte).
 
 ## Kullanıcıdan beklenenler
 
-- `baslat.bat`'ı yeniden açıp süzgeçsiz sipariş listesini yeniden yüklemek. İptal satırı düzeltmesi ancak böyle ekrana yansır.
+- `baslat.bat`'ı yeniden açmak (göç 5 açılışta uygulanır).
 - 3. adım için ERP'den güncel açık ve kapalı iş emirleri listeleri.
 - Sunucu yedeği kullanıcı kararıyla ertelendi. `OMS Veri` şimdilik yalnızca bu bilgisayarda; yedek klasörü seçilince `yedek-hedefi.txt` yazılır.

@@ -9,11 +9,11 @@ sütunlarına değil, en sağdaki ayrı sütuna dizilir.
 """
 
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 from flask import Blueprint, abort, render_template, request
 
-from .erp_aktarim import BEKLEMEDE, IPTAL, eksik_siralar, kapali_mi
+from .erp_aktarim import BEKLEMEDE, IPTAL, REVIZYON_ADLARI, eksik_siralar, kapali_mi
 from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, dis_tedarik_mi, renk, yag
 from .veritabani import baglanti
 
@@ -30,6 +30,7 @@ DURUM_SUZGECLERI = {**DURUMLAR, "tumu": "Tümü"}
 TIPLER = {"makine": "Makine", "yedek_parca": "Yedek parça", "servis": "Servis"}
 AILE_SUZGECLERI = {"vibrohammer": "Vibrohammer (SVR + OVR)", **{aile: aile for aile in AILE_SIRASI}}
 YAKLASAN_GUN = 14  # teslimine bu kadar gün kalan sipariş turuncu görünür
+REVIZYON_GUN = 30  # bu kadar gün içindeki revizyon kutuda ve satırda "Revize" etiketiyle görünür
 # Açık siparişler bu üç sütunda, her sütunda teslim tarihine göre yukarıdan aşağı dizilir.
 TESLIM_SUTUNLARI = (("gecikti", "Gecikenler"), ("yaklasan", f"{YAKLASAN_GUN} gün içinde"), ("", "Planlananlar"))
 ONAY_SUTUNU = ("onay", "Onay bekleyen projeler")
@@ -59,7 +60,12 @@ def teslim_bilgisi(teslim, bugun=None):
     return f"{gun} gün kaldı", "yaklasan" if gun <= YAKLASAN_GUN else ""
 
 
-def ozetle(siparis, kalemler):
+def yakin_revizyon(zaman):
+    """Revizyon (yükleme zamanı 'YYYY-AA-GG SS:DD:ss') son REVIZYON_GUN gün içindeyse True."""
+    return bool(zaman) and date.fromisoformat(zaman[:10]) >= date.today() - timedelta(days=REVIZYON_GUN)
+
+
+def ozetle(siparis, kalemler, son_revizyon=None):
     """Listede ve kartın başında gösterilen özet."""
     gorunen = [k for k in kalemler if k["tur"] != "hizmet"]
     durum = siparis_durumu(gorunen)
@@ -82,6 +88,7 @@ def ozetle(siparis, kalemler):
         "urunler": [(aile, urunler[aile]) for aile in AILE_SIRASI if urunler[aile]],
         "diger_kalem": sum(1 for k in etkin if not k["aile"]),
         "aileler": set(urunler),
+        "revizyon": son_revizyon if yakin_revizyon(son_revizyon) else None,
         # Haftalık takvimden gelen tarih süzgeci için: açık makine kalemlerinin teslim tarihleri
         "makine_teslimleri": {k["teslim_tarihi"] for k in kesin if k["aile"] in ANA_URUNLER and k["teslim_tarihi"]},
     }
@@ -91,7 +98,11 @@ def tum_ozetler(vt):
     kalemler = defaultdict(list)
     for kalem in vt.execute("SELECT * FROM siparis_kalemleri"):
         kalemler[kalem["siparis_id"]].append(kalem)
-    return [ozetle(s, kalemler[s["id"]]) for s in vt.execute("SELECT * FROM siparisler")]
+    son_revizyon = dict(vt.execute(
+        "SELECT r.siparis_id, MAX(y.zaman) FROM siparis_revizyonlari r"
+        " JOIN erp_yuklemeler y ON y.id = r.yukleme_id GROUP BY r.siparis_id"
+    ).fetchall())
+    return [ozetle(s, kalemler[s["id"]], son_revizyon.get(s["id"])) for s in vt.execute("SELECT * FROM siparisler")]
 
 
 def acik_mi(ozet):
@@ -212,7 +223,15 @@ def kart(siparis_no):
     ):
         urunler[urun["kalem_id"]].append(urun)
 
-    ozet = ozetle(siparis, kalemler)
+    revizyonlar = vt.execute(
+        "SELECT r.*, y.zaman, k.urun_kodu FROM siparis_revizyonlari r JOIN erp_yuklemeler y ON y.id = r.yukleme_id"
+        " LEFT JOIN siparis_kalemleri k ON k.siparis_id = r.siparis_id AND k.sira_no = r.sira_no"
+        " WHERE r.siparis_id = ? ORDER BY r.id DESC",
+        (siparis["id"],),
+    ).fetchall()
+    revize_siralar = {r["sira_no"] for r in revizyonlar if yakin_revizyon(r["zaman"])}
+
+    ozet = ozetle(siparis, kalemler, revizyonlar[0]["zaman"] if revizyonlar else None)
     bolumler = {aile: [] for aile in AILE_SIRASI}
     servis, listelenen, iptal_edilenler = [], [], []
     for kalem in kalemler:
@@ -226,6 +245,7 @@ def kart(siparis_no):
             "yag": yag(kalem["aciklama"]) if kalem["aile"] == "PP" else None,
             "kapali": kapali_mi(kalem),
             "dis_tedarik": dis_tedarik_mi(kalem["urun_kodu"]),
+            "revize": kalem["sira_no"] in revize_siralar,
         }
         if kalem["erp_durum"] == IPTAL and ozet["durum"] != "iptal":
             # Devam eden siparişte iptal edilmiş (çoğu zaman yanlış girilip düzeltilmiş) satır
@@ -244,6 +264,9 @@ def kart(siparis_no):
         servis=servis,
         listelenen=listelenen,
         iptal_edilenler=iptal_edilenler,
+        revizyonlar=revizyonlar,
+        REVIZYON_ADLARI=REVIZYON_ADLARI,
+        REVIZYON_GUN=REVIZYON_GUN,
         eksik=eksik_siralar(k["sira_no"] for k in kalemler),
         son_veri=max((k["veri_zamani"] for k in kalemler if k["veri_zamani"]), default=None),
         DURUMLAR=DURUMLAR,

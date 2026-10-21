@@ -9,6 +9,7 @@
   <span class="sk-ust">
     <a class="sk-no" href="{{ adres }}">{{ s.siparis_no }}</a>
     <span class="sk-rozetler">
+      {% if o.revizyon %}<span class="etiket revize" title="Sipariş talebi {{ o.revizyon | tarih }} tarihinde revize edildi">Revize</span>{% endif %}
       {% if s.tip %}<span class="etiket">{{ TIPLER[s.tip] }}</span>{% endif %}
       {% if o.durum == 'onay_bekliyor' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>
       {% elif o.durum == 'kapali' %}<span class="etiket durum-kapali">ERP'de kapandı</span>

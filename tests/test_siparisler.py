@@ -100,6 +100,13 @@ def test_satir_turu(kod, detay, beklenen):
     assert satir_turu(kod, detay) == beklenen
 
 
+def test_seri_nosuz_ovf_ve_wd_makinenin_parcasidir():
+    assert satir_turu("OVF-300-4BF-BSP", "MAKİNA", "OZ-TS0001-OVF-01") == ("kart", "OVF")
+    assert satir_turu("OVF-300-BF-LM-B", "MAKİNA", None) == ("aksesuar", None)
+    assert satir_turu("WD-28-43-PV", "MAKİNA", "-") == ("aksesuar", None)
+    assert satir_turu("SVR-50-NF-BSP", "MAKİNA", None) == ("kart", "SVR")  # yalnızca OVF ve WD
+
+
 def test_aciklama_ve_planlama_bilgisi_okunur():
     assert model("SVR-120-NF-BSP") == "SVR-NF"
     assert model("OVR-60-SG-01") == "OVR-SG"
@@ -397,6 +404,47 @@ def test_ozet_satirlari_tiklanir_ve_kutucuklar_renkli(istemci, ekip, yukle):
     sayfa = istemci.get("/").get_data(as_text=True)
     assert 'data-adres="/siparisler/OZ-TS0003"' in sayfa
     assert 'class="sk-urun renkli" style="--renk: #1baf7a"' in sayfa  # PP her yerde aynı renk
+
+
+def test_seri_nosuz_ovf_parcasi_makine_sayilmaz(istemci, ekip, yukle):
+    yukle(excel([
+        satir(1, "OVF-300-4BF-BSP", "Zemin Iyilestirme", planlama="OZ-TS0001-OVF-01"),
+        satir(2, "OVF-300-BF-LM-B", "TEST PARCA", miktar=2),
+    ]))
+    assert "1 makine · 1 proje" in istemci.get("/makineler").get_data(as_text=True)
+    kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    diger = kart[kart.index("Aksesuarlar ve diğer kalemler"):]
+    assert "OVF-300-BF-LM-B" in diger and "OVF-300-4BF-BSP" not in diger
+
+
+def test_revizyonlar_sipariste_gorunur(istemci, ekip, yukle):
+    yukle(excel(makine_siparisi()))
+    yukle(excel(makine_siparisi()))  # aynı liste: revizyon yok
+    assert "Revize" not in istemci.get("/siparisler").get_data(as_text=True)
+    assert "revizyonlar" not in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+
+    degisen = makine_siparisi(s1={"Uzlaşılan Sevk Tar.": datetime(2030, 2, 1)}, s2={"Açıklama": "TEST YAG 46 yağlı sevk"})
+    degisen[3]["Sip.Durumu"] = "İptal"
+    degisen[0]["Sipariş Açıklama"] = degisen[1]["Sipariş Açıklama"] = degisen[2]["Sipariş Açıklama"] = "TEST NOT 2"
+    degisen[4]["Sipariş Açıklama"] = "TEST NOT 2"
+    degisen.append(satir(6, "OZ00002", "Kablosuz Kumanda Seti"))
+    degisen[5]["Sipariş Açıklama"] = "TEST NOT 2"
+    yukle(excel(degisen))
+    assert "1 siparişte revizyon var" in istemci.get("/erp-yukleme").get_data(as_text=True)
+    assert 'class="etiket revize"' in istemci.get("/siparisler").get_data(as_text=True)
+    kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    bolum = kart[kart.index('id="revizyonlar"'):]
+    for beklenen in ("Teslim tarihi", "15/01/2030", "01/02/2030", "Açıklama", "Yağsız sevk edilecektir.",
+                     "TEST YAG 46 yağlı sevk", "Yeni satır eklendi", "OZ00002 · 1 Adet", "Satır iptal edildi",
+                     "Sipariş notu", "TEST NOT 2"):
+        assert beklenen in bolum, beklenen
+    assert "Revize edildi" in kart[:kart.index('id="revizyonlar"')]
+
+
+def test_raporda_olmayan_sutun_revizyon_sayilmaz(istemci, ekip, yukle):
+    yukle(excel(makine_siparisi()))
+    yukle(excel(makine_siparisi(), basliklar=[b for b in BASLIKLAR if b not in ("Açıklama", "Planlama Bilgisi")]))
+    assert "revizyonlar" not in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
 
 
 def test_makineler_sayfasi_suzgecleri(istemci, ekip, yukle):

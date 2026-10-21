@@ -92,6 +92,25 @@ GOCLER = [
     """
     ALTER TABLE siparis_kalemleri ADD COLUMN siparis_aciklama TEXT;
     """,
+    # 5: sipariş talebi revizyonları (yüklemeden yüklemeye değişenler); seri no'su olmayan OVF ve
+    # WD satırları makine değil, makinenin parçasıdır (kartları kaldırılır, kalem listede kalır)
+    """
+    CREATE TABLE siparis_revizyonlari (
+        id INTEGER PRIMARY KEY,
+        siparis_id INTEGER NOT NULL REFERENCES siparisler(id),
+        sira_no INTEGER,              -- boşsa siparişin kendisi (not)
+        alan TEXT NOT NULL,           -- değişen alan ya da yeni_satir, iptal, iptal_kalkti
+        eski TEXT,
+        yeni TEXT,
+        yukleme_id INTEGER NOT NULL REFERENCES erp_yuklemeler(id)
+    );
+    CREATE INDEX siparis_revizyonlari_siparis ON siparis_revizyonlari (siparis_id);
+
+    UPDATE siparis_kalemleri SET tur = 'aksesuar', aile = NULL
+     WHERE tur = 'kart' AND aile IN ('OVF', 'WD')
+       AND trim(replace(replace(COALESCE(planlama_bilgisi, ''), '&', ''), '-', '')) = '';
+    DELETE FROM urunler WHERE kalem_id IN (SELECT id FROM siparis_kalemleri WHERE tur NOT IN ('kart', 'servis'));
+    """,
 ]
 
 

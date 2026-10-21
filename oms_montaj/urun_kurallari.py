@@ -33,6 +33,9 @@ VIBROHAMMER = {"SVR", "OVR"}
 # Özetteki ve sevkiyattaki sayılara ve pastalara giren makineler; çene ve kiriş bunlara eşlik
 # ettiğinden sayılmaz (kullanıcı kararı, 21/10/2026). Kartlarda ve listelerde görünmeye devam ederler.
 ANA_URUNLER = ("SVR", "OVR", "PP", "OVF", "WD")
+# Bu ailelerde seri no'su olmayan satır makine değil, makinenin bir parçasıdır
+# (OVF-300-BF-LM-B gibi; kullanıcı kararı, 21/10/2026). Kart olmaz, sipariş kartında listelenir.
+SERI_NOSUZ_PARCA = {"OVF", "WD"}
 
 # Satır türleri: kart ve servis satırlarının her adedi bir ürün kartı olur;
 # aksesuar ve parçalar sipariş kartında listelenir; hizmet satırları (nakliye…) gösterilmez.
@@ -64,7 +67,7 @@ def siparis_tipi(detay_turu):
     return SIPARIS_TIPLERI.get(sade(detay_turu)) if detay_turu else None
 
 
-def satir_turu(urun_kodu, detay_turu=None):
+def satir_turu(urun_kodu, detay_turu=None, planlama_bilgisi=None):
     """(tür, aile): tür kart, servis, aksesuar, parca ya da hizmet; aile yalnızca kartlı türlerde."""
     kod = (urun_kodu or "").upper()
     aile = AILELER.get(onek(kod))
@@ -75,6 +78,8 @@ def satir_turu(urun_kodu, detay_turu=None):
     if siparis_tipi(detay_turu) == "yedek_parca":
         return "parca", None
     if "-HH" in kod:  # hidrolik hortum setleri, ailenin önekini taşısa da aksesuardır
+        return "aksesuar", None
+    if aile in SERI_NOSUZ_PARCA and not seri_nolar(planlama_bilgisi):
         return "aksesuar", None
     if aile:
         return "kart", aile

@@ -5,9 +5,14 @@
 
 {% macro kalem_rozetleri(satir) -%}
   {% set k = satir.kalem %}
+  {% if satir.revize %}<a class="etiket revize" href="#revizyonlar">Revize edildi</a>{% endif %}
   {% if k.erp_durum == 'Beklemede' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}
   {% if k.erp_durum == 'İptal' %}<span class="etiket durum-iptal">İptal</span>{% endif %}
   {% if satir.kapali %}<span class="etiket durum-kapali">ERP'de kapandı{% if k.son_sevk_tarihi %} · sevk {{ k.son_sevk_tarihi | tarih }}{% endif %}</span>{% endif %}
+{%- endmacro %}
+
+{% macro rev_degeri(r, deger) -%}
+  {% if deger is none %}<span class="soluk">—</span>{% elif r.alan == 'teslim_tarihi' %}{{ deger | tarih }}{% else %}{{ deger }}{% endif %}
 {%- endmacro %}
 
 {% macro kalem_bilgileri(satir) -%}
@@ -69,6 +74,7 @@
   <div class="baslik-satiri">
     <h1>{{ s.siparis_no }}</h1>
     <span class="rozetler">
+      {% if ozet.revizyon %}<a class="etiket revize" href="#revizyonlar">Revize edildi · {{ ozet.revizyon | tarih }}</a>{% endif %}
       {% if s.tip %}<span class="etiket">{{ TIPLER[s.tip] }}</span>{% endif %}
       <span class="etiket durum-{{ ozet.durum }}">{{ DURUMLAR[ozet.durum] }}</span>
     </span>
@@ -85,6 +91,31 @@
   {% if eksik %}<p class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if eksik | length > 1 %}satırları{% else %}satırı{% endif %} yüklenen ERP listesinde yok. Liste alınırken bir süzgeç uygulanmış olabilir.</p>{% endif %}
   {% if son_veri %}<p class="soluk kucuk">ERP verisi: {{ son_veri | zaman }}</p>{% endif %}
 </div>
+
+{% if revizyonlar %}
+<details class="pano-karti acilir revizyonlar" id="revizyonlar"{% if ozet.revizyon %} open{% endif %}>
+  <summary>
+    <span class="acilir-baslik">Sipariş talebi revizyonları</span>
+    <span class="soluk">{{ revizyonlar | length }} değişiklik · son {{ revizyonlar[0].zaman | zaman }}{% if not ozet.revizyon %} · göstermek için tıklayın{% endif %}</span>
+  </summary>
+  <div class="kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>Yükleme</th><th>Satır</th><th>Ne değişti</th><th>Önce</th><th>Sonra</th></tr></thead>
+      <tbody>
+        {% for r in revizyonlar %}
+        <tr>
+          <td class="sayisal">{{ r.zaman | zaman }}</td>
+          <td>{% if r.sira_no %}{{ r.sira_no }}. satır{% if r.urun_kodu %} · <strong>{{ r.urun_kodu }}</strong>{% endif %}{% else %}Sipariş{% endif %}</td>
+          <td>{{ REVIZYON_ADLARI.get(r.alan, r.alan) }}</td>
+          <td class="rev-deger">{{ rev_degeri(r, r.eski) }}</td>
+          <td class="rev-deger">{{ rev_degeri(r, r.yeni) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
 
 {% for aile, satirlar in bolumler %}
 <section class="bolum" id="aile-{{ aile }}">

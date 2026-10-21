@@ -9,6 +9,11 @@ Kart ve servis satırlarının her adedi için bir ürün kartı açılır. Sat�
 uygulamaya ilk kez kapanmış (sevk edilmiş) olarak geliyorsa kartı doğrudan
 "Sevk edildi" aşamasında açılır; açıkken bilinen bir satırın kapanması ise
 kartı değiştirmez (kullanıcıya sorulması planın 5. adımında).
+
+Sipariş talebinin revizyonları: daha önce yüklenmiş bir siparişte ürün, miktar,
+açıklama, teslim tarihi, seri no ya da sipariş notu değişirse, satır eklenir ya da
+iptal edilirse eski ve yeni değer kaydedilir; sipariş kartında gösterilir. Yüklenen
+dosyada hiç dolu olmayan bir sütun (rapora alınmamış olabilir) karşılaştırılmaz.
 """
 
 from collections import Counter, defaultdict
@@ -23,6 +28,20 @@ KALEM_ALANLARI = (
     "bagli_is_emri_no", "erp_durum", "erp_genel_durum", "erp_urun_durumu", "detay_turu",
     "teslim_tarihi", "ilk_sevk_tarihi", "son_sevk_tarihi", "tur", "aile", "siparis_aciklama",
 )
+# Değişince revizyon sayılan kalem alanları; sipariş notu, yeni satır ve iptal de revizyondur.
+REVIZYON_ALANLARI = ("urun_kodu", "urun_adi", "miktar", "aciklama", "teslim_tarihi", "planlama_bilgisi")
+REVIZYON_ADLARI = {
+    "urun_kodu": "Ürün kodu",
+    "urun_adi": "Ürün adı",
+    "miktar": "Miktar",
+    "aciklama": "Açıklama",
+    "teslim_tarihi": "Teslim tarihi",
+    "planlama_bilgisi": "Seri no",
+    "notu": "Sipariş notu",
+    "yeni_satir": "Yeni satır eklendi",
+    "iptal": "Satır iptal edildi",
+    "iptal_kalkti": "Satırın iptali kaldırıldı",
+}
 
 
 def kapali_mi(kalem):
@@ -133,6 +152,13 @@ def listede_olmayanlari_isaretle(vt, gorulen_siparisler):
     return gizlenen, geri_gelen
 
 
+def _yazi(deger):
+    """Revizyon kaydı için metin: 2.0 → '2'."""
+    if isinstance(deger, float) and deger.is_integer():
+        return str(int(deger))
+    return None if deger is None else str(deger)
+
+
 def siparisleri_isle(vt, kayitlar, yukleme_id):
     """Sipariş talepleri kayıtlarını işler; ne yapıldığını sayan bir Counter döndürür."""
     sayac = Counter(satir=len(kayitlar))
@@ -145,42 +171,73 @@ def siparisleri_isle(vt, kayitlar, yukleme_id):
         if eksik := eksik_siralar(liste):
             sayac["eksik_sirali_siparis"] += 1
             sayac["eksik_sira"] += len(eksik)
-    siparis_idleri = {
-        siparis_no: _siparis_id(vt, siparis_no, bilgi, yukleme_id, sayac)
-        for siparis_no, bilgi in siparis_bilgileri(kayitlar).items()
-    }
+
+    # Revizyonlar yalnızca dosyada dolu gelen sütunlarda aranır.
+    dolu = {alan for alan in (*REVIZYON_ALANLARI, "siparis_aciklama") if any(k.get(alan) is not None for k in kayitlar)}
+    revize = set()
+
+    def revizyon(siparis_id, sira_no, alan, eski, yeni):
+        revize.add(siparis_id)
+        vt.execute(
+            "INSERT INTO siparis_revizyonlari (siparis_id, sira_no, alan, eski, yeni, yukleme_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (siparis_id, sira_no, alan, _yazi(eski), _yazi(yeni), yukleme_id),
+        )
+
+    siparis_idleri, onceden_bilinen = {}, set()
+    for siparis_no, bilgi in siparis_bilgileri(kayitlar).items():
+        onceki = vt.execute("SELECT id, notu FROM siparisler WHERE siparis_no = ?", (siparis_no,)).fetchone()
+        siparis_idleri[siparis_no] = _siparis_id(vt, siparis_no, bilgi, yukleme_id, sayac)
+        if onceki is not None:
+            onceden_bilinen.add(onceki["id"])
+            if "siparis_aciklama" in dolu and onceki["notu"] != bilgi["notu"]:
+                revizyon(onceki["id"], None, "notu", onceki["notu"], bilgi["notu"])
+
     for kayit in kayitlar:
-        tur, aile = satir_turu(kayit["urun_kodu"], kayit["detay_turu"])
+        tur, aile = satir_turu(kayit["urun_kodu"], kayit["detay_turu"], kayit["planlama_bilgisi"])
         siparis_id = siparis_idleri[kayit["siparis_no"]]
+        sira_no = kayit["sira_no"]
         alanlar = {alan: kayit.get(alan) for alan in KALEM_ALANLARI}
         alanlar.update(tur=tur, aile=aile, miktar=kayit["miktar"] or 0)
+        iptal = alanlar["erp_durum"] == IPTAL
 
         eski = vt.execute(
-            "SELECT * FROM siparis_kalemleri WHERE siparis_id = ? AND sira_no = ?", (siparis_id, kayit["sira_no"])
+            "SELECT * FROM siparis_kalemleri WHERE siparis_id = ? AND sira_no = ?", (siparis_id, sira_no)
         ).fetchone()
         if eski is None:
             kalem_id = vt.execute(
                 f"INSERT INTO siparis_kalemleri (siparis_id, sira_no, son_yukleme_id, {', '.join(KALEM_ALANLARI)})"
                 f" VALUES (?, ?, ?, {', '.join('?' * len(KALEM_ALANLARI))})",
-                (siparis_id, kayit["sira_no"], yukleme_id, *alanlar.values()),
+                (siparis_id, sira_no, yukleme_id, *alanlar.values()),
             ).lastrowid
             sayac["yeni_kalem"] += 1
+            if siparis_id in onceden_bilinen and not iptal:
+                revizyon(siparis_id, sira_no, "yeni_satir", None,
+                         f"{alanlar['urun_kodu']} · {_yazi(alanlar['miktar'])} {alanlar['birim'] or ''}".strip())
         else:
             kalem_id = eski["id"]
             if any(eski[alan] != alanlar[alan] for alan in KALEM_ALANLARI):
                 sayac["guncellenen_kalem"] += 1
-                if eski["erp_durum"] != IPTAL and alanlar["erp_durum"] == IPTAL:
+                if eski["erp_durum"] != IPTAL and iptal:
                     sayac["iptal_edilen"] += 1
                 if not kapali_mi(eski) and kapali_mi(alanlar):
                     sayac["kapanan"] += 1
+            if eski["erp_durum"] != IPTAL and iptal:
+                revizyon(siparis_id, sira_no, "iptal", eski["urun_kodu"], None)
+            elif eski["erp_durum"] == IPTAL and not iptal:
+                revizyon(siparis_id, sira_no, "iptal_kalkti", None, alanlar["urun_kodu"])
+            elif not iptal:
+                for alan in REVIZYON_ALANLARI:
+                    if alan in dolu and eski[alan] != alanlar[alan]:
+                        revizyon(siparis_id, sira_no, alan, eski[alan], alanlar[alan])
             vt.execute(
                 f"UPDATE siparis_kalemleri SET {', '.join(f'{alan} = ?' for alan in KALEM_ALANLARI)},"
                 " son_yukleme_id = ? WHERE id = ?",
                 (*alanlar.values(), yukleme_id, kalem_id),
             )
 
-        if tur in KARTLI_TURLER and alanlar["erp_durum"] != IPTAL:
+        if tur in KARTLI_TURLER and not iptal:
             _urunleri_ac(vt, kalem_id, alanlar, eski is None, sayac)
+    sayac["revize_siparis"] = len(revize)
     return sayac
 
 
@@ -199,6 +256,7 @@ def siparis_ozeti(sayac):
         ("kapanan", "kalem ERP'de kapandı"),
         ("iptal_edilen", "kalem iptal edildi"),
         ("seri_guncellenen", "seri no güncellendi"),
+        ("revize_siparis", "siparişte revizyon var (sipariş kartında görünür)"),
     ):
         if sayac[anahtar]:
             parcalar.append(f"{sayac[anahtar]} {ad}")

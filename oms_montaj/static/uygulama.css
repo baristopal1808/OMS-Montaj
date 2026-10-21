@@ -341,6 +341,9 @@ a.satir-baslik:hover { color: var(--vurgu); }
 .etiket.durum-iptal { color: var(--hata); background: var(--hata-zemin); }
 .etiket.durum-listede_yok { color: #fff; background: #6b7280; }
 .etiket.asama { color: #fff; background: #3a4150; }
+.etiket.revize { color: var(--bilgi); background: var(--bilgi-zemin); text-decoration: none; }
+a.etiket.revize:hover { background: #d6e7f8; }
+.rev-deger { white-space: pre-wrap; max-width: 28rem; }
 
 /* Süzgeç ve arama */
 .suzgec { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.25rem; }

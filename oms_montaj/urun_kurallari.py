@@ -37,6 +37,22 @@ ANA_URUNLER = ("SVR", "OVR", "PP", "OVF", "WD")
 # (OVF-300-BF-LM-B gibi; kullanıcı kararı, 21/10/2026). Kart olmaz, sipariş kartında listelenir.
 SERI_NOSUZ_PARCA = {"OVF", "WD"}
 
+# Güç ünitesine (PP) takılan, dışarıdan alınan kalemler (soru 21): makine siparişinde montaj durumu izlenir.
+# Kod listesi 6. adımda Ayarlar'a taşınır.
+PP_EKLENTILERI = {"OZ04314": "Kablosuz kumanda seti", "OZ04082": "Uzaktan erişim modülü"}
+EKLENTI_DURUMLARI = {
+    "talep_acilacak": "Sipariş talebi açılacak",
+    "talep_acildi": "Sipariş talebi açıldı, bekleniyor",
+    "montaj_edilmedi": "Geldi, montaj edilmedi",
+    "montaj_edildi": "PP'ye montaj edildi",
+}
+VARSAYILAN_EKLENTI_DURUMU = "talep_acilacak"
+
+
+def pp_eklentisi_mi(urun_kodu, siparis_tipi_):
+    return (urun_kodu or "").upper() in PP_EKLENTILERI and siparis_tipi_ != "yedek_parca"
+
+
 # Satır türleri: kart ve servis satırlarının her adedi bir ürün kartı olur;
 # aksesuar ve parçalar sipariş kartında listelenir; hizmet satırları (nakliye…) gösterilmez.
 KARTLI_TURLER = {"kart", "servis"}
@@ -115,10 +131,13 @@ def yag(aciklama):
     return None
 
 
-# Motor seri no'ları iş emri açıklamalarında etiketsiz yazılıyor: "<proje> - 0000 111 101 - …" (Volvo:
-# 4+3+3 rakam) ya da "<proje> / N5F00001 / STANDART / YAĞSIZ SEVK" (CAT: harf, rakam, harf, 5 rakam;
-# ya da 3 harf, 5 rakam). Proje kodu (2 harf, 4 rakam) ve RAL kodu bu biçimlere uymaz.
-MOTOR_SERI = re.compile(r"(?<!\w)(\d{4})[ .]?(\d{3})[ .]?(\d{3})(?!\w)|(?<!\w)([A-Z]\d[A-Z]\d{5}|[A-Z]{3}\d{5})(?!\w)")
+# Motor seri no'ları iş emri açıklamalarında etiketsiz yazılıyor: "<proje> - 0000 111 1011 - …" (Volvo:
+# 4+3+4 rakam, daha az 4+3+3; bir yıllık listede 421'e 120) ya da "<proje> / N5F00001 / STANDART / YAĞSIZ
+# SEVK" (CAT: harf, rakam, harf, 5 rakam; ya da 3 harf, 5 rakam). Proje kodu (2 harf, 4 rakam) ve RAL
+# kodu bu biçimlere uymaz.
+MOTOR_SERI = re.compile(
+    r"(?<!\w)(\d{4})[ .]{0,2}(\d{3})[ .]{0,2}(\d{3,4})(?!\w)|(?<!\w)([A-Z]\d[A-Z]\d{5}|[A-Z]{3}\d{5})(?!\w)"
+)
 
 
 def motor_seri_nolari(*metinler):

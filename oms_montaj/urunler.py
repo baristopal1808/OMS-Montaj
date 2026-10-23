@@ -15,8 +15,8 @@ from .erp_aktarim import IPTAL, kapali_mi
 from .is_emri_aktarim import is_emri_durumu, kirilim_durumu
 from .kimlik import ekip_gerekli
 from .numaralar import KAYNAKLAR, NUMARA_ALANLARI, numara_yaz, numaralari_kaydet, sablon, urun_numaralari
-from .siparisler import TIPLER, teslim_bilgisi, yakin_revizyon
-from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, renk, yag
+from .siparisler import TIPLER, siparis_durum_ozeti, teslim_bilgisi, yakin_revizyon
+from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk, yag
 from .veritabani import baglanti
 
 bp = Blueprint("urunler", __name__)
@@ -52,6 +52,16 @@ def sayfa(urun_id):
         (urun["siparis_id"], urun["sira_no"]),
     ).fetchone()[0]
     acik = urun["erp_durum"] != IPTAL and not kapali_mi(urun) and urun["asama"] != "sevk_edildi"
+    siparis = {"id": urun["siparis_id"], "tip": urun["tip"]}
+    # Güç ünitesine takılacak, dışarıdan alınan kalemler (kablosuz kumanda seti, uzaktan erişim modülü)
+    eklentiler = [
+        k for k in vt.execute(
+            "SELECT id, urun_kodu, urun_adi, miktar, montaj_durumu FROM siparis_kalemleri"
+            " WHERE siparis_id = ? AND COALESCE(erp_durum, '') != ? ORDER BY sira_no",
+            (urun["siparis_id"], IPTAL),
+        )
+        if pp_eklentisi_mi(k["urun_kodu"], urun["tip"])
+    ] if urun["aile"] == "PP" else []
     return render_template(
         "urun.html",
         urun=urun,
@@ -65,6 +75,8 @@ def sayfa(urun_id):
         renk=renk(urun["aciklama"]),
         yag=yag(urun["aciklama"]) if urun["aile"] == "PP" else None,
         dis_tedarik=dis_tedarik_mi(urun["urun_kodu"]),
+        durum_ozeti=siparis_durum_ozeti(vt, siparis),
+        eklentiler=eklentiler,
         AILE_ADLARI=AILE_ADLARI,
         KAYNAKLAR=KAYNAKLAR,
         TIPLER=TIPLER,

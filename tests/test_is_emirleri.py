@@ -113,4 +113,41 @@ def test_kapanan_is_emri(istemci, ekip, yukle):  # noqa: F811
     yukle(excel(kapali, basliklar=IE_BASLIKLAR), ad="kapali is emirleri.xlsx")
     assert "1 iş emri ERP'de kapandı" in unescape(istemci.get("/erp-yukleme").get_data(as_text=True))
     kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
-    assert "ERP'de tamamlandı" in kart and "kapanış 20/10/2026" in kart
+    assert "ERP'de iş emri tamamlandı" in kart and "kapanış 20/10/2026" in kart
+
+
+def test_erp_kapanis_notu_aciklamadan_silinir():
+    from oms_montaj.erp_okuyucu import kapanis_notunu_sil
+
+    not_ = "NOLU İŞEMRİNİN PLAN MİKTAR <= GERÇEKLEŞEN MIKTAR DURUMUNDAN DOLAYI ZAMANLANMIS GOREV TARAFINDAN KAPATILDI."
+    assert kapanis_notunu_sil(f"OZ-TS0001 / 0000 111 1011 / STANDART0 {not_}", 0) == "OZ-TS0001 / 0000 111 1011 / STANDART"
+    # Sıra numarası motor seri no'suna yapışmış olsa da ayrılır
+    assert kapanis_notunu_sil(f"OZ-TS0001 - 0000 111 101125 {not_}", 25) == "OZ-TS0001 - 0000 111 1011"
+    # Kırılım ana satırın açıklamasını taşıyorsa notun numarası 0
+    assert kapanis_notunu_sil(f"OZ-TS0001 - TEST FIRMA0 {not_}", 25) == "OZ-TS0001 - TEST FIRMA"
+    assert kapanis_notunu_sil(f"0 {not_}", 0) is None
+    # Birden çok kez kapanmış iş emrinde not tekrar ediyor
+    assert kapanis_notunu_sil(f"OZ-TS0001 - 0000 111 10110 {not_}0 {not_}", 0) == "OZ-TS0001 - 0000 111 1011"
+    assert kapanis_notunu_sil("OZ-TS0001 projesi için", 0) == "OZ-TS0001 projesi için"
+
+
+def test_siparisin_durum_ozeti(istemci, uygulama, ekip, yukle):  # noqa: F811
+    yukle(excel(makine_siparisi()))
+    yukle(excel(is_emirleri(), basliklar=IE_BASLIKLAR), ad="acik is emirleri.xlsx")
+    kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    ozet = kart[kart.index('class="durum-ozeti"'):]
+    ozet = ozet[:ozet.index("</div>")]
+    # SVR ve PP açık, iki çene kısmen, kirişin iş emri üretimsiz kapandığı için açılmadı sayılır
+    for beklenen in ("5 ürün", "<strong>2</strong> Kısmen tamamlandı", "<strong>2</strong> İş emri açık",
+                     "<strong>1</strong> İş emri açılmadı"):
+        assert beklenen in ozet, beklenen
+    assert "ud-serit-acik" in kart and "ud-serit-yok" in kart
+    # Bir duruma tıklayınca yalnızca o durumdaki kalemler görünür
+    assert 'href="/siparisler/OZ-TS0001?goster=ud-acik#kalemler"' in kart
+    acik = istemci.get("/siparisler/OZ-TS0001?goster=ud-acik").get_data(as_text=True)
+    assert "SVR-50-NF-BSP" in acik and "PP-536-NF" in acik and "KCN-90" not in acik and "CB-HS5080-00" not in acik
+    assert "bütün kalemleri göster" in acik
+    yok = istemci.get("/siparisler/OZ-TS0001?goster=ud-yok").get_data(as_text=True)
+    assert "CB-HS5080-00" in yok and "SVR-50-NF-BSP" not in yok
+    # Tanınmayan seçim yok sayılır
+    assert "SVR-50-NF-BSP" in istemci.get("/siparisler/OZ-TS0001?goster=ud-xx").get_data(as_text=True)

@@ -9,7 +9,7 @@ from html import unescape
 
 import openpyxl
 from test_is_emirleri import IE_BASLIKLAR, ie, is_emirleri
-from test_siparisler import ekip, excel, makine_siparisi, yukle  # noqa: F401 (pytest fikstürleri)
+from test_siparisler import ekip, excel, makine_siparisi, satir, yukle  # noqa: F401 (pytest fikstürleri)
 
 from oms_montaj.urun_kurallari import motor_seri_nolari
 from oms_montaj.veritabani import baglanti
@@ -17,6 +17,8 @@ from oms_montaj.veritabani import baglanti
 
 def test_motor_seri_nolari_aciklamadan_okunur():
     assert motor_seri_nolari("OZ-TS0001 - 0000 111 101 - TEST FIRMA") == ["0000 111 101"]
+    assert motor_seri_nolari("OZ-TS0001 - 0000 111 1011") == ["0000 111 1011"]  # Volvo'da çoğunlukla 4+3+4
+    assert motor_seri_nolari("OZ-TS0001 / 0000  111  1012") == ["0000 111 1012"]
     assert motor_seri_nolari("OZ-TS0001-PP-01 / N5F00001 / STANDART / YAGSIZ SEVK") == ["N5F00001"]
     assert motor_seri_nolari("OZ-TS0001 - 0000111101 / 0000 111 102", "0000 111 101") == ["0000 111 101", "0000 111 102"]
     assert motor_seri_nolari("OZ-TS0001 projesi - RAL5017 - 9001") == []
@@ -53,8 +55,10 @@ def test_urun_sayfasi(istemci, uygulama, ekip, yukle):  # noqa: F811
     # Sipariş kartında her makine kendi sayfasına gider; motor seri no görünür.
     kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
     assert f'href="/urun/{pp}"' in kart and "0000 111 101" in kart
-    # Sevk edilecek makineler listesinden de
-    assert f'data-adres="/urun/{pp}"' in istemci.get("/makineler").get_data(as_text=True)
+    assert "Şasi no yok" in kart  # SVR'nin şasi no'su girilmedi; eksik görünür
+    # Sevk edilecek makineler listesinden de; motor seri no ve iş emri orada da görünür
+    makineler = istemci.get("/makineler").get_data(as_text=True)
+    assert f'data-adres="/urun/{pp}"' in makineler and "0000 111 101" in makineler and "900101" in makineler
     assert istemci.get("/urun/999999").status_code == 404
 
 
@@ -99,6 +103,41 @@ def test_makine_numaralari_sablonu(istemci, uygulama, ekip, yukle):  # noqa: F81
     assert ("Makine numaraları: 3 satır okundu; 1 makinenin numarası güncellendi; 1 satır hiçbir makineyle eşleşmedi"
             in unescape(istemci.get("/erp-yukleme").get_data(as_text=True)))
     assert "TEST-SASI-002" in istemci.get(f"/urun/{svr}").get_data(as_text=True)
+
+
+def eklentili_siparis():
+    return makine_siparisi() + [satir(6, "OZ04314", "PP Kablosuz Kumanda Seti")]
+
+
+def test_pp_eklentisinin_montaj_durumu(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    yukle(excel(eklentili_siparis()))
+    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert 'name="montaj_durumu"' in kart and "<strong>1</strong> Sipariş talebi açılacak" in kart
+    with uygulama.app_context():
+        kalem_id = baglanti().execute("SELECT id FROM siparis_kalemleri WHERE urun_kodu = 'OZ04314'").fetchone()[0]
+    assert gonder(f"/siparisler/kalem/{kalem_id}/montaj", montaj_durumu="yanlis").status_code == 400
+    yanit = gonder(f"/siparisler/kalem/{kalem_id}/montaj", montaj_durumu="montaj_edildi", sonra="/siparisler/OZ-TS0001")
+    assert yanit.status_code == 302 and yanit.headers["Location"].endswith("/siparisler/OZ-TS0001")
+    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert 'value="montaj_edildi" selected' in kart and "<strong>1</strong> PP'ye montaj edildi" in kart
+    secili = istemci.get("/siparisler/OZ-TS0001?goster=ek-montaj_edildi").get_data(as_text=True)
+    assert "OZ04314" in secili and "SVR-50-NF-BSP" not in secili
+    # Güç ünitesinin sayfasında da görünür
+    pp = urun_id(uygulama, "PP-536-NF")
+    assert "PP'ye takılacak kalemler" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    # ERP yüklemesi ekibin girdiği durumu değiştirmez
+    yukle(excel(eklentili_siparis()))
+    assert 'value="montaj_edildi" selected' in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+
+
+def test_izleyici_montaj_durumunu_degistiremez(istemci, uygulama, ekle, giris, gonder, ekip, yukle):  # noqa: F811
+    yukle(excel(eklentili_siparis()))
+    with uygulama.app_context():
+        kalem_id = baglanti().execute("SELECT id FROM siparis_kalemleri WHERE urun_kodu = 'OZ04314'").fetchone()[0]
+    ekle("test.izleyici", rol="izleyici")
+    giris("test.izleyici")
+    assert 'name="montaj_durumu"' not in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    assert gonder(f"/siparisler/kalem/{kalem_id}/montaj", montaj_durumu="montaj_edildi").status_code == 403
 
 
 def test_kirilim_aciklamasindaki_motor_seri_no(istemci, uygulama, ekip, yukle):  # noqa: F811

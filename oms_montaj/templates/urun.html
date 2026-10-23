@@ -1,6 +1,7 @@
 {% extends "taban.html" %}
 {% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
 {% block icerik %}
+{% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
 {% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
 <p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
 
@@ -34,6 +35,7 @@
     {% if urun.erp_urun_durumu and not dis_tedarik %}<span class="cip">Planlama birimi ürün üretim durumu: <strong>{{ urun.erp_urun_durumu }}</strong>
       <small>ERP verisi {{ urun.veri_zamani | tarih }}</small></span>{% endif %}
   </span>
+  {{ durum_ozeti_kutusu(durum_ozeti, urun.siparis_no) }}
 </div>
 
 {% if numaralar %}
@@ -71,7 +73,7 @@
 <section class="bolum">
   <h2>İş emri</h2>
   {% if ie %}
-  <div class="kutu is-emri-kutusu">
+  <div class="kutu is-emri-kutusu ie-kutu-{{ ie_durumu[1] }}">
     <div class="baslik-satiri">
       <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong></span>
       <span class="etiket ie-{{ ie_durumu[1] }}">{{ ie_durumu[0] }}</span>
@@ -87,9 +89,32 @@
     {% if ie.aciklama %}<p class="soluk kucuk">ERP açıklaması: {{ ie.aciklama }}</p>{% endif %}
   </div>
   {% else %}
-  <div class="kutu"><p class="soluk">Bu ürüne henüz iş emri bağlanmadı.{% if urun.bagli_is_emri_no %} Sipariş satırında iş emri {{ urun.bagli_is_emri_no }} yazıyor ama iş emri listelerinde yok.{% endif %}</p></div>
+  <div class="kutu is-emri-kutusu ie-kutu-yok">
+    <div class="baslik-satiri">
+      <span class="ie-no">İş emri açılmadı</span>
+      <span class="etiket ud-yok">İş emri açılacak</span>
+    </div>
+    <p>Bu ürüne bağlı bir iş emri yok.{% if urun.bagli_is_emri_no %} Sipariş satırında iş emri {{ urun.bagli_is_emri_no }} yazıyor ama iş emri listelerinde yok.{% endif %}</p>
+  </div>
   {% endif %}
 </section>
+
+{% if eklentiler %}
+<section class="bolum">
+  <h2>PP'ye takılacak kalemler</h2>
+  <ul class="urun-listesi">
+    {% for k in eklentiler %}
+    <li class="urun">
+      <div class="urun-ust">
+        <span class="urun-ad"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi }}</span>
+        <span class="soluk">{{ k.miktar | sayi }} adet</span>
+      </div>
+      <div class="urun-seri">{{ eklenti_durumu(k.id, k.montaj_durumu) }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% if kirilimlar %}
 <section class="bolum">

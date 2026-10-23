@@ -9,14 +9,18 @@ sütunlarına değil, en sağdaki ayrı sütuna dizilir.
 """
 
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, g, redirect, render_template, request, url_for
 
 from .erp_aktarim import BEKLEMEDE, IPTAL, REVIZYON_ADLARI, eksik_siralar, kapali_mi
 from .is_emri_aktarim import is_emri_durumu
+from .kimlik import ekip_gerekli, guvenli_adres
 from .numaralar import urun_numaralari
-from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, dis_tedarik_mi, motor_seri_nolari, renk, yag
+from .urun_kurallari import (
+    AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, EKLENTI_DURUMLARI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER,
+    dis_tedarik_mi, pp_eklentisi_mi, renk, yag,
+)
 from .veritabani import baglanti
 
 bp = Blueprint("siparisler", __name__)
@@ -36,6 +40,48 @@ REVIZYON_GUN = 30  # bu kadar gün içindeki revizyon kutuda ve satırda "Revize
 # Açık siparişler bu üç sütunda, her sütunda teslim tarihine göre yukarıdan aşağı dizilir.
 TESLIM_SUTUNLARI = (("gecikti", "Gecikenler"), ("yaklasan", f"{YAKLASAN_GUN} gün içinde"), ("", "Planlananlar"))
 ONAY_SUTUNU = ("onay", "Onay bekleyen projeler")
+# Sipariş kartının ve ürün sayfasının başındaki "Siparişin durumu": ürünlerin iş emri durumu
+URUN_DURUMLARI = {
+    "kapali": "İş emri tamamlandı",
+    "kismen": "Kısmen tamamlandı",
+    "acik": "İş emri açık",
+    "yok": "İş emri açılmadı",
+    "sevk": "Sevk edildi",
+}
+
+
+def urun_is_emri_sinifi(asama, kalem, ie):
+    """Ürünün iş emri durumu sınıfı (URUN_DURUMLARI anahtarı); ie: ürüne dağıtılmış iş emri ya da None."""
+    if asama == "sevk_edildi" or kapali_mi(kalem):
+        return "sevk"
+    return is_emri_durumu(ie)[1] if ie else "yok"
+
+
+def siparis_durum_ozeti(vt, siparis):
+    """Siparişteki ürünlerin iş emri durumları ve PP'ye takılacak kalemlerin montaj durumları:
+    {"toplam", "urunler": [(sınıf, ad, adet)], "eklentiler": [(durum, ad, adet)]}."""
+    urunler = Counter()
+    for u in vt.execute(
+        "SELECT u.asama, k.erp_durum, k.erp_genel_durum, i.durum, i.gercek_miktar FROM urunler u"
+        " JOIN siparis_kalemleri k ON k.id = u.kalem_id LEFT JOIN is_emirleri i ON i.id = u.is_emri_id"
+        " WHERE k.siparis_id = ? AND COALESCE(k.erp_durum, '') != ? AND k.tur IN ('kart', 'servis')",
+        (siparis["id"], IPTAL),
+    ):
+        ie = {"durum": u["durum"], "gercek_miktar": u["gercek_miktar"]} if u["durum"] else None
+        urunler[urun_is_emri_sinifi(u["asama"], u, ie)] += 1
+    eklentiler = Counter(
+        k["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU
+        for k in vt.execute(
+            "SELECT urun_kodu, montaj_durumu FROM siparis_kalemleri WHERE siparis_id = ? AND COALESCE(erp_durum, '') != ?",
+            (siparis["id"], IPTAL),
+        )
+        if pp_eklentisi_mi(k["urun_kodu"], siparis["tip"])
+    )
+    return {
+        "toplam": sum(urunler.values()),
+        "urunler": [(s, ad, urunler[s]) for s, ad in URUN_DURUMLARI.items() if urunler[s]],
+        "eklentiler": [(d, ad, eklentiler[d]) for d, ad in EKLENTI_DURUMLARI.items() if eklentiler[d]],
+    }
 
 
 def siparis_durumu(kalemler):
@@ -250,6 +296,12 @@ def kart(siparis_no):
     for ie in is_emirleri:
         if ie["kalem_id"]:
             kalem_is_emirleri[ie["kalem_id"]].append(ie)
+    is_emri_haritasi = {ie["id"]: ie for ie in is_emirleri}
+
+    # "Siparişin durumu" kutusundan gelinince yalnızca o durumdaki kalemler: ?goster=ud-acik ya da ek-talep_acildi
+    goster = request.args.get("goster", "")
+    ud_suzgec = goster[3:] if goster.startswith("ud-") and goster[3:] in URUN_DURUMLARI else None
+    ek_suzgec = goster[3:] if goster.startswith("ek-") and goster[3:] in EKLENTI_DURUMLARI else None
 
     ozet = ozetle(siparis, kalemler, revizyonlar[0]["zaman"] if revizyonlar else None)
     bolumler = {aile: [] for aile in AILE_SIRASI}
@@ -257,9 +309,18 @@ def kart(siparis_no):
     for kalem in kalemler:
         if kalem["tur"] == "hizmet":
             continue
+        gorunen = urunler[kalem["id"]]
+        if ud_suzgec:
+            gorunen = [u for u in gorunen
+                       if urun_is_emri_sinifi(u["asama"], kalem, is_emri_haritasi.get(u["is_emri_id"])) == ud_suzgec]
+            if not gorunen or kalem["erp_durum"] == IPTAL:
+                continue
+        if ek_suzgec and not (pp_eklentisi_mi(kalem["urun_kodu"], siparis["tip"]) and kalem["erp_durum"] != IPTAL
+                              and (kalem["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU) == ek_suzgec):
+            continue
         satir = {
             "kalem": kalem,
-            "urunler": urunler[kalem["id"]],
+            "urunler": gorunen,
             "renk": renk(kalem["aciklama"]),
             "pp": kalem["aile"] == "PP",
             "yag": yag(kalem["aciklama"]) if kalem["aile"] == "PP" else None,
@@ -270,9 +331,9 @@ def kart(siparis_no):
             # Ürün kartlarına dağıtılmamış iş emirleri (üretimsiz kapatılan, adetten fazla açılan) ilk üründe görünür.
             "dagitilmamis": [ie for ie in kalem_is_emirleri[kalem["id"]]
                              if ie["id"] not in {u["is_emri_id"] for u in urunler[kalem["id"]]}],
-            # Makinelerin girilmiş ya da ERP'den okunmuş numaraları (şasi no, motor seri no)
-            "numaralar": {u["id"]: [n for n in urun_numaralari(vt, u, kalem["aile"], siparis["id"]) if n[2]]
-                          for u in urunler[kalem["id"]]},
+            # Makinelerin numaraları (şasi no, motor seri no): girilmiş ya da ERP'den okunmuş; yoksa "yok" yazar
+            "numaralar": {u["id"]: urun_numaralari(vt, u, kalem["aile"], siparis["id"]) for u in urunler[kalem["id"]]},
+            "eklenti": pp_eklentisi_mi(kalem["urun_kodu"], siparis["tip"]),
         }
         if kalem["erp_durum"] == IPTAL and ozet["durum"] != "iptal":
             # Devam eden siparişte iptal edilmiş (çoğu zaman yanlış girilip düzeltilmiş) satır
@@ -293,16 +354,14 @@ def kart(siparis_no):
         iptal_edilenler=iptal_edilenler,
         revizyonlar=revizyonlar,
         REVIZYON_ADLARI=REVIZYON_ADLARI,
-        is_emri_haritasi={ie["id"]: ie for ie in is_emirleri},
+        is_emri_haritasi=is_emri_haritasi,
         alt_is_emirleri=[ie for ie in is_emirleri if not ie["kalem_id"]],
-        # Motor-pompa hattı gibi alt montajların açıklamasında yazan motor seri no'ları
-        alt_motorlar={
-            ie["id"]: " / ".join(motor_seri_nolari(ie["aciklama"], *(r[0] for r in vt.execute(
-                "SELECT aciklama FROM is_emri_satirlari WHERE is_emri_id = ?", (ie["id"],)))))
-            for ie in is_emirleri if not ie["kalem_id"]
-        },
+        # Durum kutusundan seçilen: (seçim, adı) ya da None
+        suzgec=(goster, URUN_DURUMLARI.get(ud_suzgec) or EKLENTI_DURUMLARI.get(ek_suzgec)) if ud_suzgec or ek_suzgec else None,
         is_emri_yuklu=vt.execute("SELECT 1 FROM is_emirleri LIMIT 1").fetchone() is not None,
         is_emri_durumu=is_emri_durumu,
+        urun_is_emri_sinifi=urun_is_emri_sinifi,
+        durum_ozeti=siparis_durum_ozeti(vt, siparis),
         REVIZYON_GUN=REVIZYON_GUN,
         eksik=eksik_siralar(k["sira_no"] for k in kalemler),
         son_veri=max((k["veri_zamani"] for k in kalemler if k["veri_zamani"]), default=None),
@@ -310,3 +369,26 @@ def kart(siparis_no):
         TIPLER=TIPLER,
         AILE_ADLARI=AILE_ADLARI,
     )
+
+
+@bp.route("/siparisler/kalem/<int:kalem_id>/montaj", methods=["POST"])
+@ekip_gerekli
+def montaj_durumu(kalem_id):
+    """PP'ye takılan kalemin (kablosuz kumanda seti, uzaktan erişim modülü) montaj durumunu kaydeder."""
+    durum = request.form.get("montaj_durumu")
+    if durum not in EKLENTI_DURUMLARI:
+        abort(400)
+    vt = baglanti()
+    kalem = vt.execute(
+        "SELECT k.id, s.siparis_no FROM siparis_kalemleri k JOIN siparisler s ON s.id = k.siparis_id WHERE k.id = ?",
+        (kalem_id,),
+    ).fetchone()
+    if kalem is None:
+        abort(404)
+    with vt:
+        vt.execute(
+            "UPDATE siparis_kalemleri SET montaj_durumu = ?, montaj_degisme = ?, montaj_degistiren_id = ? WHERE id = ?",
+            (durum, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), g.kullanici["id"], kalem_id),
+        )
+    sonra = request.form.get("sonra")
+    return redirect(guvenli_adres(sonra) if sonra else url_for(".kart", siparis_no=kalem["siparis_no"]))

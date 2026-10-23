@@ -1,5 +1,5 @@
 // Süzgeç kutularında bir seçim yapılınca liste hemen yenilenir.
-document.querySelectorAll("form.suzgec select").forEach(function (kutu) {
+document.querySelectorAll("form.suzgec select, form[data-otomatik] select").forEach(function (kutu) {
   kutu.addEventListener("change", function () { kutu.form.submit(); });
 });
 

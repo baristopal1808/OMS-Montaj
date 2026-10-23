@@ -2,6 +2,7 @@
 {% block baslik %}{{ ozet.siparis.siparis_no }}{% endblock %}
 {% block icerik %}
 {% set s = ozet.siparis %}
+{% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
 
 {% macro kalem_rozetleri(satir) -%}
   {% set k = satir.kalem %}
@@ -54,7 +55,7 @@
   {% set k = satir.kalem %}
   {% if satir.urunler %}
     {% for u in satir.urunler %}
-    <li class="urun tiklanir-urun{% if k.erp_durum == 'İptal' %} iptal{% endif %}">
+    <li class="urun tiklanir-urun ud-serit-{{ urun_is_emri_sinifi(u.asama, k, is_emri_haritasi.get(u.is_emri_id)) }}{% if k.erp_durum == 'İptal' %} iptal{% endif %}">
       <div class="urun-ust">
         <a class="urun-ad urun-baglanti" href="{{ url_for('urunler.sayfa', urun_id=u.id) }}"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi }}</a>
         <span class="etiket asama">{{ ASAMALAR[u.asama] }}</span>
@@ -62,7 +63,7 @@
       <div class="urun-seri">
         {% if u.seri_no %}Seri no <strong>{{ u.seri_no }}</strong>{% else %}<span class="soluk">Seri no yok</span>{% endif %}
         {% if k.miktar > 1 %}<span class="soluk"> · {{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
-        {% for alan, ad, deger, kaynak in satir.numaralar[u.id] %}<span class="soluk"> · </span>{{ ad }} <strong>{{ deger }}</strong>{% endfor %}
+        {% for alan, ad, deger, kaynak in satir.numaralar[u.id] %}<span class="soluk"> · </span>{% if deger %}{{ ad }} <strong>{{ deger }}</strong>{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}{% endfor %}
         {{ kalem_rozetleri(satir) }}
       </div>
       {{ kalem_bilgileri(satir, ([is_emri_haritasi[u.is_emri_id]] if u.is_emri_id in is_emri_haritasi else [])
@@ -101,13 +102,14 @@
       {% if ozet.kalan %}<span class="etiket {{ ozet.kalan[1] }}">{{ ozet.kalan[0] }}</span>{% endif %}</dd></div>
     {% if ozet.son_sevk %}<div><dt>Son sevk</dt><dd>{{ ozet.son_sevk | tarih }}</dd></div>{% endif %}
   </dl>
+  {{ durum_ozeti_kutusu(durum_ozeti, s.siparis_no, suzgec[0] if suzgec) }}
   {% if s.notu %}<p class="siparis-notu"><strong>Not:</strong> {{ s.notu }}</p>{% endif %}
   {% if ozet.durum == 'listede_yok' %}<p class="cip uyari eksik-satirlar">Bu sipariş en son yüklenen ERP sipariş listesinde yok; açık siparişlerden çıkarıldı. Kaydı silinmedi; listede yeniden görünürse geri gelir.</p>{% endif %}
   {% if eksik %}<p class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if eksik | length > 1 %}satırları{% else %}satırı{% endif %} yüklenen ERP listelerinin hiçbirinde görünmedi; hangi ürün olduğu bilinmiyor. Satır ERP'de silinmiş ya da liste bir süzgeçle alınmış olabilir.</p>{% endif %}
   {% if son_veri %}<p class="soluk kucuk">ERP verisi: {{ son_veri | zaman }}</p>{% endif %}
 </div>
 
-{% if revizyonlar %}
+{% if revizyonlar and not suzgec %}
 <details class="pano-karti acilir revizyonlar" id="revizyonlar"{% if ozet.revizyon %} open{% endif %}>
   <summary>
     <span class="acilir-baslik">Sipariş talebi revizyonları</span>
@@ -130,6 +132,12 @@
     </table>
   </div>
 </details>
+{% endif %}
+
+<div id="kalemler"></div>
+{% if suzgec %}
+<p class="suzgec-bandi">Yalnızca <strong>"{{ suzgec[1] }}"</strong> olan kalemler gösteriliyor ·
+  <a href="{{ url_for('siparisler.kart', siparis_no=s.siparis_no) }}">bütün kalemleri göster</a></p>
 {% endif %}
 
 {% for aile, satirlar in bolumler %}
@@ -157,7 +165,7 @@
         <span class="urun-ad"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi }}</span>
         <span class="miktar">{{ k.miktar | sayi }} {{ k.birim or '' }}{% if k.sevk_miktari %} <span class="soluk">· sevk {{ k.sevk_miktari | sayi }}</span>{% endif %}</span>
       </div>
-      <div class="urun-seri">{{ kalem_rozetleri(satir) }}</div>
+      <div class="urun-seri">{{ kalem_rozetleri(satir) }}{% if satir.eklenti and k.erp_durum != 'İptal' %}{{ eklenti_durumu(k.id, k.montaj_durumu) }}{% endif %}</div>
       {{ kalem_bilgileri(satir, satir.is_emirleri) }}
     </li>
     {% endfor %}
@@ -165,13 +173,13 @@
 </section>
 {% endif %}
 
-{% if alt_is_emirleri %}
+{% if alt_is_emirleri and not suzgec %}
 <section class="bolum">
   <h2>Alt montajlar ve yarı mamuller</h2>
   <p class="soluk kucuk">Açıklamasında bu siparişin proje kodu geçen, ürünü siparişte olmayan iş emirleri.</p>
   <div class="pano-karti kaydirilabilir">
     <table class="tablo">
-      <thead><tr><th>İş emri</th><th>Ürün</th><th>Ürün adı</th><th>Motor seri no</th><th>Durum</th><th>Miktar</th><th>Tarih</th></tr></thead>
+      <thead><tr><th>İş emri</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th><th>Tarih</th></tr></thead>
       <tbody>
         {% for ie in alt_is_emirleri %}
         {% set durum = is_emri_durumu(ie) %}
@@ -179,7 +187,6 @@
           <td class="sayisal"><strong>{{ ie.is_emri_no }}</strong></td>
           <td class="sayisal">{{ ie.urun_kodu }}</td>
           <td>{{ ie.urun_adi or '' }}</td>
-          <td class="sayisal">{{ alt_motorlar[ie.id] or '' }}</td>
           <td><span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span></td>
           <td class="sayisal">{{ ie.gercek_miktar | sayi }}/{{ ie.plan_miktar | sayi }}</td>
           <td class="sayisal">{% if ie.kapatma_tarihi %}kapanış {{ ie.kapatma_tarihi | tarih }}{% elif ie.tahmini_bitis %}tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}</td>
@@ -191,7 +198,7 @@
 </section>
 {% endif %}
 
-{% if iptal_edilenler %}
+{% if iptal_edilenler and not suzgec %}
 <details class="pano-karti acilir">
   <summary>
     <span class="acilir-baslik">İptal edilen satırlar</span>

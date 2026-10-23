@@ -6,6 +6,7 @@ verir; .xlsx de okunur. Sütunlar başlık adıyla bulunur; sütunların sıras�
 fazladan sütunlar önemli değildir. Raporların yapısı: docs/ihtiyaclar.md, 2.3.
 """
 
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -234,10 +235,33 @@ def siparis_satirlari(basliklar, satirlar):
     return _kayitlar(basliklar, satirlar, SIPARIS_SUTUNLARI, ZORUNLU_SIPARIS, ("siparis_no", "urun_kodu", "sira_no"))
 
 
+# ERP iş emrini kapatınca açıklamanın sonuna boşluk bırakmadan "<sıra no> NOLU İŞEMRİNİN PLAN MİKTAR <=
+# GERÇEKLEŞEN MIKTAR DURUMUNDAN DOLAYI ZAMANLANMIS GOREV TARAFINDAN KAPATILDI." ekliyor; baştaki sıra numarası
+# önceki kelimeye (bazen motor seri no'suna) yapışıyor.
+ERP_KAPANIS_NOTU = re.compile(r"\s*NOLU\s+\S*EMR\S*\s+PLAN\s+M\S*KTAR.*?KAPATILDI\.?", re.IGNORECASE | re.DOTALL)
+
+
+def kapanis_notunu_sil(aciklama, sira_no):
+    """ERP'nin eklediği kapanış notunu (iş emri birden çok kez kapandıysa her birini), önündeki sıra
+    numarasıyla birlikte açıklamadan çıkarır."""
+    while aciklama and (eslesme := ERP_KAPANIS_NOTU.search(aciklama)):
+        once = aciklama[: eslesme.start()]
+        # Notun numarası satırın sıra numarası; kırılım, ana satırın açıklamasını taşıyorsa 0.
+        for no in dict.fromkeys(str(n) for n in (sira_no, 0) if n is not None):
+            if once.endswith(no):
+                once = once[: -len(no)]
+                break
+        aciklama = (once + aciklama[eslesme.end():]).strip(" -/") or None
+    return aciklama
+
+
 def is_emri_satirlari(basliklar, satirlar):
     """Açık ya da kapalı iş emirleri raporunun satırlarını kayıtlara çevirir (ana satır ve kırılımlar)."""
-    return _kayitlar(basliklar, satirlar, IS_EMRI_SUTUNLARI, ZORUNLU_IS_EMRI,
-                     ("is_emri_no", "urun_kodu", "sira_no"), BOS_DEGERLER)
+    kayitlar = _kayitlar(basliklar, satirlar, IS_EMRI_SUTUNLARI, ZORUNLU_IS_EMRI,
+                         ("is_emri_no", "urun_kodu", "sira_no"), BOS_DEGERLER)
+    for kayit in kayitlar:
+        kayit["aciklama"] = kapanis_notunu_sil(kayit["aciklama"], kayit["sira_no"])
+    return kayitlar
 
 
 def numara_satirlari(basliklar, satirlar):

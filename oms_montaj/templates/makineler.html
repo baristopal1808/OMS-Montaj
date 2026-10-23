@@ -46,17 +46,18 @@
   </a>
   <div class="kaydirilabilir">
     <table class="tablo mg-tablo">
-      <colgroup><col style="width: 25%"><col style="width: 22%"><col style="width: 11%"><col style="width: 10%"><col style="width: 13%"><col style="width: 9%"><col style="width: 10%"></colgroup>
-      <thead><tr><th>Ürün</th><th>Ürün adı</th><th>Seri no</th><th>Aşama</th><th>Planlama durumu</th><th>İş emri</th><th>Teslim</th></tr></thead>
+      <colgroup><col style="width: 21%"><col style="width: 16%"><col style="width: 12%"><col style="width: 13%"><col style="width: 9%"><col style="width: 10%"><col style="width: 11%"><col style="width: 8%"></colgroup>
+      <thead><tr><th>Ürün</th><th>Ürün adı</th><th>Seri no</th><th>Şasi / motor no</th><th>Aşama</th><th>Planlama durumu</th><th>İş emri</th><th>Teslim</th></tr></thead>
       <tbody>
         {% for m in g.makineler %}
         <tr class="tiklanir" data-adres="{{ url_for('urunler.sayfa', urun_id=m.id) }}">
           <td><span class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[m.aile] }}">{{ m.aile }}</span> <strong>{{ m.urun_kodu }}</strong></td>
           <td>{{ m.urun_adi or '' }}</td>
           <td class="sayisal">{{ m.seri_no or '—' }}</td>
+          <td class="sayisal">{% for alan, ad, deger, kaynak in numaralar[m.id] %}<span title="{{ ad }}">{{ deger or '—' }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>
           <td><span class="etiket asama">{{ ASAMALAR[m.asama] }}</span></td>
           <td>{{ m.erp_urun_durumu or 'Belirtilmemiş' }}</td>
-          <td class="sayisal">{{ m.bagli_is_emri_no or '—' }}</td>
+          <td class="sayisal">{% if m.is_emri_no %}{{ m.is_emri_no }}<br><span class="etiket ie-{{ is_emri_durumlari[m.id][1] }}">{{ is_emri_durumlari[m.id][0] }}</span>{% else %}—{% endif %}</td>
           <td class="sayisal">{{ m.teslim_tarihi | tarih }}</td>
         </tr>
         {% endfor %}

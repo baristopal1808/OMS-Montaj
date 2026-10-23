@@ -166,6 +166,13 @@ GOCLER = [
     ALTER TABLE urunler ADD COLUMN numara_degistiren_id INTEGER REFERENCES kullanicilar(id);
     ALTER TABLE is_emri_satirlari ADD COLUMN aciklama TEXT;
     """,
+    # 8: PP'ye takılan, dışarıdan alınan kalemlerin (kablosuz kumanda seti, uzaktan erişim modülü) montaj
+    #    durumu; ekip girer, ERP yüklemesi değiştirmez
+    """
+    ALTER TABLE siparis_kalemleri ADD COLUMN montaj_durumu TEXT;
+    ALTER TABLE siparis_kalemleri ADD COLUMN montaj_degisme TEXT;
+    ALTER TABLE siparis_kalemleri ADD COLUMN montaj_degistiren_id INTEGER REFERENCES kullanicilar(id);
+    """,
 ]
 
 

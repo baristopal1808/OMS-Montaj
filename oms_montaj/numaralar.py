@@ -15,15 +15,13 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from .erp_aktarim import IPTAL
-from .urun_kurallari import ANA_URUNLER, motor_seri_nolari
+from .urun_kurallari import motor_seri_nolari
 
-# Hangi makinede hangi numara alanı var
+# Hangi makinede hangi numara alanı var; OVF ve WD'de şasi no yok, onlar izlenmez (kullanıcı, 23/10/2026)
 NUMARA_ALANLARI = {
     "SVR": ("sasi_no",),
     "OVR": ("sasi_no",),
     "PP": ("motor_seri_no",),
-    "OVF": ("sasi_no", "motor_seri_no"),
-    "WD": ("sasi_no", "motor_seri_no"),
 }
 NUMARA_ADLARI = {"sasi_no": "Şasi no", "motor_seri_no": "Motor seri no"}
 KAYNAKLAR = {
@@ -121,9 +119,9 @@ def sablon(vt):
         "SELECT u.id, u.seri_no, u.sasi_no, u.motor_seri_no, u.is_emri_id, k.urun_kodu, k.urun_adi, k.aile,"
         " k.siparis_id, s.siparis_no, s.musteri FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id"
         " JOIN siparisler s ON s.id = k.siparis_id"
-        f" WHERE k.tur = 'kart' AND k.erp_durum != ? AND k.aile IN ({', '.join('?' * len(ANA_URUNLER))})"
+        f" WHERE k.tur = 'kart' AND k.erp_durum != ? AND k.aile IN ({', '.join('?' * len(NUMARA_ALANLARI))})"
         " ORDER BY s.talep_tarihi DESC, s.siparis_no, k.sira_no, u.adet_sira",
-        (IPTAL, *ANA_URUNLER),
+        (IPTAL, *NUMARA_ALANLARI),
     ).fetchall():
         erp = erp_motor_serisi(vt, u, u["aile"], u["siparis_id"])[0] if "motor_seri_no" in NUMARA_ALANLARI[u["aile"]] else None
         sayfa.append([u["id"], u["siparis_no"], u["musteri"], u["urun_kodu"], u["urun_adi"], u["seri_no"],

@@ -14,6 +14,8 @@ from flask import Blueprint, render_template, request
 
 from .erp_aktarim import BEKLEMEDE, IPTAL, kapali_mi
 from .grafik import PLANLAMA_RENKLERI
+from .is_emri_aktarim import is_emri_durumu
+from .numaralar import urun_numaralari
 from .siparisler import TIPLER, teslim_bilgisi
 from .urun_kurallari import AILE_SIRASI, ANA_URUNLER
 from .veritabani import baglanti
@@ -26,10 +28,12 @@ PLANLAMA_SECENEKLERI = [*PLANLAMA_RENKLERI, BELIRTILMEMIS]
 
 def sevk_edilecek_makineler(vt):
     satirlar = vt.execute(
-        "SELECT u.id, u.seri_no, u.asama, u.adet_sira, k.aile, k.urun_kodu, k.urun_adi, k.miktar, k.teslim_tarihi,"
-        " k.erp_urun_durumu, k.bagli_is_emri_no, k.erp_durum, k.erp_genel_durum,"
-        " s.siparis_no, s.musteri, s.tip, s.erp_listede"
+        "SELECT u.id, u.seri_no, u.asama, u.adet_sira, u.sasi_no, u.motor_seri_no, u.is_emri_id, k.aile, k.urun_kodu,"
+        " k.urun_adi, k.miktar, k.teslim_tarihi, k.erp_urun_durumu, k.bagli_is_emri_no, k.erp_durum, k.erp_genel_durum,"
+        " k.siparis_id, s.siparis_no, s.musteri, s.tip, s.erp_listede,"
+        " i.is_emri_no, i.durum AS ie_durum, i.gercek_miktar AS ie_gercek"
         " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id JOIN siparisler s ON s.id = k.siparis_id"
+        " LEFT JOIN is_emirleri i ON i.id = u.is_emri_id"
         " WHERE COALESCE(k.erp_durum, '') NOT IN (?, ?) AND u.asama != 'sevk_edildi'"
         f" AND k.aile IN ({', '.join('?' * len(ANA_URUNLER))})"
         " ORDER BY k.teslim_tarihi, s.siparis_no, k.sira_no, u.adet_sira",
@@ -50,7 +54,8 @@ def liste():
     secim = {alan: request.args.get(alan, "").strip() for alan in ("planlama", "aile", "teslim", "bas", "bit")}
     bugun = date.today().isoformat()
     bas, bit = _tarih(secim["bas"]), _tarih(secim["bit"])
-    makineler = sevk_edilecek_makineler(baglanti())
+    vt = baglanti()
+    makineler = sevk_edilecek_makineler(vt)
 
     # Tarih ve aile süzgeçleri; planlama seçicisinin sayıları bunlardan sonra sayılır.
     if secim["teslim"] == "gecikti":
@@ -78,6 +83,11 @@ def liste():
     aileler = Counter(m["aile"] for m in makineler)
     return render_template(
         "makineler.html",
+        numaralar={m["id"]: urun_numaralari(vt, m, m["aile"], m["siparis_id"]) for m in makineler},
+        is_emri_durumlari={
+            m["id"]: is_emri_durumu({"durum": m["ie_durum"], "gercek_miktar": m["ie_gercek"]})
+            for m in makineler if m["is_emri_no"]
+        },
         gruplar=sorted(gruplar.values(), key=lambda g: (g["teslim"] or "9999", g["siparis_no"])),
         toplam=len(makineler),
         aileler=[(aile, aileler[aile]) for aile in AILE_SIRASI if aileler[aile]],

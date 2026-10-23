@@ -57,7 +57,7 @@ def is_emri_durumu(ie):
     if ie["durum"] == KAPALI:
         if not ie["gercek_miktar"]:
             return "Üretim girişi olmadan kapatıldı", "iptal"
-        return "ERP'de tamamlandı", "kapali"
+        return "ERP'de iş emri tamamlandı", "kapali"
     if ie["gercek_miktar"]:
         return "Kısmen tamamlandı", "kismen"
     return "Açık", "acik"

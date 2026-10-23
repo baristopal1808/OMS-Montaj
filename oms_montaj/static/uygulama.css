@@ -343,15 +343,58 @@ a.satir-baslik:hover { color: var(--vurgu); }
 .etiket.asama { color: #fff; background: #3a4150; }
 .etiket.revize { color: var(--bilgi); background: var(--bilgi-zemin); text-decoration: none; }
 /* İş emrinin ERP'deki durumu */
-.etiket.ie-acik { color: var(--bilgi); background: var(--bilgi-zemin); }
+.etiket.ie-acik { color: #6b5600; background: #fdf3c4; }
 .etiket.ie-kismen { color: #8a4b00; background: #fff1dc; }
 .etiket.ie-kapali { color: #1f5c38; background: #e3f3e8; }
 .etiket.ie-iptal { color: var(--soluk); background: #eef0f4; }
 .ie-cipi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .ie-cipi .etiket { font-size: .75rem; padding: 0 .5rem; }
 
+/* Ürünün iş emri durumu (ud-) ve PP'ye takılacak kalemin montaj durumu (ek-): yeşil tamam, sarı sürüyor,
+   soluk kırmızı başlanmadı, gri sevk edildi */
+.ud-kapali, .ek-montaj_edildi { color: #1f5c38; background: #e3f3e8; }
+.ud-acik, .ud-kismen, .ek-talep_acildi { color: #6b5600; background: #fdf3c4; }
+.ek-montaj_edilmedi { color: var(--bilgi); background: var(--bilgi-zemin); }
+.ud-yok, .ek-talep_acilacak { color: #a61b1b; background: #fdeceb; }
+.ud-sevk { color: #5c6576; background: #eef0f4; }
+
+/* Siparişin durumu: kartın ve ürün sayfasının başında; renkli başlıkta da açık zeminli kalır */
+.durum-ozeti {
+  display: grid;
+  gap: .4rem;
+  max-width: max-content;
+  margin: .25rem 0 .5rem;
+  padding: .6rem .85rem;
+  color: var(--yazi);
+  background: rgb(255 255 255 / 94%);
+  border-radius: 8px;
+}
+.do-baslik { font-size: .72rem; font-weight: 700; letter-spacing: .06em; color: #5c6576; text-transform: uppercase; }
+.do-satir { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.do-ad { margin-right: .2rem; font-size: .88rem; font-weight: 650; }
+.do-cip { padding: .1rem .6rem; font-size: .82rem; text-decoration: none; border: 1px solid transparent; border-radius: 99px; }
+a.do-cip:hover { border-color: currentColor; }
+.do-cip.secili { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
+.suzgec-bandi { margin: 0 0 1rem; padding: .6rem .9rem; background: var(--bilgi-zemin); border-radius: 8px; }
+
+/* PP'ye takılan kalemin montaj durumu seçicisi */
+.eklenti-formu { display: inline-flex; margin-left: .25rem; }
+.eklenti-formu label { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; font-weight: 500; }
+.eklenti-formu select { width: auto; min-height: 34px; padding: .2rem 2rem .2rem .6rem; font-size: .85rem; font-weight: 600; border-color: transparent; }
+
+/* Sipariş kartında ürünün solundaki şerit: iş emri durumu */
+.urun[class*="ud-serit-"] { box-shadow: inset 4px 0 0 var(--serit); }
+.ud-serit-kapali { --serit: #2e9d62; }
+.ud-serit-acik, .ud-serit-kismen { --serit: #e3b341; }
+.ud-serit-yok { --serit: #e59a94; }
+.ud-serit-sevk { --serit: #c9ced8; }
+
 /* Ürün sayfası */
 .duz-baglanti { color: inherit; }
+.is-emri-kutusu.ie-kutu-kapali { background: #eef8f1; border-color: #b9e0c6; }
+.is-emri-kutusu.ie-kutu-acik, .is-emri-kutusu.ie-kutu-kismen { background: #fffbe6; border-color: #f0dc8a; }
+.is-emri-kutusu.ie-kutu-yok { background: #fdf1f0; border-color: #f2c3be; }
+.is-emri-kutusu.ie-kutu-iptal { background: #f4f5f7; }
 .numara-formu { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem 1.5rem; align-items: start; }
 .numara-formu small { font-weight: 400; }
 .numara-formu .dugme { justify-self: start; align-self: end; }
@@ -684,7 +727,7 @@ a.gosterge:hover { box-shadow: 0 6px 18px rgb(16 24 40 / 12%); }
 .mg-musteri { color: var(--soluk); }
 .mg-teslim { display: flex; align-items: center; gap: .45rem; margin-left: auto; font-size: .95rem; }
 /* Sütunlar her projede aynı genişlikte; tablolar alt alta hizalı görünür. */
-.mg-tablo { table-layout: fixed; min-width: 56rem; }
+.mg-tablo { table-layout: fixed; min-width: 64rem; }
 .mg-tablo td { overflow-wrap: anywhere; }
 
 /* Sevkiyat: çeyrek seçici */

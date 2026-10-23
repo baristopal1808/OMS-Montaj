@@ -47,7 +47,8 @@ Montaj ekibinin takibi (sipariş → malzeme hazırlık → montaj → test → 
 - Vibrohammer ve diğer ailelerin kontrol listesi şablonları (Ayarlar'dan ilk sürümde de eklenebilir)
 - Servis takibinin ayrıntısı (denemelerde birlikte çalışılacak)
 - Uygunsuzluk ve DÖF uyarısı
-- ERP'ye doğrudan bağlantı (Excel yüklemesinin yerine)
+- ERP'ye doğrudan bağlantı (Excel yüklemesinin yerine; ERP sorumlusu canlı verinin mümkün olduğunu söyledi, 23/10/2026)
+- Yapay zekâ asistanı: uygulamanın verisinden soru cevaplayan asistan (Claude API; `ihtiyaclar.md` Kararlar)
 - Yetkilerin kişi kişi ayarlanması
 
 ## 4. Nasıl kurulacak
@@ -102,7 +103,7 @@ Her adımın sonunda kullanıcı deneyebileceği bir şey görür. Kullanıcı d
 
 - 1. adım bitti (21/10/2026). Kullanıcının isteğiyle giriş ekranı, logo ve yan menü eklendi.
 - 2. adım bitti (21/10/2026). Gerçek listelerle denendi. Kullanıcının isteğiyle Özet ana ekranı, sevk edilecek makineler, Sevkiyat ve Yedek parça ekranları eklendi.
-- 3. adım sürüyor (23/10/2026): iş emirlerinin yüklenmesi ve kendiliğinden bağlanması bitti; ürün sayfası (4. adımdan öne alındı) ve makine numaraları (motor seri no, şasi no) eklendi. Kalanlar: bağlanamayan iş emirlerinin sorulması, eksik malzeme, "İmalatta" uyarısı, Yapılacaklar.
+- 3. adım sürüyor (23/10/2026): iş emirlerinin yüklenmesi ve kendiliğinden bağlanması bitti; ürün sayfası (4. adımdan öne alındı), makine numaraları (motor seri no, şasi no), sipariş durumu özeti ve PP'ye takılan kalemlerin montaj durumu eklendi. Kalanlar: bağlanamayan iş emirlerinin sorulması, eksik malzeme, "İmalatta" uyarısı, Yapılacaklar.
 
 | Adım | Ne yapılır | Kullanıcı ne dener |
 |---|---|---|

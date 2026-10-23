@@ -1,37 +1,38 @@
 # Kaldığımız yer
 
-**23/10/2026, 08:33.** 3. adımın ilk parçaları yazıldı: iş emirleri yükleniyor ve siparişe bağlanıyor; her makinenin kendi sayfası, motor seri no ve şasi no var. Sırada bağlanamayan iş emirlerinin kullanıcıya sorulması.
+**23/10/2026, 10:16.** 3. adım sürüyor. İş emirleri, ürün sayfası, makine numaraları, sipariş durumu özeti ve PP'ye takılan kalemlerin montaj durumu yazıldı. Sırada yapay zekâ asistanı denemesi (kullanıcı istedi; önce kütüphane ve API anahtarı) ve bağlanamayan iş emirlerinin sorulması var.
 
 ## Bu oturumda yapılanlar
 
 - 2. adım tamamlandı (siparişler, Özet, sevk edilecek makineler, Sevkiyat, Yedek parça; ayrıntısı `docs/ihtiyaclar.md` Kararlar).
-  - Onay bekleyen siparişler ayrı sütunda; sevk edilecek sayılara girmez.
-  - Sipariş talebi revizyonları kartta görünür.
-  - Seri no'suz OVF ve WD satırları makine sayılmaz.
-  - Müşteri rengi ve logosu; diğer siparişlerde OMS logosu ve kırmızısı.
 - 3a, ilk yarı (`is_emri_aktarim.py`):
   - Açık ve kapalı iş emirleri (tek dosyada da olur) yüklenir.
-  - Siparişe kendiliğinden bağlanır: ERP bağlantısı, açıklamadaki proje kodu, alt montaj, stok.
+  - Siparişe kendiliğinden bağlanır.
   - İş emri açılan ürün "Malzeme hazırlık"a geçer.
-  - Kırılımlar iki listeden birleşir.
-- Ürün sayfası (`urunler.py`, 3b öne alındı): makinenin bilgileri, iş emri, kırılımlar (tamamlanan ve bekleyen). Ürüne tıklayınca bu sayfa, siparişe tıklayınca bütün kalemler açılır.
+  - ERP'nin kapanış notu açıklamadan silinir.
+- Ürün sayfası (`urunler.py`): makinenin bilgileri, iş emri (durumuna göre yeşil, sarı ya da soluk kırmızı), kırılımlar.
 - Makine numaraları (`numaralar.py`):
-  - Motor seri no iş emri açıklamalarından okunur.
-  - Şasi no ve motor seri no ürün sayfasından elle girilir.
-  - Toplu giriş için "Makine numaraları" şablonu (ERP yükleme ekranından indirilir, doldurulup yüklenir).
-- Göçler 5–7: revizyonlar, iş emirleri, makine numaraları.
-- Kullanıcının bir yıllık iş emri listesiyle denendi: 719 iş emri, 277'si sipariş satırına bağlandı. Bütün sayfalar hatasız açıldı.
-- 89 otomatik test geçiyor.
+  - Motor seri no iş emri açıklamasından okunur (Volvo 4+3+4 ve 4+3+3, CAT).
+  - Şasi no ve motor seri no elle ya da "Makine numaraları" şablonuyla girilir.
+  - Yalnızca SVR, OVR, PP için.
+- Sipariş kartında ve ürün sayfasında "Siparişin durumu" kutusu; durumlar tıklanınca sipariş kartı yalnızca o kalemlerle açılır. Ürünlerin solunda iş emri durumu şeridi.
+- PP'ye takılan kalemler (kablosuz kumanda seti, uzaktan erişim modülü): montaj durumu seçilir.
+- Göçler 5–8.
+- Kullanıcının bir yıllık iş emri listesiyle denendi; 591 sayfa hatasız açılıyor.
+- 93 otomatik test geçiyor.
 
 ## Sıradaki iş
 
-1. 3a, ikinci yarı: bağlanamayan iş emirlerinin listesi; hangi siparişe ait olduğunu kullanıcı seçer (önce açık olanlar).
-2. 3c: çıkış yapılamayan malzeme, "İş emri tamamlandı ama ERP'de İmalatta" uyarısı, Yapılacaklar listesi.
-3. 4. adım: aşama değiştirme, kontrol listeleri, notlar ve zaman akışı, fotoğraf; eksik satır uyarısına "Kontrol ettim, satır silinmiş" düğmesi.
+1. Yapay zekâ asistanı denemesi (Claude Haiku 5.5): kullanıcı onay verince `anthropic` kütüphanesi eklenir, API anahtarı `OMS Veri` içinde tutulur. Önce uydurma veriyle mi gerçek veriyle mi denendiği kararlaştırılır. Asistan yalnızca uygulamanın sorgularını araç olarak kullanır.
+2. 3a, ikinci yarı: bağlanamayan iş emirlerinin listesi; hangi siparişe ait olduğunu kullanıcı seçer.
+3. 3c: çıkış yapılamayan malzeme, "İş emri tamamlandı ama ERP'de İmalatta" uyarısı, Yapılacaklar listesi.
+4. 4. adım: aşama değiştirme, kontrol listeleri, notlar ve zaman akışı, fotoğraf; eksik satır uyarısına "Kontrol ettim, satır silinmiş" düğmesi.
+5. ERP'den canlı veri (API, 15 dakikada bir): ERP sorumlusundan adres, belge ve salt okunur erişim gelince.
 
 ## Kullanıcıdan beklenenler
 
-- `baslat.bat`'ı yeniden açıp bir yıllık iş emri Excel'ini bir kez daha yüklemek (kırılım açıklamalarındaki motor numaraları için).
-- "Makine numaraları" şablonunu indirip şasi no'ları (Planner'daki "Şasi No" ve "Şanzıman (Seri) No") doldurup yüklemek.
-- OVF ve WD'de şasi no mu, motor seri no mu, ikisi mi gerekli?
+- Asistan denemesi için: kütüphane onayı, Anthropic API anahtarı, deneme verisinin seçimi (uydurma ya da gerçek).
+- `baslat.bat`'ı yeniden açıp iş emri Excel'ini bir kez daha yüklemek (açıklamalar temizlenir, motor numaraları yeniden okunur).
+- "Makine numaraları" şablonunu doldurup yüklemek (şasi no'lar).
+- ERP sorumlusundan: API adresi ve belgesi, salt okunur kullanıcı, hazır görünümlerin adları.
 - Sunucu yedeği kullanıcı kararıyla bekliyor; `OMS Veri` şimdilik yalnızca bu bilgisayarda.

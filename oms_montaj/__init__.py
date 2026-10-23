@@ -20,6 +20,7 @@ from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
 from .grafik import AILE_RENKLERI
 from .simgeler import simge
+from .urun_kurallari import EKLENTI_DURUMLARI
 
 SURUM = "0.1"
 KOK = Path(__file__).resolve().parent.parent
@@ -76,6 +77,8 @@ def uygulama_olustur(ayarlar=None):
     for kod in HATA_METINLERI:
         uygulama.register_error_handler(kod, hata_sayfasi)
     uygulama.jinja_env.filters.update(SUZGECLER)
-    uygulama.jinja_env.globals.update(simge=simge, SURUM=SURUM, ASAMALAR=ASAMALAR, AILE_RENKLERI=AILE_RENKLERI)
+    uygulama.jinja_env.globals.update(
+        simge=simge, SURUM=SURUM, ASAMALAR=ASAMALAR, AILE_RENKLERI=AILE_RENKLERI, EKLENTI_DURUMLARI=EKLENTI_DURUMLARI,
+    )
     uygulama.context_processor(lambda: {"YIL": date.today().year})
     return uygulama

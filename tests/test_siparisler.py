@@ -407,6 +407,14 @@ def test_ozet_satirlari_tiklanir_ve_kutucuklar_renkli(istemci, ekip, yukle):
     assert 'class="sk-urun renkli" style="--renk: #1baf7a"' in sayfa  # PP her yerde aynı renk
 
 
+def test_siparis_kutusunda_tam_urun_kodu(istemci, ekip, yukle):
+    yukle(excel(makine_siparisi()))
+    sayfa = istemci.get("/siparisler").get_data(as_text=True)
+    assert "<strong>1</strong> PP-536-NF</a>" in sayfa and "<strong>1</strong> SVR-50-NF-BSP</a>" in sayfa
+    assert "<strong>2</strong> KCN-90</a>" in sayfa and "#aile-Çene" in sayfa  # iki çene: sipariş kartının bölümü
+    assert "<strong>1</strong> PP</a>" not in sayfa
+
+
 def test_seri_nosuz_ovf_parcasi_makine_sayilmaz(istemci, ekip, yukle):
     yukle(excel([
         satir(1, "OVF-300-4BF-BSP", "Zemin Iyilestirme", planlama="OZ-TS0001-OVF-01"),

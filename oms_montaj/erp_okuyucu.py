@@ -25,7 +25,7 @@ RAPORLAR = {
     "siparis_talepleri": {"ad": "Sipariş talepleri", "imza": ("Sipariş No", "Sip.Sıra No", "Planlama Bilgisi")},
     "is_emirleri": {"ad": "İş emirleri", "imza": ("* İş Emri No", "* Sıra No")},
     "makine_numaralari": {"ad": "Makine numaraları", "imza": ("Kart No", "Şasi No", "Motor Seri No")},
-    "cikis_yapilamayan": {"ad": "Çıkış yapılamayan malzeme", "imza": ("Isemri No / Sıra", "Gerceklesen Cikis Miktar"), "adim": 5},
+    "cikis_yapilamayan": {"ad": "Çıkış yapılamayan malzeme", "imza": ("Isemri No / Sıra", "Gerceklesen Cikis Miktar")},
     "stok": {"ad": "Stok raporu", "imza": ("MalzemeKodu", "EldekiMiktar"), "adim": 5},
 }
 
@@ -86,14 +86,38 @@ NUMARA_SUTUNLARI = {
     "seri_no": "Seri No",
     "sasi_no": "Şasi No",
     "motor_seri_no": "Motor Seri No",
+    "motor2_seri_no": "Motor 2 Seri No",  # iki motorlu güç ünitelerinde; eski şablonlarda yok
 }
 ZORUNLU_NUMARA = ("kart_no", "sasi_no", "motor_seri_no")
+
+# Çıkış yapılamayan malzeme raporu ("Montaj açık iş emri raporu"): açık iş emirlerinin bütün malzeme
+# satırları; iş emri no ve kırılımın sıra no'su tek sütunda ("900101 / 2").
+CIKIS_SUTUNLARI = {
+    "malzeme_kodu": "Malzeme Kodu",
+    "malzeme_adi": "Malzeme Adı",
+    "envanter_turu": "Malzeme Envanter Türü",
+    "eldeki": "Toplam Eldeki Miktar",
+    "cikis_miktar": "Gerceklesen Cikis Miktar",
+    "plan_miktar": "Planlanan Takip Miktar",
+    "birim": "Plan Birimi",
+    "ana_urun_depo": "Ana Ürün Depo Miktar",
+    "uretim_depo": "Üretim Depo Miktar",
+    "montaj_depo": "Montaj Depo Miktar",
+    "montaj_uretim_depo": "Montaj Üretim Depo Miktar",
+    "sevk_depo": "Sevk Depo Miktar",
+    "is_emri_sira": "Isemri No / Sıra",
+    "ana_urun_kodu": "Ana Ürün Kodu",
+}
+ZORUNLU_CIKIS = ("malzeme_kodu", "cikis_miktar", "plan_miktar", "is_emri_sira")
 
 TARIH_ALANLARI = {
     "teslim_tarihi", "talep_tarihi", "ilk_sevk_tarihi", "son_sevk_tarihi",
     "acilis_tarihi", "baslama_tarihi", "tahmini_bitis", "kapatma_tarihi", "ilk_stok_giris", "son_stok_giris",
 }
-SAYI_ALANLARI = {"miktar", "sevk_miktari", "plan_miktar", "gercek_miktar", "kalan_miktar"}
+SAYI_ALANLARI = {
+    "miktar", "sevk_miktari", "plan_miktar", "gercek_miktar", "kalan_miktar", "eldeki", "cikis_miktar",
+    "ana_urun_depo", "uretim_depo", "montaj_depo", "montaj_uretim_depo", "sevk_depo",
+}
 BOS_DEGERLER = {"---"}  # ERP'nin boş alan yerine yazdığı
 
 
@@ -261,6 +285,18 @@ def is_emri_satirlari(basliklar, satirlar):
                          ("is_emri_no", "urun_kodu", "sira_no"), BOS_DEGERLER)
     for kayit in kayitlar:
         kayit["aciklama"] = kapanis_notunu_sil(kayit["aciklama"], kayit["sira_no"])
+    return kayitlar
+
+
+def cikis_satirlari(basliklar, satirlar):
+    """Çıkış yapılamayan malzeme raporunun satırlarını kayıtlara çevirir; "900101 / 2" iş emri no ve sıra no'ya
+    ayrılır. Biçime uymayan satır atlanır."""
+    kayitlar = []
+    for kayit in _kayitlar(basliklar, satirlar, CIKIS_SUTUNLARI, ZORUNLU_CIKIS, ("malzeme_kodu", "is_emri_sira")):
+        eslesme = re.fullmatch(r"\s*(\d+)\s*/\s*(\d+)\s*", kayit.pop("is_emri_sira"))
+        if eslesme:
+            kayit["is_emri_no"], kayit["sira_no"] = eslesme.group(1), int(eslesme.group(2))
+            kayitlar.append(kayit)
     return kayitlar
 
 

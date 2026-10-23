@@ -8,12 +8,6 @@ bp = Blueprint("ekranlar", __name__)
 BOS_EKRANLAR = {
     "pano": ("/pano", "Pano", "Ürünler bulundukları aşamanın sütununda görünecek.", 4),
     "stok": ("/stok", "Stok", "Siparişe bağlanmamış ürünler, depoları ve test durumlarıyla burada listelenecek.", 5),
-    "yapilacaklar": (
-        "/yapilacaklar",
-        "Yapılacaklar",
-        "Uygulamanın size soracağı her şey burada toplanacak: bağlanamayan iş emirleri, test soruları, sevk onayları.",
-        3,
-    ),
     "arsiv": ("/arsiv", "Planner arşivi", "Tamamlanmış Planner kartları burada İEN, seri no ya da sipariş no ile aranacak.", 7),
 }
 

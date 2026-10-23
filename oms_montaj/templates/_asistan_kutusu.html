@@ -1,0 +1,47 @@
+{# Yapay zekâ asistanının sohbet kutusu: her ekranın sağ altında (taban.html). Soru sayfa yenilenmeden
+   gönderilir (uygulama.js); cevap balonu sunucuda bu dosyadaki cevap_balonu ile çizilir. #}
+
+{% macro cevap_balonu(s) -%}
+{% if s.hata %}
+<div class="ak-balon ak-hata">{{ s.hata }}</div>
+{% else %}
+<div class="ak-balon ak-cevap">{{ s.cevap | asistan_metni }}</div>
+<div class="ak-bilgi">{% if s.araclar %}Bakılan: {{ s.araclar }} · {% endif %}≈ {{ '%.4f' | format(s.maliyet or 0) }} $</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro asistan_kutusu() -%}
+{% set sayi, toplam = asistan_ay_ozeti() %}
+{# Simge: veri klasöründeki marka/ai-logo/oms-ai-ikon.svg (kendi zemini ve canlandırmasıyla), yoksa uygulamanınki #}
+{% set ikon = ai_ikonu() %}
+<div class="ak" data-asistan>
+  <button type="button" class="ak-ac{% if ikon %} ozel-ikon{% endif %}" data-asistan-ac aria-expanded="false" aria-controls="asistan-paneli" aria-label="Montaj Asistanı">
+    {{ ikon or simge('asistan') }}<span class="ak-etiket" aria-hidden="true">Montaj Asistanı</span>
+  </button>
+  <section class="ak-panel" id="asistan-paneli" aria-label="Asistan">
+    <header class="ak-ust">
+      <span class="ak-baslik">{{ simge('asistan') }} Asistan <small data-asistan-ozet>bu ay {{ sayi }} soru · ≈ {{ '%.3f' | format(toplam) }} $</small></span>
+      <form method="post" action="{{ url_for('asistan.yeni_konusma') }}" data-asistan-yeni>
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <button type="submit" class="ak-kucuk" title="Konuşmayı temizle">Yeni konuşma</button>
+      </form>
+      <button type="button" class="ak-kapat" data-asistan-kapat aria-label="Kapat">×</button>
+    </header>
+    <div class="ak-mesajlar" data-asistan-mesajlar>
+      <div class="ak-balon ak-cevap ak-karsilama">
+        <p>Merhaba{% if ilk_ad(g.kullanici.ad_soyad) %} {{ ilk_ad(g.kullanici.ad_soyad) }}{% endif %}, hoş geldiniz. Size nasıl yardımcı olabilirim, neyi öğrenmek istersiniz?</p>
+        {% if not asistan_anahtar_var() %}<p class="ak-uyari">API anahtarı tanımlı değil: anahtarı "OMS Veri\anthropic-anahtar.txt" dosyasına yazıp uygulamayı yeniden açın.</p>{% endif %}
+      </div>
+      {% for s in asistan_konusmasi() %}
+      <div class="ak-balon ak-soru">{{ s.soru }}</div>
+      {{ cevap_balonu(s) }}
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('asistan.sor_gorunumu') }}" class="ak-form" data-asistan-form>
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <textarea name="soru" rows="2" maxlength="1000" required placeholder="Sorunuzu yazın; göndermek için Enter" aria-label="Sorunuz"></textarea>
+      <button type="submit" class="ak-gonder" aria-label="Gönder">➤</button>
+    </form>
+  </section>
+</div>
+{%- endmacro %}

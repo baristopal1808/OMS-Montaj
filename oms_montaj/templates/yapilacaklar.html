@@ -1,0 +1,130 @@
+{% extends "taban.html" %}
+{% block baslik %}Yapılacaklar{% endblock %}
+{% block icerik %}
+{% from "_uyarilar.html" import eksik_karti, imalatta_karti with context %}
+<h1>Yapılacaklar</h1>
+<p class="soluk">Uygulamanın sizden cevap beklediği konular. Test soruları ve sevk onayları sonraki adımlarda buraya gelecek.</p>
+
+<nav class="aile-suzgeci" aria-label="Konuya göre süz">
+  <a href="{{ url_for('yapilacaklar.liste', aile=secili_aile or None) }}" class="suzgec-cip{% if not secili_konu %} secili{% endif %}">Bütün konular <strong data-sayi-tumu-konu>{{ konu_sayilari.values() | sum }}</strong></a>
+  {% for konu, ad in KONULAR.items() %}
+  <a href="{{ url_for('yapilacaklar.liste', konu=konu, aile=secili_aile or None) }}" class="suzgec-cip{% if secili_konu == konu %} secili{% endif %}{% if not konu_sayilari[konu] %} bos{% endif %}">{{ ad }} <strong data-sayi-konu="{{ konu }}">{{ konu_sayilari[konu] }}</strong></a>
+  {% endfor %}
+</nav>
+<nav class="aile-suzgeci" aria-label="Ürün ailesine göre süz">
+  <a href="{{ url_for('yapilacaklar.liste', konu=secili_konu or None) }}" class="suzgec-cip{% if not secili_aile %} secili{% endif %}">Bütün aileler <strong data-sayi-tumu-aile>{{ aile_sayilari.values() | sum }}</strong></a>
+  {% for aile in AILE_SECENEKLERI %}
+  {% if aile_sayilari[aile] %}
+  <a href="{{ url_for('yapilacaklar.liste', aile=aile, konu=secili_konu or None) }}" class="suzgec-cip{% if secili_aile == aile %} secili{% endif %}"
+    style="--renk: {{ AILE_RENKLERI.get(aile, '#98a2b3') }}">{{ aile }} <strong data-sayi-aile="{{ aile }}">{{ aile_sayilari[aile] }}</strong></a>
+  {% else %}
+  <span class="suzgec-cip bos" title="Bu ailede yapılacak yok">{{ aile }} <strong>0</strong></span>
+  {% endif %}
+  {% endfor %}
+</nav>
+
+{% if secili_konu in ('', 'eksik') %}
+<section class="bolum" id="eksik">
+  <h2>Eksik malzeme <span class="soluk">(<span data-sayi-konu="eksik">{{ konu_sayilari.eksik }}</span>)</span></h2>
+  <p class="soluk kucuk">Açık iş emirlerinde çıkışı yapılmamış malzemeler ("Çıkış yapılamayan malzeme" raporundan). İş emri başına bir kez sorulur; cevaptan sonra yeni bir malzeme eksik görünürse ya da eksik miktarı artarsa yeniden sorulur. Depoda olan malzeme sarı, olmayan kırmızı.</p>
+  {% for baslik, ogeler in eksik_gruplari %}
+  <h3 class="yapilacak-grubu">{{ baslik }} <span class="soluk">({{ ogeler | length }})</span></h3>
+  {% for ie, o in ogeler %}{{ eksik_karti(ie, o, eksik_ayrintilari[ie.is_emri_no], is_emri_ailesi(ie), secili_aile, secili_konu) }}{% endfor %}
+  {% else %}
+  <div class="kutu bos"><p>Sorulacak eksik malzeme yok.</p></div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if secili_konu in ('', 'imalatta') %}
+<section class="bolum" id="imalatta">
+  <h2>İş emri stoğa girmiş ama ERP'de "İmalatta" <span class="soluk">(<span data-sayi-konu="imalatta">{{ konu_sayilari.imalatta }}</span>)</span></h2>
+  <p class="soluk kucuk">Planlama biriminin ERP'deki ürün durumu geç güncellenebiliyor. Aynı üründen birden çok olsa da her ürün ve iş emri için ayrı sorulur; ERP'deki durum değişince uyarı kendiliğinden kalkar.</p>
+  {% for baslik, ogeler in imalatta_gruplari %}
+  {% if baslik %}<h3 class="yapilacak-grubu">{{ baslik }} <span class="soluk">({{ ogeler | length }})</span></h3>{% endif %}
+  {% for u in ogeler %}{{ imalatta_karti(u, secili_aile, secili_konu) }}{% else %}<div class="kutu bos"><p>Sorulacak ürün yok.</p></div>{% endfor %}
+  {% else %}
+  <div class="kutu bos"><p>Sorulacak ürün yok.</p></div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if secili_konu in ('', 'baglanamayan') %}
+<section class="bolum" id="baglanamayan">
+  <h2>Bağlanamayan iş emirleri <span class="soluk">(<span data-sayi-konu="baglanamayan">{{ konu_sayilari.baglanamayan }}</span>)</span></h2>
+  <p class="soluk kucuk">ERP'de hangi siparişe ait olduğu bulunamayan iş emirleri: açık olanlar ve son {{ KAPALI_GUN }} günde kapananlar. Seçiminiz saklanır, ERP yüklemesi değiştirmez; yanlışsa aşağıdaki "Elle bağlananlar"dan geri alabilirsiniz.</p>
+  {% for baslik, isler in baglanamayan_gruplari %}
+  <h3 class="yapilacak-grubu">{{ baslik }} <span class="soluk">({{ isler | length }})</span></h3>
+  {% for ie in isler %}
+  {% set durum = is_emri_durumu(ie) %}
+  <div class="kutu yapilacak" id="ie-{{ ie.id }}" data-yapilacak data-aile="{{ is_emri_ailesi(ie) }}" data-konu="baglanamayan">
+    <div class="baslik-satiri">
+      <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong> · <strong>{{ ie.urun_kodu }}</strong> {{ ie.urun_adi or '' }}</span>
+      <span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span>
+    </div>
+    <p class="soluk kucuk">
+      {{ ie.envanter_tipi or '' }} · açılış {{ ie.acilis_tarihi | tarih }}
+      {% if ie.kapatma_tarihi %} · kapanış {{ ie.kapatma_tarihi | tarih }}{% elif ie.tahmini_bitis %} · tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}
+      · stoğa giren {{ (ie.gercek_miktar or 0) | sayi }}/{{ ie.plan_miktar | sayi }}
+      {% if ie.aciklama %}<br>ERP açıklaması: {{ ie.aciklama }}{% endif %}
+    </p>
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('yapilacaklar.bagla', ie_id=ie.id) }}" class="baglama-formu" data-yerinde>
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <input type="hidden" name="aile" value="{{ secili_aile }}"><input type="hidden" name="konu" value="{{ secili_konu }}">
+      {% if sonraki.get(ie.id) %}<input type="hidden" name="sonraki" value="ie-{{ sonraki[ie.id] }}">{% endif %}
+      <fieldset>
+        <legend>Bu iş emri neye ait?</legend>
+        {% for a in adaylar[ie.id] %}
+        <label class="secenek"><input type="radio" name="secim" value="kalem:{{ a.id }}"{% if loop.first and a.bos %} checked{% endif %}>
+          <span><strong>{{ a.siparis_no }}</strong> · {{ a.sira_no }}. satır · {{ a.musteri or '' }} · teslim {{ (a.teslim_tarihi | tarih) or '—' }}
+            · {% if a.bos %}{{ a.bos }} adedin iş emri yok{% else %}<span class="soluk">bütün adetlerin iş emri var</span>{% endif %}</span></label>
+        {% endfor %}
+        <label class="secenek"><input type="radio" name="secim" value="siparis">
+          <span>Başka bir sipariş: <input type="text" name="siparis_no" class="kisa-girdi" placeholder="OZ-…" aria-label="Sipariş no">
+            <small class="soluk">ürün siparişte yoksa alt montajı olarak bağlanır</small></span></label>
+        <label class="secenek"><input type="radio" name="secim" value="stok"><span>Stok için açılmış</span></label>
+        <label class="secenek"><input type="radio" name="secim" value="yoksay"><span>Takip etme (montaj ekibini ilgilendirmiyor)</span></label>
+      </fieldset>
+      <p class="yapilacak-hata" data-hata hidden></p>
+      <button type="submit" class="dugme">Kaydet</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="kutu bos"><p>{% if secili_aile %}{{ secili_aile }} ailesinde bağlanamayan iş emri yok.{% else %}Bağlanamayan iş emri yok.{% endif %}</p></div>
+  {% endfor %}
+</section>
+
+{% if elle %}
+<details class="pano-karti acilir" id="elle">
+  <summary>
+    <span class="acilir-baslik">Elle bağlananlar</span>
+    <span class="soluk">{{ elle | length }} iş emri · göstermek için tıklayın</span>
+  </summary>
+  <div class="kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>İş emri</th><th>Ürün</th><th>Seçim</th><th>Kim, ne zaman</th><th></th></tr></thead>
+      <tbody>
+        {% for ie in elle %}
+        <tr>
+          <td class="sayisal"><strong>{{ ie.is_emri_no }}</strong></td>
+          <td>{{ ie.urun_kodu }}</td>
+          <td>{{ BAGLANTILAR[ie.baglanti] }}{% if ie.siparis_no %}: <a href="{{ url_for('siparisler.kart', siparis_no=ie.siparis_no) }}">{{ ie.siparis_no }}</a>{% if ie.sira_no %} · {{ ie.sira_no }}. satır{% else %} · alt montaj{% endif %}{% endif %}</td>
+          <td class="soluk">{{ ie.ad_soyad or '' }} · {{ ie.baglama_zamani | zaman }}</td>
+          <td>{% if g.kullanici.rol == 'ekip' %}
+            <form method="post" action="{{ url_for('yapilacaklar.geri_al', ie_id=ie.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+              <input type="hidden" name="aile" value="{{ secili_aile }}">
+              <button type="submit" class="dugme ikincil kucuk-dugme">Geri al</button>
+            </form>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -173,6 +173,73 @@ GOCLER = [
     ALTER TABLE siparis_kalemleri ADD COLUMN montaj_degisme TEXT;
     ALTER TABLE siparis_kalemleri ADD COLUMN montaj_degistiren_id INTEGER REFERENCES kullanicilar(id);
     """,
+    # 9: iş emrinin elle bağlanması (Yapılacaklar): kim, ne zaman; seçimin türü baglanti sütununda
+    #    (kullanici: siparişe, kullanici_stok: stok, yok_sayildi: takip edilmiyor)
+    """
+    ALTER TABLE is_emirleri ADD COLUMN baglayan_id INTEGER REFERENCES kullanicilar(id);
+    ALTER TABLE is_emirleri ADD COLUMN baglama_zamani TEXT;
+    """,
+    # 10: yapay zekâ asistanına sorulan sorular: konuşma hafızası ve maliyet takibi
+    """
+    CREATE TABLE asistan_sorulari (
+        id INTEGER PRIMARY KEY,
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        soru TEXT NOT NULL,
+        cevap TEXT,
+        hata TEXT,
+        araclar TEXT,                 -- bakılan kayıtlar (araç adları, virgülle)
+        giris INTEGER,                -- token
+        cikis INTEGER,
+        maliyet REAL                  -- dolar, yaklaşık
+    );
+    """,
+    # 11: iki motorlu güç ünitelerinde (PP-1072, PP-1536…) ikinci motorun seri no'su (ekibin girdiği)
+    """
+    ALTER TABLE urunler ADD COLUMN motor2_seri_no TEXT;
+    """,
+    # 12: çıkış yapılamayan malzeme (açık iş emirlerinin eksik malzemeleri; her yüklemede baştan yazılır),
+    #     ekibin "bilginiz var mı?" cevapları ve "iş emri stoğa girmiş ama ERP İmalatta" cevapları
+    """
+    CREATE TABLE eksik_malzemeler (
+        id INTEGER PRIMARY KEY,
+        is_emri_no TEXT NOT NULL,
+        sira_no INTEGER NOT NULL,     -- iş emrinin kırılımı (0: ana ürün)
+        malzeme_kodu TEXT NOT NULL,
+        malzeme_adi TEXT,
+        envanter_turu TEXT,
+        birim TEXT,
+        plan_miktar REAL,             -- planlanan takip miktarı
+        cikis_miktar REAL,            -- gerçekleşen çıkış; eksik = plan - çıkış
+        eldeki REAL,                  -- bütün depolarda
+        ana_urun_depo REAL,
+        uretim_depo REAL,
+        montaj_depo REAL,
+        montaj_uretim_depo REAL,
+        sevk_depo REAL,
+        yukleme_id INTEGER REFERENCES erp_yuklemeler(id)
+    );
+    CREATE INDEX eksik_malzemeler_is_emri ON eksik_malzemeler (is_emri_no);
+
+    CREATE TABLE eksik_cevaplari (      -- en sonuncusu geçerli; cevaptan sonra yeni eksik gelirse yeniden sorulur
+        id INTEGER PRIMARY KEY,
+        is_emri_no TEXT NOT NULL,
+        cevap TEXT NOT NULL,
+        eksikler TEXT NOT NULL,       -- cevap anındaki eksikler (JSON: "sıra|malzeme" → miktar)
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL
+    );
+    CREATE INDEX eksik_cevaplari_is_emri ON eksik_cevaplari (is_emri_no);
+
+    CREATE TABLE imalatta_cevaplari (   -- her ürün ve iş emri için ayrı sorulur
+        urun_id INTEGER NOT NULL REFERENCES urunler(id),
+        is_emri_id INTEGER NOT NULL REFERENCES is_emirleri(id),
+        cevap TEXT NOT NULL,
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL,
+        PRIMARY KEY (urun_id, is_emri_id)
+    );
+    """,
 ]
 
 

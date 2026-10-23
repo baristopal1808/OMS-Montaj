@@ -6,5 +6,8 @@ if not exist ".venv\Scripts\python.exe" (
     pause
     exit /b 1
 )
+rem Yapay zeka asistani (sag alttaki sohbet kutusu): anahtar "OMS Veri\anthropic-anahtar.txt" dosyasindan okunur.
+set "OMS_ANAHTAR_DOSYASI=%~dp0OMS Veri\anthropic-anahtar.txt"
+set OMS_ASISTAN=1
 ".venv\Scripts\python.exe" -m oms_montaj
 pause

@@ -1,6 +1,9 @@
 """Ekranda gösterim biçimleri; şablonlarda süzgeç olarak kullanılır: {{ tarih | tarih }}."""
 
+import re
 from datetime import date, datetime
+
+from markupsafe import Markup, escape
 
 
 def tarih(deger):
@@ -34,4 +37,28 @@ def sayi(deger):
     return f"{deger:g}".replace(".", ",")
 
 
-SUZGECLER = {"tarih": tarih, "zaman": zaman, "sayi": sayi}
+def asistan_metni(metin):
+    """Asistan cevabındaki basit Markdown: **kalın**, "- " ile başlayan maddeler, # başlıklar; gerisi paragraf.
+    Metin önce HTML'den arındırılır, yalnızca bu birkaç biçim etikete çevrilir."""
+    html, liste = [], False
+    for satir in str(escape(metin or "")).split("\n"):
+        satir = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", satir)
+        madde = re.match(r"\s*[-•*]\s+(.*)", satir)
+        if madde:
+            html.append(("" if liste else "<ul>") + f"<li>{madde.group(1)}</li>")
+            liste = True
+            continue
+        if liste:
+            html.append("</ul>")
+            liste = False
+        baslik = re.match(r"\s*#{1,6}\s+(.*)", satir)
+        if baslik:
+            html.append(f"<p><strong>{baslik.group(1)}</strong></p>")
+        elif satir.strip():
+            html.append(f"<p>{satir}</p>")
+    if liste:
+        html.append("</ul>")
+    return Markup("".join(html))
+
+
+SUZGECLER = {"tarih": tarih, "zaman": zaman, "sayi": sayi, "asistan_metni": asistan_metni}

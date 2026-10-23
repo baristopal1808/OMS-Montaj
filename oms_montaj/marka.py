@@ -24,6 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, current_app, send_from_directory, url_for
+from markupsafe import Markup
 from PIL import Image, ImageChops
 
 bp = Blueprint("marka", __name__)
@@ -123,9 +124,34 @@ def musteri_markasi(siparis_no):
     return {"renk": renk, "logo": logo}
 
 
+# Asistan düğmesinin simgesi: kendi CSS'iyle canlandırılmış (üzerine gelince titreyen) bir SVG. Canlandırma
+# düğmenin üzerine gelmeyle tetiklendiği için <img> olarak değil, sayfanın içine gömülür. Dosya yoksa
+# uygulamanın kendi simgesi kullanılır. Gömülen SVG sayfanın parçası olacağından betik içeren dosya alınmaz.
+AI_IKONU = "ai-logo/oms-ai-ikon.svg"
+TEHLIKELI_SVG = re.compile(r"<script|<foreignobject|\son\w+\s*=|javascript:|<iframe|<embed|<object", re.IGNORECASE)
+
+
+@lru_cache(maxsize=2)
+def _svg_metni(yol, _surum):
+    metin = Path(yol).read_text(encoding="utf-8-sig")
+    metin = re.sub(r"<\?xml[^>]*\?>|<!DOCTYPE[^>]*>|<!--.*?-->", "", metin, flags=re.DOTALL).strip()
+    if TEHLIKELI_SVG.search(metin) or not metin.startswith("<svg"):
+        return None
+    return Markup(metin)
+
+
+def ai_ikonu():
+    """Asistan simgesinin SVG'si (sayfaya gömülecek) ya da None."""
+    dosya = _marka_klasoru() / AI_IKONU
+    if not dosya.is_file():
+        return None
+    durum = dosya.stat()
+    return _svg_metni(str(dosya), (durum.st_mtime_ns, durum.st_size))
+
+
 @bp.app_context_processor
 def sablon_degiskenleri():
-    return {"logo_adresi": logo_adresi, "musteri_markasi": musteri_markasi}
+    return {"logo_adresi": logo_adresi, "musteri_markasi": musteri_markasi, "ai_ikonu": ai_ikonu}
 
 
 def _logo_yaniti(dosya):

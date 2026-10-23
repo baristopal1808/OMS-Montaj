@@ -11,7 +11,8 @@ import openpyxl
 from test_is_emirleri import IE_BASLIKLAR, ie, is_emirleri
 from test_siparisler import ekip, excel, makine_siparisi, satir, yukle  # noqa: F401 (pytest fikstürleri)
 
-from oms_montaj.urun_kurallari import motor_seri_nolari
+from oms_montaj.numaralar import motor_listesi
+from oms_montaj.urun_kurallari import motor_sayisi, motor_seri_nolari
 from oms_montaj.veritabani import baglanti
 
 
@@ -22,6 +23,51 @@ def test_motor_seri_nolari_aciklamadan_okunur():
     assert motor_seri_nolari("OZ-TS0001-PP-01 / N5F00001 / STANDART / YAGSIZ SEVK") == ["N5F00001"]
     assert motor_seri_nolari("OZ-TS0001 - 0000111101 / 0000 111 102", "0000 111 101") == ["0000 111 101", "0000 111 102"]
     assert motor_seri_nolari("OZ-TS0001 projesi - RAL5017 - 9001") == []
+
+
+def test_motor_sayisi_ve_okunma_sirasi():
+    assert motor_sayisi("PP-1072-NF") == motor_sayisi("PP-1536-NF") == 2
+    assert motor_sayisi("PP-536-NF") == motor_sayisi("PP-908-NF") == motor_sayisi("SVR-50-NF-BSP") == 1
+    # Kırılım bazen başka bir güç ünitesinin motorunu yazıyor: iş emrinin kendi açıklaması önce gelir
+    assert motor_listesi(["OZ-TS0001 / 0000 111 101", "OZ-TS0001 / 0000 111 109"], 1) == ["0000 111 101"]
+    # İki motorlu: iki numara içeren ilk açıklama; hiçbirinde iki yoksa bulunanlar sırayla
+    assert motor_listesi(["0000 111 101", "0000 111 102 - 0000 111 101"], 2) == ["0000 111 102", "0000 111 101"]
+    assert motor_listesi(["0000 111 101", None, "N5F00001"], 2) == ["0000 111 101", "N5F00001"]
+
+
+def test_iki_motorlu_guc_unitesi(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    yukle(excel(makine_siparisi(s2={"Ürün Kodu": "PP-1072-NF"})))
+    liste = is_emirleri()
+    liste[0].update({"* Ürün Kodu": "PP-1072-NF", "Açıklama": "OZ-TS0001 / 0000 111 101 / 0000 111 102 / RAL5017"})
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    pp = urun_id(uygulama, "PP-1072-NF")
+    sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "Motor 1 seri no" in sayfa and "Motor 2 seri no" in sayfa and 'name="motor2_seri_no"' in sayfa
+    # Her motorun numarası kendi alanında (iş emri açıklamasında ikisi yan yana yazıyor)
+    assert "açıklamasından): <strong>0000 111 101</strong>" in sayfa and "açıklamasından): <strong>0000 111 102</strong>" in sayfa
+    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert "Motor 1 seri no <strong>0000 111 101</strong>" in kart and "Motor 2 seri no <strong>0000 111 102</strong>" in kart
+    makineler = unescape(istemci.get("/makineler").get_data(as_text=True))
+    assert "Motor 1:</small> 0000 111 101" in makineler and "Motor 2:</small> 0000 111 102" in makineler
+    # Ekip ikinci motoru düzeltir; birinci ERP'den okunmaya devam eder
+    gonder(f"/urun/{pp}/numaralar", motor_seri_no="", motor2_seri_no="0000111103")
+    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert "Motor 1 seri no <strong>0000 111 101</strong>" in kart and "Motor 2 seri no <strong>0000 111 103</strong>" in kart
+    # Şablonda iki motor ayrı sütunlarda; tek motorlu makinede Motor 2 Seri No yok sayılır
+    kitap = openpyxl.load_workbook(io.BytesIO(istemci.get("/makine-numaralari.xlsx").data))
+    sayfa_ = kitap.active
+    satirlar = {r[0].value: r for r in sayfa_.iter_rows(min_row=2)}
+    assert [h.value for h in sayfa_[1]][8] == "Motor 2 Seri No"
+    assert [satirlar[pp][i].value for i in (8, 9, 10)] == ["0000 111 103", "0000 111 101", "0000 111 102"]
+    satirlar[pp][7].value = "0000 111 104"
+    svr = urun_id(uygulama, "SVR-50-NF-BSP")
+    satirlar[svr][8].value = "0000 111 105"
+    tampon = io.BytesIO()
+    kitap.save(tampon)
+    yukle(tampon.getvalue(), ad="makine numaralari.xlsx")
+    assert "Motor 1 seri no <strong>0000 111 104</strong>" in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    with uygulama.app_context():
+        assert baglanti().execute("SELECT motor2_seri_no FROM urunler WHERE id = ?", (svr,)).fetchone()[0] is None
 
 
 def motorlu_is_emirleri():
@@ -94,7 +140,7 @@ def test_makine_numaralari_sablonu(istemci, uygulama, ekip, yukle):  # noqa: F81
     assert basliklar[:8] == ["Kart No", "Sipariş No", "Müşteri", "Ürün Kodu", "Ürün Adı", "Seri No", "Şasi No", "Motor Seri No"]
     satirlar = {r[0].value: r for r in sayfa.iter_rows(min_row=2)}
     assert set(satirlar) == {urun_id(uygulama, "SVR-50-NF-BSP"), urun_id(uygulama, "PP-536-NF")}  # yalnızca makineler
-    assert satirlar[urun_id(uygulama, "PP-536-NF")][8].value == "0000 111 101"  # ERP'den okunan, bilgi için
+    assert satirlar[urun_id(uygulama, "PP-536-NF")][9].value == "0000 111 101"  # ERP'den okunan, bilgi için
     satirlar[svr][6].value = "TEST-SASI-002"
     sayfa.append([999999, "OZ-TS0001", None, "SVR-50-NF-BSP", None, None, "TEST-SASI-003", None])  # eşleşmeyen
     tampon = io.BytesIO()

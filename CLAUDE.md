@@ -23,7 +23,7 @@ Kaldığımız yer: @docs/kaldigimiz-yer.md
 - Gerçek veri (veritabanı, oturum anahtarı) geliştirmede `OMS Veri/uygulama/` klasöründe; sunucuda `OMS_VERI_KLASORU` ortam değişkeninin gösterdiği klasörde.
 - Şema değişikliği `oms_montaj/veritabani.py` içindeki `GOCLER` listesinin sonuna yeni göç olarak eklenir; yayınlanmış göç değiştirilmez.
 - Resim dosyaları (.png, .jpg) git'e giremez; simgeler .svg yapılır.
-- Yapay zekâ asistanı (deneme, `oms_montaj/asistan.py`) normal uygulamada kapalıdır. `asistan-deneme.bat` onu uydurma veriyle ayrı bir kopyada açar (port 8091, `OMS Veri/asistan-deneme`); API anahtarı `OMS Veri/anthropic-anahtar.txt`. Testler Anthropic'e bağlanmaz.
+- Yapay zekâ asistanı (deneme, `oms_montaj/asistan.py`): her ekranın sağ altındaki sohbet kutusu. `baslat.bat` onu gerçek veriyle açar (OMS_ASISTAN=1; kullanıcı onayladı); `asistan-deneme.bat` uydurma veriyle ayrı bir kopyada (port 8091, `OMS Veri/asistan-deneme`). API anahtarı `OMS Veri/anthropic-anahtar.txt`. Testler Anthropic'e bağlanmaz.
 
 ## Oturum düzeni
 

@@ -18,12 +18,11 @@
   {% from "_karsilama.html" import logo_blok with context %}
   {% set menu = [
     ('ozet.ana', 'ozet', 'Özet'),
-  ] + ([('asistan.sayfa', 'asistan', 'Asistan')] if config.ASISTAN_ACIK else []) + [
     ('siparisler.liste', 'siparisler', 'Siparişler'),
     ('yedek_parca.liste', 'yedek_parca', 'Yedek parça'),
     ('ekranlar.pano', 'pano', 'Pano'),
     ('ekranlar.stok', 'stok', 'Stok'),
-    ('ekranlar.yapilacaklar', 'yapilacaklar', 'Yapılacaklar'),
+    ('yapilacaklar.liste', 'yapilacaklar', 'Yapılacaklar'),
     ('sevkiyat.liste', 'sevkiyat', 'Sevkiyat'),
     ('erp.yukleme', 'erp_yukleme', 'ERP yükleme'),
     ('ekranlar.arsiv', 'arsiv', 'Arşiv'),
@@ -36,7 +35,9 @@
         {% for uc, simge_adi, ad in menu %}
         {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar')
              or (uc == 'siparisler.liste' and request.endpoint == 'siparisler.kart') %}
-        <a href="{{ url_for(uc) }}"{% if etkin %} class="etkin" aria-current="page"{% endif %}>{{ simge(simge_adi) }}<span>{{ ad }}</span></a>
+        {% set bekleyen = yapilacak_sayisi() if uc == 'yapilacaklar.liste' else 0 %}
+        <a href="{{ url_for(uc) }}"{% if etkin %} class="etkin" aria-current="page"{% endif %}>{{ simge(simge_adi) }}<span>{{ ad }}</span>
+          {%- if bekleyen %}<span class="menu-sayi" title="{{ bekleyen }} yapılacak iş">{{ bekleyen }}</span>{% endif %}</a>
         {% endfor %}
       </nav>
       <div class="yan-alt">
@@ -63,6 +64,10 @@
       </main>
     </div>
   </div>
+  {% if config.ASISTAN_ACIK %}
+  {% from "_asistan_kutusu.html" import asistan_kutusu with context %}
+  {{ asistan_kutusu() }}
+  {% endif %}
   <script src="{{ url_for('static', filename='uygulama.js') }}" defer></script>
 {% else %}
   {% if g.kullanici %}

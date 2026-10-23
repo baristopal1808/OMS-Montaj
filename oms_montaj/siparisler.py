@@ -21,6 +21,7 @@ from .urun_kurallari import (
     AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, EKLENTI_DURUMLARI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER,
     dis_tedarik_mi, pp_eklentisi_mi, renk, yag,
 )
+from .uyarilar import eksik_ozetleri, imalatta_uyarilari
 from .veritabani import baglanti
 
 bp = Blueprint("siparisler", __name__)
@@ -123,12 +124,16 @@ def ozetle(siparis, kalemler, son_revizyon=None, urun_idleri=None):
     acik = [k for k in etkin if not kapali_mi(k)]
     kesin = [k for k in acik if k["erp_durum"] != BEKLEMEDE]
     teslim = min((k["teslim_tarihi"] for k in (kesin or acik or etkin) if k["teslim_tarihi"]), default=None)
-    urunler = Counter()
-    kartlar = defaultdict(list)
+    urunler, modeller = Counter(), Counter()
+    kartlar, model_kartlari = defaultdict(list), defaultdict(list)
     for kalem in etkin:
         if kalem["aile"]:
-            urunler[kalem["aile"]] += round(kalem["miktar"] or 0)
-            kartlar[kalem["aile"]].extend((urun_idleri or {}).get(kalem["id"], []))
+            adet = round(kalem["miktar"] or 0)
+            idler = (urun_idleri or {}).get(kalem["id"], [])
+            urunler[kalem["aile"]] += adet
+            kartlar[kalem["aile"]].extend(idler)
+            modeller[(kalem["aile"], kalem["urun_kodu"])] += adet
+            model_kartlari[kalem["urun_kodu"]].extend(idler)
     return {
         "siparis": siparis,
         "durum": durum,
@@ -136,10 +141,14 @@ def ozetle(siparis, kalemler, son_revizyon=None, urun_idleri=None):
         "kalan": teslim_bilgisi(teslim) if durum in ("acik", "onay_bekliyor") else None,
         "son_sevk": max((k["son_sevk_tarihi"] for k in etkin if k["son_sevk_tarihi"]), default=None),
         "urunler": [(aile, urunler[aile]) for aile in AILE_SIRASI if urunler[aile]],
+        # Sipariş kutusundaki ürün kutucukları: tam ürün koduyla (PP-536-NF, SVR-50-NF-BSP), aile sırasıyla
+        "modeller": [(aile, kod, adet) for (aile, kod), adet in sorted(
+            modeller.items(), key=lambda m: (AILE_SIRASI.index(m[0][0]), m[0][1])) if adet],
         "diger_kalem": sum(1 for k in etkin if not k["aile"]),
         "aileler": set(urunler),
-        # Siparişte o aileden tek makine varsa ürün kutucuğu doğrudan onun sayfasını açar.
+        # Siparişte o aileden (o üründen) tek makine varsa ürün kutucuğu doğrudan onun sayfasını açar.
         "tek_urun": {aile: idler[0] for aile, idler in kartlar.items() if len(idler) == 1},
+        "tek_model": {kod: idler[0] for kod, idler in model_kartlari.items() if len(idler) == 1},
         "revizyon": son_revizyon if yakin_revizyon(son_revizyon) else None,
         # Haftalık takvimden gelen tarih süzgeci için: açık makine kalemlerinin teslim tarihleri
         "makine_teslimleri": {k["teslim_tarihi"] for k in kesin if k["aile"] in ANA_URUNLER and k["teslim_tarihi"]},
@@ -332,7 +341,8 @@ def kart(siparis_no):
             "dagitilmamis": [ie for ie in kalem_is_emirleri[kalem["id"]]
                              if ie["id"] not in {u["is_emri_id"] for u in urunler[kalem["id"]]}],
             # Makinelerin numaraları (şasi no, motor seri no): girilmiş ya da ERP'den okunmuş; yoksa "yok" yazar
-            "numaralar": {u["id"]: urun_numaralari(vt, u, kalem["aile"], siparis["id"]) for u in urunler[kalem["id"]]},
+            "numaralar": {u["id"]: urun_numaralari(vt, u, kalem["aile"], siparis["id"], kalem["urun_kodu"])
+                          for u in urunler[kalem["id"]]},
             "eklenti": pp_eklentisi_mi(kalem["urun_kodu"], siparis["tip"]),
         }
         if kalem["erp_durum"] == IPTAL and ozet["durum"] != "iptal":
@@ -364,6 +374,9 @@ def kart(siparis_no):
         durum_ozeti=siparis_durum_ozeti(vt, siparis),
         REVIZYON_GUN=REVIZYON_GUN,
         eksik=eksik_siralar(k["sira_no"] for k in kalemler),
+        # İş emirlerinin eksik malzemeleri (iş emri no → özet) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarıları
+        eksikler=eksik_ozetleri(vt, [ie["is_emri_no"] for ie in is_emirleri]),
+        imalatta={u["urun_id"]: u for u in imalatta_uyarilari(vt, siparis_id=siparis["id"])},
         son_veri=max((k["veri_zamani"] for k in kalemler if k["veri_zamani"]), default=None),
         DURUMLAR=DURUMLAR,
         TIPLER=TIPLER,

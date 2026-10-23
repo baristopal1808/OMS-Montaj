@@ -3,7 +3,9 @@
 Siparişteki ürüne tıklayınca açılır (sipariş kutusundaki ürün kutucuğu, sevk edilecek makineler
 listesi, sipariş kartındaki ürün); siparişe tıklayınca ise bütün kalemleriyle sipariş kartı açılır.
 Sayfada makinenin bilgileri, numaraları (şasi no, motor seri no), iş emri ve iş emrinin kırılımları
-(alt montajlar: tamamlanan ve bekleyen) görünür. Kontrol listesi, notlar ve fotoğraflar 4. adımda.
+(alt montajlar: tamamlanan ve bekleyen) görünür. İş emrinin eksik malzemeleri (kırılım kırılım) ve "iş emri
+stoğa girmiş ama ERP İmalatta" uyarısı da burada görünür ve cevaplanır. Kontrol listesi, notlar ve
+fotoğraflar 4. adımda.
 """
 
 import io
@@ -14,9 +16,10 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 from .erp_aktarim import IPTAL, kapali_mi
 from .is_emri_aktarim import is_emri_durumu, kirilim_durumu
 from .kimlik import ekip_gerekli
-from .numaralar import KAYNAKLAR, NUMARA_ALANLARI, numara_yaz, numaralari_kaydet, sablon, urun_numaralari
+from .numaralar import KAYNAKLAR, numara_alanlari, numara_yaz, numaralari_kaydet, sablon, urun_numaralari
 from .siparisler import TIPLER, siparis_durum_ozeti, teslim_bilgisi, yakin_revizyon
 from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk, yag
+from .uyarilar import eksik_ozetleri, imalatta_uyarilari, is_emri_eksikleri
 from .veritabani import baglanti
 
 bp = Blueprint("urunler", __name__)
@@ -54,6 +57,12 @@ def sayfa(urun_id):
     acik = urun["erp_durum"] != IPTAL and not kapali_mi(urun) and urun["asama"] != "sevk_edildi"
     siparis = {"id": urun["siparis_id"], "tip": urun["tip"]}
     # Güç ünitesine takılacak, dışarıdan alınan kalemler (kablosuz kumanda seti, uzaktan erişim modülü)
+    # Eksik malzeme (çıkışı yapılmamış) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı
+    eksik = is_emri_eksikleri(vt, ie["is_emri_no"]) if ie else []
+    eksik_zamani = vt.execute(
+        "SELECT y.zaman FROM eksik_malzemeler e JOIN erp_yuklemeler y ON y.id = e.yukleme_id WHERE e.is_emri_no = ? LIMIT 1",
+        (ie["is_emri_no"],),
+    ).fetchone() if eksik else None
     eklentiler = [
         k for k in vt.execute(
             "SELECT id, urun_kodu, urun_adi, miktar, montaj_durumu FROM siparis_kalemleri"
@@ -69,7 +78,7 @@ def sayfa(urun_id):
         ie_durumu=is_emri_durumu(ie) if ie else None,
         kirilimlar=kirilimlar,
         tamamlanan=sum(1 for k in kirilimlar if k["durum"][1] == "kapali"),
-        numaralar=urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"]),
+        numaralar=urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"], urun["urun_kodu"]),
         kalan=teslim_bilgisi(urun["teslim_tarihi"]) if acik else None,
         revize=revizyon if yakin_revizyon(revizyon) else None,
         renk=renk(urun["aciklama"]),
@@ -77,6 +86,11 @@ def sayfa(urun_id):
         dis_tedarik=dis_tedarik_mi(urun["urun_kodu"]),
         durum_ozeti=siparis_durum_ozeti(vt, siparis),
         eklentiler=eklentiler,
+        eksik=eksik,
+        eksik_ozet=eksik_ozetleri(vt, [ie["is_emri_no"]]).get(ie["is_emri_no"]) if eksik else None,
+        eksik_sirasi={sira: len(liste) for sira, _, liste in eksik},
+        eksik_zamani=eksik_zamani[0] if eksik_zamani else None,
+        imalatta=imalatta_uyarilari(vt, urun_id=urun_id),
         AILE_ADLARI=AILE_ADLARI,
         KAYNAKLAR=KAYNAKLAR,
         TIPLER=TIPLER,
@@ -90,7 +104,7 @@ def numaralar(urun_id):
     urun = urun_kaydi(vt, urun_id)
     if urun is None:
         abort(404)
-    degerler = {alan: numara_yaz(request.form.get(alan), alan) for alan in NUMARA_ALANLARI.get(urun["aile"], ())}
+    degerler = {alan: numara_yaz(request.form.get(alan), alan) for alan in numara_alanlari(urun["aile"], urun["urun_kodu"])}
     if any(degerler[alan] != urun[alan] for alan in degerler):
         with vt:
             numaralari_kaydet(vt, urun_id, degerler, g.kullanici["id"])

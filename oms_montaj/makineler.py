@@ -28,7 +28,8 @@ PLANLAMA_SECENEKLERI = [*PLANLAMA_RENKLERI, BELIRTILMEMIS]
 
 def sevk_edilecek_makineler(vt):
     satirlar = vt.execute(
-        "SELECT u.id, u.seri_no, u.asama, u.adet_sira, u.sasi_no, u.motor_seri_no, u.is_emri_id, k.aile, k.urun_kodu,"
+        "SELECT u.id, u.seri_no, u.asama, u.adet_sira, u.sasi_no, u.motor_seri_no, u.motor2_seri_no, u.is_emri_id,"
+        " k.aile, k.urun_kodu,"
         " k.urun_adi, k.miktar, k.teslim_tarihi, k.erp_urun_durumu, k.bagli_is_emri_no, k.erp_durum, k.erp_genel_durum,"
         " k.siparis_id, s.siparis_no, s.musteri, s.tip, s.erp_listede,"
         " i.is_emri_no, i.durum AS ie_durum, i.gercek_miktar AS ie_gercek"
@@ -83,7 +84,7 @@ def liste():
     aileler = Counter(m["aile"] for m in makineler)
     return render_template(
         "makineler.html",
-        numaralar={m["id"]: urun_numaralari(vt, m, m["aile"], m["siparis_id"]) for m in makineler},
+        numaralar={m["id"]: urun_numaralari(vt, m, m["aile"], m["siparis_id"], m["urun_kodu"]) for m in makineler},
         is_emri_durumlari={
             m["id"]: is_emri_durumu({"durum": m["ie_durum"], "gercek_miktar": m["ie_gercek"]})
             for m in makineler if m["is_emri_no"]

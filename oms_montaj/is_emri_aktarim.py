@@ -10,10 +10,12 @@ silmez).
 Bağlantı her yüklemeden sonra (sipariş ya da iş emri listesi) baştan kurulur, sırayla:
   erp       sipariş satırının "Bağlı İşemri No"su ya da iş emrinin "Sip. No"su
             (…-<proje>-<sıra>-) bu iş emrini gösteriyor
-  aciklama  iş emrinin açıklamasında proje kodu geçiyor ve o siparişte aynı ürün var
+  aciklama  iş emrinin açıklamasında ya da ürün kodunda (OZ-<proje>-PR-01 gibi projeye özel ürünler)
+            proje kodu geçiyor ve o siparişte aynı ürün var
   proje     proje kodu geçiyor ama ürün siparişte yok: alt montaj ya da yarı mamul
   stok      açıklamada "stok" geçiyor: stok için açılmış
-  (boş)     bağlanamadı; kullanıcıya sorulur
+  (boş)     bağlanamadı; Yapılacaklar'da kullanıcıya sorulur
+Kullanıcının Yapılacaklar'da yaptığı seçim (kullanici, kullanici_stok, yok_sayildi) korunur.
 
 Siparişe bağlı iş emirleri, sipariş satırının ürün kartlarına adet sırasıyla dağıtılır;
 iş emri açılan ürün "Sipariş" aşamasındaysa "Malzeme hazırlık" aşamasına geçer (ERP
@@ -44,8 +46,12 @@ BAGLANTILAR = {
     "aciklama": "açıklamadaki proje kodundan",
     "proje": "projenin alt montajı / yarı mamulü",
     "stok": "stok için",
-    "kullanici": "elle bağlandı",
+    "kullanici": "elle siparişe bağlandı",
+    "kullanici_stok": "elle stok olarak işaretlendi",
+    "yok_sayildi": "takip edilmiyor",
 }
+# Kullanıcının seçtiği bağlantılar: ERP yüklemesinden sonra yeniden kurulmaz.
+KULLANICI_BAGLANTILARI = ("kullanici", "kullanici_stok", "yok_sayildi")
 
 
 def uretimsiz_kapandi(ie):
@@ -142,7 +148,8 @@ def _baglanti_bul(ie, siparisler, kalemler, erp_bagli, doluluk):
     if kalem is not None:
         return kalem["siparis_id"], kalem["id"], "erp"
 
-    projeler = [siparisler[kod] for kod in PROJE_KODU.findall((ie["aciklama"] or "").upper()) if kod in siparisler]
+    metin = f'{ie["aciklama"] or ""} {ie["urun_kodu"] or ""}'.upper()
+    projeler = [siparisler[kod] for kod in dict.fromkeys(PROJE_KODU.findall(metin)) if kod in siparisler]
     for siparis in projeler:
         adaylar = [k for k in kalemler.get(siparis["id"], {}).values()
                    if k["urun_kodu"] == ie["urun_kodu"] and k["erp_durum"] != IPTAL]
@@ -176,8 +183,8 @@ def is_emirlerini_bagla(vt):
     for ie in vt.execute(
         "SELECT * FROM is_emirleri WHERE urun_kodu IS NOT NULL ORDER BY acilis_tarihi, is_emri_no"  # ana satırı gelmemişler beklenir
     ).fetchall():
-        if ie["baglanti"] == "kullanici":
-            siparis_id, kalem_id, baglanti = ie["siparis_id"], ie["kalem_id"], "kullanici"
+        if ie["baglanti"] in KULLANICI_BAGLANTILARI:
+            siparis_id, kalem_id, baglanti = ie["siparis_id"], ie["kalem_id"], ie["baglanti"]
         else:
             siparis_id, kalem_id, baglanti = _baglanti_bul(ie, siparisler, kalemler, erp_bagli, doluluk)
             vt.execute(
@@ -216,10 +223,10 @@ def baglanti_ozeti(sayac):
     parcalar = [f"İş emirleri: {siparise} tanesi sipariş satırına bağlı"]
     if sayac["proje"]:
         parcalar.append(f"{sayac['proje']} tanesi projenin alt montajı ya da yarı mamulü")
-    if sayac["stok"]:
-        parcalar.append(f"{sayac['stok']} tanesi stok için")
+    if sayac["stok"] + sayac["kullanici_stok"]:
+        parcalar.append(f"{sayac['stok'] + sayac['kullanici_stok']} tanesi stok için")
     if sayac["baglanamadi"]:
-        parcalar.append(f"{sayac['baglanamadi']} tanesi bağlanamadı")
+        parcalar.append(f"{sayac['baglanamadi']} tanesi bağlanamadı (Yapılacaklar'da sorulur)")
     ozet = ", ".join(parcalar) + "."
     if sayac["malzeme_hazirliga_gecen"]:
         ozet += f" {sayac['malzeme_hazirliga_gecen']} ürün \"Malzeme hazırlık\" aşamasına geçti."

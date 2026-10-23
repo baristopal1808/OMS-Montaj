@@ -3,6 +3,7 @@
 {% block icerik %}
 {% set s = ozet.siparis %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
+{% from "_uyarilar.html" import eksik_cipi with context %}
 
 {% macro kalem_rozetleri(satir) -%}
   {% set k = satir.kalem %}
@@ -28,10 +29,20 @@
   </span>
 {%- endmacro %}
 
-{% macro kalem_bilgileri(satir, is_emirleri) -%}
+{# Eksik malzeme rozeti: makinenin sayfasına, makine yoksa Yapılacaklar'daki sorusuna gider #}
+{% macro eksik_rozeti(ie, urun_id=None) -%}
+  {{ eksik_cipi(eksikler.get(ie.is_emri_no),
+                url_for('urunler.sayfa', urun_id=urun_id) ~ '#eksik' if urun_id
+                else url_for('yapilacaklar.liste', konu='eksik') ~ '#eksik-' ~ ie.is_emri_no) }}
+{%- endmacro %}
+
+{% macro kalem_bilgileri(satir, is_emirleri, urun_id=None) -%}
   {% set k = satir.kalem %}
+  {% set im = imalatta.get(urun_id) if urun_id else none %}
   <span class="cipler">
-    {% for ie in is_emirleri %}{{ ie_cipi(ie) }}{% endfor %}
+    {% for ie in is_emirleri %}{{ ie_cipi(ie) }}{{ eksik_rozeti(ie, urun_id) }}{% endfor %}
+    {% if im %}<a class="cip {% if im.cevap %}soluk-cip{% else %}uyari{% endif %}" href="{{ url_for('urunler.sayfa', urun_id=urun_id) }}#imalatta">
+      {%- if im.cevap %}ERP "İmalatta" diyor · ekip: {{ IMALATTA_CEVAPLARI[im.cevap] }}{% else %}İş emri stoğa girmiş, ERP'de hâlâ "İmalatta" · cevaplayın{% endif %}</a>{% endif %}
     {% if satir.renk %}<span class="cip">Renk: {{ satir.renk }}</span>{% endif %}
     {% if satir.pp %}
       {% if satir.yag %}
@@ -63,11 +74,18 @@
       <div class="urun-seri">
         {% if u.seri_no %}Seri no <strong>{{ u.seri_no }}</strong>{% else %}<span class="soluk">Seri no yok</span>{% endif %}
         {% if k.miktar > 1 %}<span class="soluk"> · {{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
-        {% for alan, ad, deger, kaynak in satir.numaralar[u.id] %}<span class="soluk"> · </span>{% if deger %}{{ ad }} <strong>{{ deger }}</strong>{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}{% endfor %}
+        {% set numaralar = satir.numaralar[u.id] %}
+        {% if numaralar | length == 1 %}{% for alan, ad, deger, kaynak in numaralar %}<span class="soluk"> · </span>{% if deger %}{{ ad }} <strong>{{ deger }}</strong>{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}{% endfor %}{% endif %}
         {{ kalem_rozetleri(satir) }}
       </div>
+      {% if numaralar | length > 1 %}
+      {# İki motorlu güç ünitesi: her motorun numarası ayrı #}
+      <div class="urun-numaralar">
+        {% for alan, ad, deger, kaynak in numaralar %}<span class="numara-cip{% if not deger %} soluk{% endif %}">{{ ad }} <strong>{{ deger or 'yok' }}</strong></span>{% endfor %}
+      </div>
+      {% endif %}
       {{ kalem_bilgileri(satir, ([is_emri_haritasi[u.is_emri_id]] if u.is_emri_id in is_emri_haritasi else [])
-                                + (satir.dagitilmamis if loop.first else [])) }}
+                                + (satir.dagitilmamis if loop.first else []), u.id) }}
     </li>
     {% endfor %}
   {% else %}
@@ -179,7 +197,7 @@
   <p class="soluk kucuk">Açıklamasında bu siparişin proje kodu geçen, ürünü siparişte olmayan iş emirleri.</p>
   <div class="pano-karti kaydirilabilir">
     <table class="tablo">
-      <thead><tr><th>İş emri</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th><th>Tarih</th></tr></thead>
+      <thead><tr><th>İş emri</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th><th>Tarih</th><th>Eksik malzeme</th></tr></thead>
       <tbody>
         {% for ie in alt_is_emirleri %}
         {% set durum = is_emri_durumu(ie) %}
@@ -190,6 +208,7 @@
           <td><span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span></td>
           <td class="sayisal">{{ ie.gercek_miktar | sayi }}/{{ ie.plan_miktar | sayi }}</td>
           <td class="sayisal">{% if ie.kapatma_tarihi %}kapanış {{ ie.kapatma_tarihi | tarih }}{% elif ie.tahmini_bitis %}tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}</td>
+          <td>{{ eksik_rozeti(ie) }}</td>
         </tr>
         {% endfor %}
       </tbody>

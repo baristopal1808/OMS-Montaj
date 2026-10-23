@@ -140,6 +140,17 @@ MOTOR_SERI = re.compile(
 )
 
 
+# Model numarası bu sınırdan büyük ya da eşit güç üniteleri iki motorludur (PP-1072, PP-1102, PP-1536,
+# PP-1592; kullanıcı kararı, 23/10/2026).
+IKI_MOTOR_SINIRI = 1000
+
+
+def motor_sayisi(urun_kodu):
+    """Güç ünitesindeki motor sayısı: 'PP-1072-NF' → 2, 'PP-536-NF' → 1."""
+    eslesme = re.match(r"PP-?(\d+)", (urun_kodu or "").upper())
+    return 2 if eslesme and int(eslesme.group(1)) >= IKI_MOTOR_SINIRI else 1
+
+
 def motor_seri_nolari(*metinler):
     """Metinlerde geçen motor seri no'ları, yazıldıkları sırayla ve birer kez: Volvo '0000 111 101', CAT 'N5F00001'."""
     bulunan = []

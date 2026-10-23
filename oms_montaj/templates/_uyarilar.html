@@ -1,0 +1,125 @@
+{# Uyarılar (uyarilar.py): eksik malzeme ve "ERP'de İmalatta". Yapılacaklar'da, ürün sayfasında ve sipariş
+   kartında kullanılır. Cevap formları sayfa yenilenmeden kaydedilir (uygulama.js, data-yerinde); formun
+   çevresindeki [data-yapilacak] kutusunun yerinde "Kaydedildi" yazar. #}
+
+{# Eksik malzemeler kırılım kırılım: depoda olan sarı, olmayan kırmızı #}
+{% macro eksik_tablosu(gruplar) -%}
+{% for sira, ad, liste in gruplar %}
+<h4 class="kirilim-basligi">{% if sira %}{{ sira }}. kırılım · {{ ad or 'adı yok' }}{% else %}Ana ürün{% if ad %} · {{ ad }}{% endif %}{% endif %}
+  <span class="soluk">({{ liste | length }} malzeme)</span></h4>
+<div class="kaydirilabilir">
+  <table class="tablo eksik-tablosu">
+    <thead><tr><th>Malzeme</th><th>Malzeme adı</th><th class="sayisal">Eksik</th><th>Depo</th></tr></thead>
+    <tbody>
+      {% for m in liste %}
+      {% set durum = depo_durumu(m) %}
+      <tr>
+        <td class="sayisal">{{ m.malzeme_kodu }}</td>
+        <td>{{ m.malzeme_adi or '' }}{% if m.envanter_turu %} <small class="soluk">{{ m.envanter_turu }}</small>{% endif %}</td>
+        <td class="sayisal"><strong>{{ eksik_miktari(m) | sayi }}</strong> {{ m.birim or '' }}
+          <small class="soluk">{{ m.cikis_miktar | sayi }}/{{ m.plan_miktar | sayi }} çıktı</small></td>
+        <td><span class="depo-cip depo-{{ durum }}">{{ DEPO_DURUMLARI[durum] }}</span>
+          {% for ad_, miktar in depolar(m) %}<small class="soluk">{{ ad_ }} {{ miktar | sayi }}{% if not loop.last %} · {% endif %}</small>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{%- endmacro %}
+
+{# "12 malzemenin çıkışı yapılmamış: 7'si depoda var, 5'i depoda yok." #}
+{% macro eksik_cumlesi(o) -%}
+<strong>{{ o.toplam }} malzemenin</strong> çıkışı yapılmamış:
+{%- if o.var %} <span class="depo-cip depo-var">{{ o.var }} depoda var</span>{% endif %}
+{%- if o.kismen %} <span class="depo-cip depo-kismen">{{ o.kismen }} kısmen depoda</span>{% endif %}
+{%- if o.yok %} <span class="depo-cip depo-yok">{{ o.yok }} depoda yok</span>{% endif %}
+{%- endmacro %}
+
+{% macro onceki_cevap(o) -%}
+{% if o.cevap %}<p class="soluk kucuk">{% if o.bekliyor %}Önceki cevap{% else %}Ekibin cevabı{% endif %}: <strong>{{ EKSIK_CEVAPLARI[o.cevap.cevap] }}</strong>
+  ({{ o.cevap.ad_soyad or '' }}, {{ o.cevap.zaman | zaman }}){% if o.bekliyor %}. Sonra yeni eksik geldi; yeniden soruluyor.{% endif %}</p>{% endif %}
+{%- endmacro %}
+
+{% macro eksik_formu(no, sonra=None, aile='', konu='') -%}
+<form method="post" action="{{ url_for('yapilacaklar.eksik_cevap', is_emri_no=no) }}" class="baglama-formu" data-yerinde>
+  <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+  {% if sonra %}<input type="hidden" name="sonra" value="{{ sonra }}">{% endif %}
+  <input type="hidden" name="aile" value="{{ aile }}"><input type="hidden" name="konu" value="{{ konu }}">
+  <fieldset>
+    <legend>Bilginiz var mı?</legend>
+    {% for anahtar, ad in EKSIK_CEVAPLARI.items() %}
+    <label class="secenek"><input type="radio" name="cevap" value="{{ anahtar }}"><span>{{ ad }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <p class="yapilacak-hata" data-hata hidden></p>
+  <button type="submit" class="dugme">Kaydet</button>
+</form>
+{%- endmacro %}
+
+{# Yapılacaklar'da bir iş emrinin eksik malzeme sorusu #}
+{% macro eksik_karti(ie, o, ayrinti, aile, secili_aile='', secili_konu='') -%}
+{% set durum = is_emri_durumu(ie) %}
+<div class="kutu yapilacak" id="eksik-{{ ie.is_emri_no }}" data-yapilacak data-aile="{{ aile }}" data-konu="eksik">
+  <div class="baslik-satiri">
+    <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong> · <strong>{{ ie.urun_kodu }}</strong> {{ ie.urun_adi or '' }}</span>
+    <span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span>
+  </div>
+  <p class="soluk kucuk">
+    {% if ie.siparis_no %}Sipariş <a href="{{ url_for('siparisler.kart', siparis_no=ie.siparis_no) }}">{{ ie.siparis_no }}</a>
+      · {% if ie.kalem_sira %}{{ ie.kalem_sira }}. satır{% else %}alt montaj / yarı mamul{% endif %}
+    {% elif ie.baglanti %}Bağlantı: {{ BAGLANTILAR[ie.baglanti] }}{% else %}Siparişe bağlanmadı{% endif %}
+    · açılış {{ ie.acilis_tarihi | tarih }}{% if ie.tahmini_bitis %} · tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}
+  </p>
+  <p class="eksik-ozeti">{{ eksik_cumlesi(o) }}</p>
+  {{ onceki_cevap(o) }}
+  <details class="eksik-ayrinti">
+    <summary>Malzemeleri göster</summary>
+    {{ eksik_tablosu(ayrinti) }}
+  </details>
+  {% if g.kullanici.rol == 'ekip' %}{{ eksik_formu(ie.is_emri_no, aile=secili_aile, konu=secili_konu) }}{% endif %}
+</div>
+{%- endmacro %}
+
+{# "İş emri stoğa girmiş ama ERP İmalatta" uyarısının metni #}
+{% macro imalatta_metni(u) -%}
+İş emri <strong>{{ u.is_emri_no }}</strong> stoğa girmiş ({{ u.gercek_miktar | sayi }}/{{ u.plan_miktar | sayi }}{% if u.ilk_stok_giris %}, ilk giriş {{ u.ilk_stok_giris | tarih }}{% endif %});
+planlama biriminin ERP'deki ürün durumu ise hâlâ <strong>İmalatta</strong>. Emin misiniz?
+{%- endmacro %}
+
+{% macro imalatta_formu(u, sonra=None, aile='', konu='') -%}
+<form method="post" action="{{ url_for('yapilacaklar.imalatta_cevap', urun_id=u.urun_id, ie_id=u.is_emri_id) }}" class="baglama-formu" data-yerinde>
+  <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+  {% if sonra %}<input type="hidden" name="sonra" value="{{ sonra }}">{% endif %}
+  <input type="hidden" name="aile" value="{{ aile }}"><input type="hidden" name="konu" value="{{ konu }}">
+  <fieldset>
+    <legend>Ürün nerede?</legend>
+    {% for anahtar, ad in IMALATTA_CEVAPLARI.items() %}
+    <label class="secenek"><input type="radio" name="cevap" value="{{ anahtar }}"><span>{{ ad }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <p class="yapilacak-hata" data-hata hidden></p>
+  <button type="submit" class="dugme">Kaydet</button>
+</form>
+{%- endmacro %}
+
+{# Yapılacaklar'da bir ürünün "İmalatta" sorusu #}
+{% macro imalatta_karti(u, secili_aile='', secili_konu='') -%}
+<div class="kutu yapilacak uyari-kutusu" id="imalatta-{{ u.urun_id }}-{{ u.is_emri_id }}" data-yapilacak data-aile="{{ u.aile }}" data-konu="imalatta">
+  <div class="baslik-satiri">
+    <span class="ie-no"><a href="{{ url_for('urunler.sayfa', urun_id=u.urun_id) }}"><strong>{{ u.urun_kodu }}</strong></a> {{ u.urun_adi or '' }}
+      {% if u.seri_no %}· seri no <strong>{{ u.seri_no }}</strong>{% endif %}{% if u.miktar > 1 %} · {{ u.adet_sira }}. adet{% endif %}</span>
+    <span class="etiket durum-onay_bekliyor">ERP: İmalatta</span>
+  </div>
+  <p class="soluk kucuk">Sipariş <a href="{{ url_for('siparisler.kart', siparis_no=u.siparis_no) }}">{{ u.siparis_no }}</a> · {{ u.sira_no }}. satır · {{ u.musteri or '' }}</p>
+  <p>{{ imalatta_metni(u) }}</p>
+  {% if g.kullanici.rol == 'ekip' %}{{ imalatta_formu(u, aile=secili_aile, konu=secili_konu) }}{% endif %}
+</div>
+{%- endmacro %}
+
+{# Sipariş kartında iş emrinin yanında: "12 malzeme eksik" #}
+{% macro eksik_cipi(o, adres) -%}
+{% if o %}<a class="cip eksik-cipi {% if o.yok or o.kismen %}depo-yok{% else %}depo-var{% endif %}" href="{{ adres }}"
+  title="Çıkışı yapılmamış malzeme: {{ o.var }} depoda var, {{ o.yok + o.kismen }} depoda yok ya da eksik">{{ o.toplam }} malzeme eksik
+  {%- if o.cevap and not o.bekliyor %} <small>· {{ EKSIK_CEVAPLARI[o.cevap.cevap] }}</small>{% elif o.bekliyor %} <small>· soruluyor</small>{% endif %}</a>{% endif %}
+{%- endmacro %}

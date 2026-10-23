@@ -69,7 +69,7 @@ def test_is_emirleri_siparise_baglanir(istemci, ekip, yukle):  # noqa: F811
     sayfa = unescape(istemci.get("/erp-yukleme").get_data(as_text=True))
     assert "7 iş emri okundu (6 açık, 1 kapalı)" in sayfa
     assert ("İş emirleri: 4 tanesi sipariş satırına bağlı, 1 tanesi projenin alt montajı ya da yarı mamulü,"
-            " 1 tanesi stok için, 1 tanesi bağlanamadı.") in sayfa
+            " 1 tanesi stok için, 1 tanesi bağlanamadı (Yapılacaklar'da sorulur).") in sayfa
     assert "4 ürün \"Malzeme hazırlık\" aşamasına geçti" in sayfa
 
     kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)

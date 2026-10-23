@@ -11,9 +11,12 @@ from pathlib import Path
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from .erp_aktarim import listede_olmayanlari_isaretle, siparis_ozeti, siparisleri_isle
-from .erp_okuyucu import RAPORLAR, OkumaHatasi, is_emri_satirlari, numara_satirlari, rapor_turu, siparis_satirlari, tablo_oku
+from .erp_okuyucu import (
+    RAPORLAR, OkumaHatasi, cikis_satirlari, is_emri_satirlari, numara_satirlari, rapor_turu, siparis_satirlari, tablo_oku,
+)
 from .is_emri_aktarim import baglanti_ozeti, is_emirlerini_bagla, is_emirlerini_isle, is_emri_ozeti
 from .numaralar import numara_ozeti, numaralari_isle
+from .uyarilar import eksik_ozeti, eksikleri_isle
 from .veritabani import baglanti
 
 bp = Blueprint("erp", __name__)
@@ -41,19 +44,36 @@ def _kopyasini_kaydet(dosya, uzanti):
     return yol
 
 
-def dosya_isle(dosya):
-    """Yüklenen bir dosyayı işler: (kullanıcıya gösterilecek sonuç, dosyadaki sipariş numaraları, tanınan tür)."""
+# Birlikte yüklenen dosyalar bu sırayla işlenir: eksik malzemeler iş emirlerine, iş emirleri siparişlere bakar.
+ISLEME_SIRASI = ("siparis_talepleri", "is_emirleri", "cikis_yapilamayan", "makine_numaralari")
+
+
+def dosya_oku(dosya):
+    """Yüklenen dosyanın kopyasını saklar ve okur: {"ad", "yol", "basliklar", "satirlar", "tur", "hata"}."""
     ad = dosya.filename
     uzanti = Path(ad).suffix.lower()
     if uzanti not in UZANTILAR:
-        return f"{ad}: yalnızca .xls ve .xlsx dosyaları yüklenebilir.", set(), None
+        return {"ad": ad, "yol": None, "tur": None, "hata": "yalnızca .xls ve .xlsx dosyaları yüklenebilir."}
     yol = _kopyasini_kaydet(dosya, uzanti)
-    vt = baglanti()
-    siparis_nolari = set()
-    tur = None
     try:
         basliklar, satirlar = tablo_oku(yol)
-        tur = rapor_turu(basliklar)
+    except OkumaHatasi as hata:
+        return {"ad": ad, "yol": yol, "tur": None, "hata": f"İşlenemedi: {hata}"}
+    return {"ad": ad, "yol": yol, "basliklar": basliklar, "satirlar": satirlar, "tur": rapor_turu(basliklar), "hata": None}
+
+
+def dosya_isle(okunan):
+    """Okunan bir dosyayı işler: (kullanıcıya gösterilecek sonuç, dosyadaki sipariş numaraları, tanınan tür)."""
+    ad, yol, tur = okunan["ad"], okunan["yol"], okunan["tur"]
+    vt = baglanti()
+    if okunan["hata"]:
+        if yol:
+            with vt:
+                _yukleme_kaydi(vt, ad, yol.name, None, None, okunan["hata"])
+        return f"{ad}: {okunan['hata']}", set(), None
+    basliklar, satirlar = okunan["basliklar"], okunan["satirlar"]
+    siparis_nolari = set()
+    try:
         with vt:
             yukleme_id = _yukleme_kaydi(vt, ad, yol.name, tur, len(satirlar))
             if tur == "siparis_talepleri":
@@ -65,11 +85,15 @@ def dosya_isle(dosya):
             elif tur == "makine_numaralari":
                 ozet = "Makine numaraları: " + numara_ozeti(
                     numaralari_isle(vt, numara_satirlari(basliklar, satirlar), g.kullanici["id"]))
+            elif tur == "cikis_yapilamayan":
+                ozet = "Çıkış yapılamayan malzeme: " + eksik_ozeti(
+                    eksikleri_isle(vt, cikis_satirlari(basliklar, satirlar), yukleme_id))
             elif tur:
                 rapor = RAPORLAR[tur]
                 ozet = f"{rapor['ad']} raporu tanındı; bu rapor planın {rapor['adim']}. adımında işlenecek."
             else:
-                ozet = "Rapor türü tanınamadı. Şimdilik sipariş talepleri ve iş emirleri listeleri işlenebiliyor."
+                ozet = ("Rapor türü tanınamadı. Şimdilik sipariş talepleri, iş emirleri ve çıkış yapılamayan malzeme"
+                        " listeleri işlenebiliyor.")
             vt.execute("UPDATE erp_yuklemeler SET ozet = ? WHERE id = ?", (ozet, yukleme_id))
     except OkumaHatasi as hata:
         ozet = f"İşlenemedi: {hata}"
@@ -88,8 +112,12 @@ def yukleme():
         if not dosyalar:
             flash("Dosya seçilmedi.")
         gorulen, turler = set(), set()
-        for dosya in dosyalar:
-            mesaj, siparis_nolari, tur = dosya_isle(dosya)
+        okunanlar = sorted(
+            (dosya_oku(dosya) for dosya in dosyalar),
+            key=lambda o: ISLEME_SIRASI.index(o["tur"]) if o["tur"] in ISLEME_SIRASI else len(ISLEME_SIRASI),
+        )
+        for okunan in okunanlar:
+            mesaj, siparis_nolari, tur = dosya_isle(okunan)
             gorulen |= siparis_nolari
             turler.add(tur)
             flash(mesaj)

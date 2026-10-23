@@ -1,23 +1,25 @@
 """Yapay zekâ asistanı (deneme): ekip uygulamaya Türkçe soru sorar ("OZ-… siparişinin özeti, motor
-seri no'su ne, montaj bitti mi?").
+seri no'su ne, montaj bitti mi?"). Her ekranın sağ altındaki sohbet kutusundan kullanılır
+(_asistan_kutusu.html); soru sayfa yenilenmeden gönderilir, cevap JSON olarak döner.
 
 Asistan Claude Haiku 5.5 ile çalışır ve veritabanını yalnızca bu dosyadaki araçlarla okur; cevap
-tahminden değil kayıtlardan gelir, hiçbir şey yazmaz. Her soru ayrıdır (önceki soruyu hatırlamaz).
+tahminden değil kayıtlardan gelir, hiçbir şey yazmaz. Aynı konuşmadaki son KONUSMA_HAFIZASI soru ve
+cevabı hatırlar ("Yeni konuşma" ile sıfırlanır). Her soru, cevabı ve yaklaşık maliyeti kaydedilir;
+kutuda bu ayın toplamı görünür.
 
-Yalnızca OMS_ASISTAN=1 ortam değişkeniyle açılır. Şimdilik asistan-deneme.bat uydurma veriyle
-ayrı bir kopya açar; gerçek veriyle kullanmaya şirketin onayıyla geçilir (sorulan siparişin
-bilgileri cevap için Anthropic'e gider). API anahtarı OMS_ANAHTAR_DOSYASI'nın gösterdiği dosyadan
-(geliştirmede "OMS Veri\\anthropic-anahtar.txt") ya da ANTHROPIC_API_KEY ortam değişkeninden gelir;
-anahtar git'e girmez.
+Yalnızca OMS_ASISTAN=1 ortam değişkeniyle açılır: baslat.bat gerçek veriyle (kullanıcı onayladı,
+23/10/2026; sorulan siparişin bilgileri cevap için Anthropic'e gider), asistan-deneme.bat uydurma
+veriyle ayrı bir kopyada. API anahtarı OMS_ANAHTAR_DOSYASI'nın gösterdiği dosyadan (geliştirmede
+"OMS Veri\\anthropic-anahtar.txt") ya da ANTHROPIC_API_KEY ortam değişkeninden gelir; git'e girmez.
 """
 
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 
 import anthropic
 from anthropic import beta_tool
-from flask import Blueprint, abort, current_app, render_template, request
+from flask import Blueprint, abort, current_app, g, get_template_attribute, jsonify, request, session
 
 from .asamalar import ASAMALAR
 from .erp_aktarim import IPTAL
@@ -36,6 +38,7 @@ MODEL = "claude-haiku-5-5"
 # Claude Haiku 5.5 fiyatı (100 bin token'a kadar istek), 1 milyon token başına dolar
 GIRIS_FIYATI, CIKIS_FIYATI = 0.10, 0.50
 EN_COK_ADIM = 6  # bir soruda en çok kaç kez araç çağrılabilir
+KONUSMA_HAFIZASI = 3  # devam sorularında hatırlanan önceki soru-cevap sayısı
 SISTEM = """Sen OMS Pile Driving Equipment montaj fabrikasının iş takip uygulamasının asistanısın. \
 Montaj ekibinin sorularını Türkçe, kısa ve net cevapla.
 
@@ -129,7 +132,7 @@ def siparis_bilgisi(siparis_no: str) -> str:
                 "is_emri_durumu": URUN_DURUMLARI[urun_is_emri_sinifi(u["asama"], k, ie)],
                 "planlama_birimi_urun_durumu": k["erp_urun_durumu"],
                 "numaralar": {ad: (f"{deger} ({KAYNAKLAR[kaynak]})" if deger else "girilmedi")
-                              for _, ad, deger, kaynak in urun_numaralari(vt, u, k["aile"], s["id"])},
+                              for _, ad, deger, kaynak in urun_numaralari(vt, u, k["aile"], s["id"], k["urun_kodu"])},
                 "renk": renk(k["aciklama"]),
                 "yag": (yag(k["aciklama"]) or ("bilgi yok",))[0] if k["aile"] == "PP" else None,
             })
@@ -161,15 +164,15 @@ def makine_ara(metin: str) -> str:
         "SELECT DISTINCT u.*, k.urun_kodu, k.urun_adi, k.aile, k.siparis_id, s.siparis_no, s.musteri"
         " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id JOIN siparisler s ON s.id = k.siparis_id"
         " LEFT JOIN is_emirleri i ON i.id = u.is_emri_id LEFT JOIN is_emri_satirlari r ON r.is_emri_id = i.id"
-        " WHERE u.seri_no LIKE ? OR u.sasi_no LIKE ? OR u.motor_seri_no LIKE ? OR i.aciklama LIKE ? OR r.aciklama LIKE ?"
-        " LIMIT 10",
-        (desen,) * 5,
+        " WHERE u.seri_no LIKE ? OR u.sasi_no LIKE ? OR u.motor_seri_no LIKE ? OR u.motor2_seri_no LIKE ?"
+        " OR i.aciklama LIKE ? OR r.aciklama LIKE ? LIMIT 10",
+        (desen,) * 6,
     ).fetchall():
         sonuc.append({
             "siparis_no": u["siparis_no"], "musteri": u["musteri"], "urun": f'{u["urun_kodu"]} {u["urun_adi"]}',
             "seri_no": u["seri_no"], "asama": ASAMALAR[u["asama"]],
             "numaralar": {ad: (f"{deger} ({KAYNAKLAR[kaynak]})" if deger else "girilmedi")
-                          for _, ad, deger, kaynak in urun_numaralari(vt, u, u["aile"], u["siparis_id"])},
+                          for _, ad, deger, kaynak in urun_numaralari(vt, u, u["aile"], u["siparis_id"], u["urun_kodu"])},
         })
     return _json(sonuc or {"bulunamadi": f'"{metin}" ile eşleşen makine yok.'})
 
@@ -197,8 +200,9 @@ def sevk_edilecek_makineler_listesi(sadece_gecikenler: bool = False) -> str:
 ARACLAR = [beta_tool(arac) for arac in (siparis_ara, siparis_bilgisi, makine_ara, sevk_edilecek_makineler_listesi)]
 
 
-def sor(soru):
-    """Soruyu Claude'a sorar; {"cevap", "araclar", "giris", "cikis", "maliyet"} ya da {"hata"} döndürür."""
+def sor(soru, gecmis=()):
+    """Soruyu Claude'a sorar; gecmis: aynı konuşmanın önceki (soru, cevap) çiftleri.
+    {"cevap", "araclar", "giris", "cikis", "maliyet"} ya da {"hata"} döndürür."""
     anahtar = api_anahtari()
     if not anahtar:
         return {"hata": 'API anahtarı tanımlı değil. Anahtarı "OMS Veri\\anthropic-anahtar.txt" dosyasına yazıp '
@@ -212,7 +216,11 @@ def sor(soru):
             max_tokens=4096,
             system=SISTEM,
             tools=ARACLAR,
-            messages=[{"role": "user", "content": soru}],
+            messages=[
+                *({"role": rol, "content": metin} for onceki, cevap in gecmis
+                  for rol, metin in (("user", onceki), ("assistant", cevap))),
+                {"role": "user", "content": soru},
+            ],
             output_config={"effort": "medium"},
             max_iterations=EN_COK_ADIM,
         )
@@ -250,19 +258,79 @@ def sor(soru):
     }
 
 
-ORNEK_SORULAR = (
-    "OZ-TS0001 siparişinin özeti nedir? Ürünlerin montajı tamamlandı mı?",
-    "OZ-TS0001'deki güç ünitesinin motor seri numarası nedir?",
-    "Teslimi geçen makineler hangileri?",
-    "0000 111 motor numaralı makine hangi siparişte?",
-)
+def _simdi():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-@bp.route("/asistan", methods=["GET", "POST"])
-def sayfa():
+def _son_soru_id(vt):
+    return vt.execute("SELECT COALESCE(MAX(id), 0) FROM asistan_sorulari").fetchone()[0]
+
+
+def konusma(vt):
+    """Bu kullanıcının şu anki konuşması (sorular eskiden yeniye). Konuşma oturum açılınca ya da "Yeni
+    konuşma"yla başlar; sınır, o anki son sorunun kayıt numarasıdır."""
+    if "asistan_sinir" not in session:
+        session["asistan_sinir"] = _son_soru_id(vt)
+    return vt.execute(
+        "SELECT * FROM asistan_sorulari WHERE kullanici_id = ? AND id > ? ORDER BY id",
+        (g.kullanici["id"], session["asistan_sinir"]),
+    ).fetchall()
+
+
+def ay_ozeti(vt):
+    """Bu ay cevaplanan soru sayısı ve yaklaşık toplam maliyet (dolar)."""
+    return tuple(vt.execute(
+        "SELECT COUNT(*), COALESCE(SUM(maliyet), 0) FROM asistan_sorulari WHERE zaman >= ? AND hata IS NULL",
+        (f"{date.today():%Y-%m}-01",),
+    ).fetchone())
+
+
+def ilk_ad(ad_soyad):
+    """Karşılamada kullanılan ad: 'TEST KULLANICI' → 'TEST'. Hitap (Bey, Hanım) eklenmez; kişinin nasıl
+    hitap edilmek istediği bilinmiyor."""
+    return (ad_soyad or "").split()[0] if (ad_soyad or "").strip() else ""
+
+
+@bp.app_context_processor
+def sablon_degiskenleri():
+    """Sohbet kutusu her sayfada çizilir; konuşma ve ay özeti yalnızca kutu açıksa okunur."""
+    return {
+        "asistan_konusmasi": lambda: konusma(baglanti()),
+        "asistan_ay_ozeti": lambda: ay_ozeti(baglanti()),
+        "asistan_anahtar_var": lambda: bool(api_anahtari()),
+        "ilk_ad": ilk_ad,
+    }
+
+
+@bp.route("/asistan/sor", methods=["POST"])
+def sor_gorunumu():
+    """Sohbet kutusunun sorusu: cevabın HTML'i ve bu ayın özeti JSON olarak döner."""
     if not asistan_acik():
         abort(404)
+    vt = baglanti()
     soru = (request.form.get("soru") or "").strip()[:1000]
-    sonuc = sor(soru) if request.method == "POST" and soru else None
-    return render_template("asistan.html", soru=soru, sonuc=sonuc, ornekler=ORNEK_SORULAR, model=MODEL,
-                           anahtar_var=bool(api_anahtari()))
+    if not soru:
+        abort(400)
+    gecmis = [(s["soru"], s["cevap"]) for s in konusma(vt) if s["cevap"]][-KONUSMA_HAFIZASI:]
+    sonuc = sor(soru, gecmis)
+    with vt:
+        kayit_id = vt.execute(
+            "INSERT INTO asistan_sorulari (kullanici_id, zaman, soru, cevap, hata, araclar, giris, cikis, maliyet)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (g.kullanici["id"], _simdi(), soru, sonuc.get("cevap"), sonuc.get("hata"),
+             ", ".join(sonuc.get("araclar", [])), sonuc.get("giris"), sonuc.get("cikis"), sonuc.get("maliyet")),
+        ).lastrowid
+    kayit = vt.execute("SELECT * FROM asistan_sorulari WHERE id = ?", (kayit_id,)).fetchone()
+    sayi, toplam = ay_ozeti(vt)
+    return jsonify(
+        cevap=str(get_template_attribute("_asistan_kutusu.html", "cevap_balonu")(kayit)),
+        ozet=f"bu ay {sayi} soru · ≈ {toplam:.3f} $",
+    )
+
+
+@bp.route("/asistan/yeni", methods=["POST"])
+def yeni_konusma():
+    if not asistan_acik():
+        abort(404)
+    session["asistan_sinir"] = _son_soru_id(baglanti())
+    return jsonify(tamam=True)

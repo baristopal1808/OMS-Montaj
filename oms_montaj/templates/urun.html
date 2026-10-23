@@ -2,6 +2,7 @@
 {% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
 {% block icerik %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
+{% from "_uyarilar.html" import eksik_tablosu, eksik_cumlesi, onceki_cevap, eksik_formu, imalatta_metni, imalatta_formu with context %}
 {% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
 <p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
 
@@ -37,6 +38,16 @@
   </span>
   {{ durum_ozeti_kutusu(durum_ozeti, urun.siparis_no) }}
 </div>
+
+{# İş emri stoğa girmiş ama ERP "İmalatta" diyor #}
+{% for u in imalatta %}
+<div class="kutu uyari-kutusu{% if u.cevap %} cevaplandi{% endif %}" id="imalatta" data-yapilacak data-aile="{{ urun.aile }}" data-konu="imalatta">
+  <p class="uyari-baslik">ERP'de "İmalatta" görünüyor</p>
+  <p>{{ imalatta_metni(u) }}</p>
+  {% if u.cevap %}<p class="soluk kucuk">Ekibin cevabı: <strong>{{ IMALATTA_CEVAPLARI[u.cevap] }}</strong> ({{ u.cevaplayan or '' }}, {{ u.cevap_zamani | zaman }}). ERP'deki durum değişince bu uyarı kalkar.</p>
+  {% elif g.kullanici.rol == 'ekip' %}{{ imalatta_formu(u, sonra=request.path) }}{% endif %}
+</div>
+{% endfor %}
 
 {% if numaralar %}
 <section class="bolum">
@@ -99,6 +110,19 @@
   {% endif %}
 </section>
 
+{% if eksik %}
+<section class="bolum" id="eksik">
+  <h2>Eksik malzeme <span class="soluk">(çıkışı yapılmamış)</span></h2>
+  <div class="kutu" data-yapilacak data-aile="{{ urun.aile }}" data-konu="eksik">
+    <p class="eksik-ozeti">{{ eksik_cumlesi(eksik_ozet) }}</p>
+    {{ onceki_cevap(eksik_ozet) }}
+    {% if eksik_ozet.bekliyor and g.kullanici.rol == 'ekip' %}{{ eksik_formu(ie.is_emri_no, sonra=request.path ~ '#eksik') }}{% endif %}
+    {{ eksik_tablosu(eksik) }}
+    <p class="soluk kucuk">ERP verisi: {{ eksik_zamani | zaman }} ("Çıkış yapılamayan malzeme" raporu)</p>
+  </div>
+</section>
+{% endif %}
+
 {% if eklentiler %}
 <section class="bolum">
   <h2>PP'ye takılacak kalemler</h2>
@@ -125,7 +149,7 @@
   </div>
   <div class="pano-karti kaydirilabilir">
     <table class="tablo">
-      <thead><tr><th>Sıra</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th></tr></thead>
+      <thead><tr><th>Sıra</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th>{% if eksik %}<th>Eksik malzeme</th>{% endif %}</tr></thead>
       <tbody>
         {% for k in kirilimlar %}
         <tr>
@@ -134,6 +158,7 @@
           <td>{{ k.satir.urun_adi or '' }}</td>
           <td><span class="etiket ie-{{ k.durum[1] }}">{{ k.durum[0] }}</span></td>
           <td class="sayisal">{{ (k.satir.gercek_miktar or 0) | sayi }}/{{ k.satir.plan_miktar | sayi }}</td>
+          {% if eksik %}<td>{% if eksik_sirasi.get(k.satir.sira_no) %}<a class="depo-cip depo-yok" href="#eksik">{{ eksik_sirasi[k.satir.sira_no] }} eksik</a>{% endif %}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>

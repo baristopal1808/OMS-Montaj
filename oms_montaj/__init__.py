@@ -15,7 +15,7 @@ from flask import Flask, render_template
 
 from . import (
     asistan, ekranlar, erp, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, urunler, veritabani,
-    yedek_parca,
+    yapilacaklar, yedek_parca,
 )
 from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
@@ -52,6 +52,9 @@ def uygulama_olustur(ayarlar=None):
     uygulama.config.update(
         VERI_KLASORU=Path(os.environ.get("OMS_VERI_KLASORU", VARSAYILAN_VERI_KLASORU)),
         SESSION_COOKIE_SAMESITE="Lax",
+        # Aynı bilgisayarda başka bir portta açılan kopya (asistan denemesi) ayrı çerez kullanır;
+        # yoksa tarayıcı iki kopyanın oturumunu karıştırır.
+        SESSION_COOKIE_NAME=f"session_{os.environ['OMS_PORT']}" if os.environ.get("OMS_PORT") else "session",
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
         MAX_CONTENT_LENGTH=50 * 1024 * 1024,
         # Yapay zekâ asistanı yalnızca açıkça istenince açılır (asistan-deneme.bat); bkz. asistan.py
@@ -75,6 +78,7 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(makineler.bp)
     uygulama.register_blueprint(urunler.bp)
     uygulama.register_blueprint(asistan.bp)
+    uygulama.register_blueprint(yapilacaklar.bp)
     uygulama.register_blueprint(erp.bp)
     uygulama.register_blueprint(ekranlar.bp)
     uygulama.register_blueprint(marka.bp)

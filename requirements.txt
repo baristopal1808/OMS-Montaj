@@ -4,3 +4,5 @@ waitress==3.0.2
 openpyxl==3.1.5
 xlrd==2.0.2
 pillow==13.0.0
+# Yapay zekâ asistanı denemesi (onay: 23/10/2026)
+anthropic==2.1.0

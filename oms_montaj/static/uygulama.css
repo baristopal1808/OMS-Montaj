@@ -389,6 +389,15 @@ a.do-cip:hover { border-color: currentColor; }
 .ud-serit-yok { --serit: #e59a94; }
 .ud-serit-sevk { --serit: #c9ced8; }
 
+/* Asistan (deneme) */
+.asistan-kutusu { max-width: 52rem; }
+.asistan-kutusu textarea { width: 100%; padding: .6rem .8rem; font: inherit; border: 1px solid var(--cizgi); border-radius: 8px; resize: vertical; }
+.asistan-kutusu .form .dugme { justify-self: start; }
+.ornek-sorular { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: 1rem; }
+.ornek-soru { padding: .3rem .7rem; font: inherit; font-size: .85rem; color: var(--bilgi); cursor: pointer; background: var(--bilgi-zemin); border: 0; border-radius: 99px; }
+.ornek-soru:hover { text-decoration: underline; }
+.asistan-cevap { max-width: 52rem; white-space: pre-wrap; line-height: 1.55; }
+
 /* Ürün sayfası */
 .duz-baglanti { color: inherit; }
 .is-emri-kutusu.ie-kutu-kapali { background: #eef8f1; border-color: #b9e0c6; }

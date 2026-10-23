@@ -14,7 +14,8 @@ from pathlib import Path
 from flask import Flask, render_template
 
 from . import (
-    ekranlar, erp, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, urunler, veritabani, yedek_parca,
+    asistan, ekranlar, erp, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, urunler, veritabani,
+    yedek_parca,
 )
 from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
@@ -53,6 +54,8 @@ def uygulama_olustur(ayarlar=None):
         SESSION_COOKIE_SAMESITE="Lax",
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
         MAX_CONTENT_LENGTH=50 * 1024 * 1024,
+        # Yapay zekâ asistanı yalnızca açıkça istenince açılır (asistan-deneme.bat); bkz. asistan.py
+        ASISTAN_ACIK=os.environ.get("OMS_ASISTAN") == "1",
     )
     uygulama.config.update(ayarlar or {})
 
@@ -71,6 +74,7 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(yedek_parca.bp)
     uygulama.register_blueprint(makineler.bp)
     uygulama.register_blueprint(urunler.bp)
+    uygulama.register_blueprint(asistan.bp)
     uygulama.register_blueprint(erp.bp)
     uygulama.register_blueprint(ekranlar.bp)
     uygulama.register_blueprint(marka.bp)

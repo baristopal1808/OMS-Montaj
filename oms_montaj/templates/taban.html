@@ -18,6 +18,7 @@
   {% from "_karsilama.html" import logo_blok with context %}
   {% set menu = [
     ('ozet.ana', 'ozet', 'Özet'),
+  ] + ([('asistan.sayfa', 'asistan', 'Asistan')] if config.ASISTAN_ACIK else []) + [
     ('siparisler.liste', 'siparisler', 'Siparişler'),
     ('yedek_parca.liste', 'yedek_parca', 'Yedek parça'),
     ('ekranlar.pano', 'pano', 'Pano'),

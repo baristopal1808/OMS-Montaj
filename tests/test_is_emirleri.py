@@ -70,7 +70,8 @@ def test_is_emirleri_siparise_baglanir(istemci, ekip, yukle):  # noqa: F811
     assert "7 iş emri okundu (6 açık, 1 kapalı)" in sayfa
     assert ("İş emirleri: 4 tanesi sipariş satırına bağlı, 1 tanesi projenin alt montajı ya da yarı mamulü,"
             " 1 tanesi stok için, 1 tanesi bağlanamadı (Yapılacaklar'da sorulur).") in sayfa
-    assert "4 ürün \"Malzeme hazırlık\" aşamasına geçti" in sayfa
+    # 900103 iki çene için, biri stoğa girmiş: o çene "Montaj tamamlandı", öbürü "Malzeme hazırlık"
+    assert 'Aşaması ilerleyen: 3 ürün "Malzeme hazırlık", 1 ürün "Montaj tamamlandı".' in sayfa
 
     kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
     for beklenen in ("900101", "900102", "900103", "Kısmen tamamlandı", "1/2 stoğa girdi",
@@ -78,6 +79,34 @@ def test_is_emirleri_siparise_baglanir(istemci, ekip, yukle):  # noqa: F811
         assert beklenen in kart, beklenen
     assert "900105" not in kart and "900106" not in kart
     assert "iş emri listelerinde yok" not in kart
+
+
+def test_asama_erpye_gore_ilerler_geri_gelmez(istemci, uygulama, ekip, yukle):  # noqa: F811
+    from oms_montaj.veritabani import baglanti
+
+    def asamalar():
+        with uygulama.app_context():
+            return dict(baglanti().execute(
+                "SELECT k.urun_kodu || '/' || u.adet_sira, u.asama FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id"
+            ).fetchall())
+
+    yukle(excel(makine_siparisi()))
+    liste = is_emirleri()
+    liste[1]["Gerçek Mkt."] = 1  # PP'nin (900101) bir kırılımı stoğa girdi: montaj başladı
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    assert asamalar()["PP-536-NF/1"] == "montaj"
+    assert (asamalar()["KCN-90/1"], asamalar()["KCN-90/2"]) == ("montaj_tamamlandi", "malzeme_hazirlik")
+    assert asamalar()["SVR-50-NF-BSP/1"] == "malzeme_hazirlik"
+    # İş emri tamamlanınca "Montaj tamamlandı"; ekibin ileri aldığı ürün ERP yüzünden geri gelmez
+    with uygulama.app_context():
+        vt = baglanti()
+        with vt:
+            vt.execute("UPDATE urunler SET asama = 'test' WHERE kalem_id = (SELECT id FROM siparis_kalemleri"
+                       " WHERE urun_kodu = 'SVR-50-NF-BSP')")
+    liste[0].update({"* Durumu": "Kapalı", "Gerçek Mkt.": 1, "İşEmri Kapatma Tarihi": datetime(2026, 10, 20)})
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    assert asamalar()["PP-536-NF/1"] == "montaj_tamamlandi" and asamalar()["SVR-50-NF-BSP/1"] == "test"
+    assert "Montaj tamamlandı" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
 
 
 def test_once_is_emri_sonra_siparis_yuklenince_de_baglanir(istemci, ekip, yukle):  # noqa: F811

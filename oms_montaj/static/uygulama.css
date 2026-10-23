@@ -485,30 +485,35 @@ a.cip.uyari { text-decoration: none; }
 .ak-ac.ozel-ikon, .ak-ac.ozel-ikon:hover { width: 128px; height: 128px; padding: 0; background: none; border-radius: 0; box-shadow: none; }
 .ak-ac.ozel-ikon svg { display: block; width: 128px; height: 128px; }
 .ak-ac.ozel-ikon:focus-visible { outline: 3px solid var(--vurgu); outline-offset: 3px; border-radius: 28px; }
-/* Üzerine gelince simgenin solunda "Montaj Asistanı" yazısı simgenin arkasından sola doğru kayarak çıkar */
+/* Üzerine gelince simgenin kutusu sola doğru uzar ve içinde "Montaj Asistanı" yazar: yazının zemini simgenin
+   zeminiyle aynı renkte, simgenin arkasından çıkar; ikisi tek bir kutu gibi görünür. */
+.ak-ac svg, .ak-ac .simge { position: relative; z-index: 1; }
 .ak-etiket {
+  --ak-zemin: #111314;          /* simgenin zemin rengi (oms-ai-ikon.svg) */
+  --ak-yaricap: 28px;           /* simgenin köşe yuvarlaklığı, 128 pikselde */
   position: absolute;
-  top: 50%;
-  right: calc(100% + .75rem);
-  padding: .6rem 1.1rem;
+  top: 0;
+  right: calc(100% - var(--ak-yaricap));
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 calc(var(--ak-yaricap) + .9rem) 0 1.6rem;
   font-family: inherit;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
-  background: #111314;
-  border-radius: 99px;
-  box-shadow: 0 6px 20px rgb(16 24 40 / 22%);
-  opacity: 0;
-  transform: translate(28px, -50%);
-  clip-path: inset(0 0 0 100% round 99px);
+  background: var(--ak-zemin);
+  border-radius: var(--ak-yaricap) 0 0 var(--ak-yaricap);
+  clip-path: inset(0 0 0 100%);
   pointer-events: none;
-  transition: opacity .2s ease, transform .35s cubic-bezier(.2, .9, .3, 1.15), clip-path .35s ease;
+  transition: clip-path .38s cubic-bezier(.3, .8, .3, 1);
 }
-.ak-etiket::after { content: ""; display: inline-block; width: .45rem; height: .45rem; margin-left: .55rem; vertical-align: middle; background: var(--vurgu); border-radius: 50%; }
-.ak-ac:hover .ak-etiket, .ak-ac:focus-visible .ak-etiket { opacity: 1; transform: translate(0, -50%); clip-path: inset(0 round 99px); }
+.ak-ac:not(.ozel-ikon) .ak-etiket { --ak-zemin: var(--vurgu); --ak-yaricap: 1.75rem; font-size: 1rem; }
+.ak-ac:hover .ak-etiket, .ak-ac:focus-visible .ak-etiket { clip-path: inset(0 0 0 0); pointer-events: auto; }
 @media (hover: none) { .ak-etiket { display: none; } }
-@media (prefers-reduced-motion: reduce) { .ak-etiket { transition: opacity .2s ease; transform: translate(0, -50%); clip-path: none; } }
+@media (prefers-reduced-motion: reduce) { .ak-etiket { transition: none; } }
 .ak.acik .ak-ac { visibility: hidden; opacity: 0; transform: scale(.4) rotate(-12deg); pointer-events: none; }
 .ak-panel {
   position: fixed;

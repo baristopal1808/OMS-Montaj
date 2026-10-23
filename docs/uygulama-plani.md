@@ -26,7 +26,7 @@ Montaj ekibinin takibi (sipariş → malzeme hazırlık → montaj → test → 
 ### Kurallar (özet)
 
 - Her fiziksel ürünün bir kartı olur. Kartlar ERP'nin sipariş ve iş emri listelerinden oluşur.
-- Aşamalar `ihtiyaclar.md` 3.1'deki listeyle başlar. ERP kartı yalnızca "Sipariş" ve "Malzeme hazırlık" aşamalarına getirir; gerisini ekip ilerletir.
+- Aşamalar `ihtiyaclar.md` 3.1'deki listeyle başlar. ERP kartı "Sipariş", "Malzeme hazırlık", "Montaj" (bir kırılım stoğa girince) ve "Montaj tamamlandı" (iş emri tamamlanınca) aşamalarına getirir, yalnızca ileri götürür; gerisini ekip ilerletir.
 - ERP verisi ekibin elle girdiği bilgiyi ezmez; çelişki varsa uygulama sorar.
 - Bağlantısı ERP'de görünmeyen ürünler kullanıcıya sorularak bağlanır.
 - Kontrol listeleri ürün ailesinin şablonundan gelir. Kablosuz kumanda, uzaktan erişim gibi maddeler yalnızca siparişte varsa gelir.

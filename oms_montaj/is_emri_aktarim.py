@@ -17,15 +17,17 @@ Bağlantı her yüklemeden sonra (sipariş ya da iş emri listesi) baştan kurul
   (boş)     bağlanamadı; Yapılacaklar'da kullanıcıya sorulur
 Kullanıcının Yapılacaklar'da yaptığı seçim (kullanici, kullanici_stok, yok_sayildi) korunur.
 
-Siparişe bağlı iş emirleri, sipariş satırının ürün kartlarına adet sırasıyla dağıtılır;
-iş emri açılan ürün "Sipariş" aşamasındaysa "Malzeme hazırlık" aşamasına geçer (ERP
-kartı yalnızca bu iki aşamaya getirir, docs/ihtiyaclar.md 3.1). Üretim girişi olmadan
-kapatılan iş emri ürüne dağıtılmaz.
+Siparişe bağlı iş emirleri, sipariş satırının ürün kartlarına adet sırasıyla dağıtılır ve
+ürün ERP'nin gösterdiği aşamaya ilerler (docs/ihtiyaclar.md 3.1): iş emri açıldı → "Malzeme
+hazırlık", kırılımlarından biri stoğa girdi → "Montaj", iş emri tamamlandı (ürün stoğa girdi)
+→ "Montaj tamamlandı". Aşama yalnızca ileri gider; ekibin ileri aldığı ürün geri gelmez.
+Üretim girişi olmadan kapatılan iş emri ürüne dağıtılmaz.
 """
 
 import re
 from collections import Counter, defaultdict
 
+from .asamalar import ASAMALAR, erp_asamasi, ileri
 from .erp_aktarim import IPTAL
 from .urun_kurallari import sade
 
@@ -199,22 +201,33 @@ def is_emirlerini_bagla(vt):
 
 
 def _urunlere_dagit(vt, sayac):
-    """Sipariş satırına bağlı iş emirlerini o satırın ürün kartlarına adet sırasıyla dağıtır."""
+    """Sipariş satırına bağlı iş emirlerini o satırın ürün kartlarına adet sırasıyla dağıtır ve ürünü ERP'nin
+    gösterdiği aşamaya ilerletir (asamalar.erp_asamasi; geri götürmez). Birden çok adetlik iş emrinde stoğa
+    giren miktar kadar ürün "Montaj tamamlandı" sayılır."""
     yuvalar = defaultdict(list)  # kalem → her adet için bir iş emri
+    stoga_giren = {}
     for ie in vt.execute(
         "SELECT id, kalem_id, plan_miktar, durum, gercek_miktar FROM is_emirleri WHERE kalem_id IS NOT NULL"
         " ORDER BY acilis_tarihi, is_emri_no"
     ):
         if not uretimsiz_kapandi(ie):
             yuvalar[ie["kalem_id"]].extend([ie["id"]] * max(1, round(ie["plan_miktar"] or 1)))
+            stoga_giren[ie["id"]] = ie["gercek_miktar"] or 0
+    kirilimi_giren = {r[0] for r in vt.execute(
+        "SELECT DISTINCT is_emri_id FROM is_emri_satirlari WHERE COALESCE(gercek_miktar, 0) > 0"
+    )}
+    kacinci = Counter()  # iş emrinin kaçıncı ürünü
     for urun in vt.execute("SELECT id, kalem_id, adet_sira, asama, is_emri_id FROM urunler ORDER BY kalem_id, adet_sira").fetchall():
         sira = urun["adet_sira"] - 1
         ie_id = yuvalar[urun["kalem_id"]][sira] if sira < len(yuvalar[urun["kalem_id"]]) else None
-        asama = "malzeme_hazirlik" if ie_id and urun["asama"] == "siparis" else urun["asama"]
+        asama = urun["asama"]
+        if ie_id:
+            kacinci[ie_id] += 1
+            asama = ileri(asama, erp_asamasi(stoga_giren[ie_id] >= kacinci[ie_id], ie_id in kirilimi_giren))
         if (ie_id, asama) != (urun["is_emri_id"], urun["asama"]):
             vt.execute("UPDATE urunler SET is_emri_id = ?, asama = ? WHERE id = ?", (ie_id, asama, urun["id"]))
             if asama != urun["asama"]:
-                sayac["malzeme_hazirliga_gecen"] += 1
+                sayac[f"gecen:{asama}"] += 1
 
 
 def baglanti_ozeti(sayac):
@@ -228,6 +241,7 @@ def baglanti_ozeti(sayac):
     if sayac["baglanamadi"]:
         parcalar.append(f"{sayac['baglanamadi']} tanesi bağlanamadı (Yapılacaklar'da sorulur)")
     ozet = ", ".join(parcalar) + "."
-    if sayac["malzeme_hazirliga_gecen"]:
-        ozet += f" {sayac['malzeme_hazirliga_gecen']} ürün \"Malzeme hazırlık\" aşamasına geçti."
+    gecenler = [f'{sayac["gecen:" + asama]} ürün "{ad}"' for asama, ad in ASAMALAR.items() if sayac["gecen:" + asama]]
+    if gecenler:
+        ozet += f" Aşaması ilerleyen: {', '.join(gecenler)}."
     return ozet

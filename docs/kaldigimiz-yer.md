@@ -1,8 +1,15 @@
 # Kaldığımız yer
 
-**23/10/2026, 17:10.** 3. adım (iş emirleri) yazıldı ve kullanıcının denemesini bekliyor: bağlanamayan iş emirleri, eksik malzeme ve "İmalatta" uyarısı Yapılacaklar'da soruluyor. Sırada kullanıcının denemesi ve 4. adım var.
+**23/10/2026, 18:06.** 3. adım (iş emirleri) yazıldı ve kullanıcının denemesini bekliyor: bağlanamayan iş emirleri, eksik malzeme ve "İmalatta" uyarısı Yapılacaklar'da soruluyor. Kullanıcı pazartesi (26/10/2026) devam edecek; sırada kullanıcının denemesi ve 4. adım var.
 
 ## Bu oturumda yapılanlar
+
+- Aşamalar ERP'ye göre ilerliyor:
+  - Yeni aşama "Montaj tamamlandı" (Montaj ile Teste hazır arasında).
+  - İş emri açıldı → Malzeme hazırlık; bir kırılım stoğa girdi → Montaj; iş emri tamamlandı → Montaj tamamlandı.
+  - Aşama yalnızca ileri gidiyor.
+  - Gerçek veride açık siparişlerde 13 ürün ilerledi.
+- Asistan simgesi: üzerine gelince simgenin kutusu sola uzuyor, içinde "Montaj Asistanı" yazıyor.
 
 - Yapılacaklar ekranı (`yapilacaklar.py`). Üç konu var:
   - **Eksik malzeme** (`uyarilar.py`): "Çıkış yapılamayan malzeme" raporu yükleniyor. Ürün sayfasında eksikler kırılım kırılım görünüyor; depoda olan sarı, olmayan kırmızı. İş emri başına "Bilginiz var mı?" diye soruluyor. Yeni eksik gelirse soru yeniden geliyor.
@@ -21,7 +28,7 @@
   - Kullanıcının OMS simgesi 128×128 boyutunda sayfaya gömülü; üzerine gelince "Montaj Asistanı" yazısı kayarak çıkıyor.
   - Kutu açılırken büyüyerek açılıyor.
   - Kullanıcı Anthropic'in iade cevabını beklediği için şimdilik soru sormuyor.
-- Göçler 9–12. 117 otomatik test geçiyor; gerçek verinin kopyasında 885 sayfa hatasız açılıyor.
+- Göçler 9–12. 118 otomatik test geçiyor; gerçek verinin kopyasında 885 sayfa hatasız açılıyor.
 
 ## Sıradaki iş
 
@@ -32,7 +39,7 @@
 
 ## Kullanıcıdan beklenenler
 
-- `baslat.bat`'ı yeniden açıp "Çıkış yapılamayan malzeme" raporunu bir kez daha yüklemek (önceki yükleme yalnızca tanınmıştı, kaydedilmemişti).
+- `baslat.bat`'ı yeniden açıp açık ve kapalı iş emirleri listesiyle "Çıkış yapılamayan malzeme" raporunu birlikte yüklemek: aşamalar güncellenir; eksik malzeme raporunun önceki yüklemesi yalnızca tanınmıştı, kaydedilmemişti.
 - Yapılacaklar'daki soruları deneyip görüşlerini söylemek.
 - "Makine numaraları" şablonunu doldurup yüklemek (şasi no'lar; iki motorlu PP'lerde ikinci motor).
 - Asistan: Anthropic'in iade cevabı gelince denemeye karar vermek.

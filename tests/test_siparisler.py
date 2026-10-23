@@ -244,7 +244,7 @@ def test_atlanan_satir_numaralari_bildirilir(istemci, ekip, yukle):
     del satirlar[3]  # 4. satır listede yok
     yukle(excel(satirlar))
     assert "1 siparişte toplam 1 satır listede yok" in istemci.get("/erp-yukleme").get_data(as_text=True)
-    assert "Siparişin 4. satırı yüklenen ERP listesinde yok" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    assert "Siparişin 4. satırı yüklenen ERP listelerinin hiçbirinde görünmedi" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
 
 
 def test_yag_bilgisi_olmayan_pp_icin_uyari(istemci, ekip, yukle):
@@ -268,7 +268,8 @@ def test_acik_siparisler_teslim_sutunlarinda(istemci, ekip, yukle):
     gecikenler, planlanan, onay = (sayfa.index(ad) for ad in ("Gecikenler", "Planlananlar", "Onay bekleyen projeler"))
     # Onay bekleyen sipariş teslimi geçmiş olsa da gecikenlerde değil, en sağdaki sütunda durur.
     assert gecikenler < sayfa.index("OZ-TS0003") < planlanan < sayfa.index("OZ-TS0001") < onay < sayfa.index("OZ-TS0004")
-    assert 'href="/siparisler/OZ-TS0001#aile-SVR"' in sayfa
+    # Tek SVR kendi sayfasını, iki adet çene siparişin çene bölümünü açar.
+    assert 'href="/urun/' in sayfa and 'href="/siparisler/OZ-TS0001#aile-Çene"' in sayfa
     yalniz_onay = istemci.get("/siparisler?durum=onay_bekliyor").get_data(as_text=True)
     assert "OZ-TS0004" in yalniz_onay and "Gecikenler" not in yalniz_onay and "OZ-TS0001" not in yalniz_onay
 

@@ -22,7 +22,8 @@ class OkumaHatasi(Exception):
 # Rapor türleri; türü başlıklardaki bu sütunlar belirler.
 RAPORLAR = {
     "siparis_talepleri": {"ad": "Sipariş talepleri", "imza": ("Sipariş No", "Sip.Sıra No", "Planlama Bilgisi")},
-    "is_emirleri": {"ad": "İş emirleri", "imza": ("* İş Emri No", "* Sıra No"), "adim": 3},
+    "is_emirleri": {"ad": "İş emirleri", "imza": ("* İş Emri No", "* Sıra No")},
+    "makine_numaralari": {"ad": "Makine numaraları", "imza": ("Kart No", "Şasi No", "Motor Seri No")},
     "cikis_yapilamayan": {"ad": "Çıkış yapılamayan malzeme", "imza": ("Isemri No / Sıra", "Gerceklesen Cikis Miktar"), "adim": 5},
     "stok": {"ad": "Stok raporu", "imza": ("MalzemeKodu", "EldekiMiktar"), "adim": 5},
 }
@@ -51,8 +52,48 @@ SIPARIS_SUTUNLARI = {
     "son_sevk_tarihi": "Son Sevk Tarihi",
 }
 ZORUNLU_SIPARIS = ("siparis_no", "sira_no", "urun_kodu", "miktar")
-TARIH_ALANLARI = {"teslim_tarihi", "talep_tarihi", "ilk_sevk_tarihi", "son_sevk_tarihi"}
-SAYI_ALANLARI = {"miktar", "sevk_miktari"}
+
+# Açık ve kapalı iş emirleri raporu (ikisi aynı biçimde): 0. satır ana ürün, diğerleri kırılımlar
+IS_EMRI_SUTUNLARI = {
+    "is_emri_no": "* İş Emri No",
+    "sira_no": "* Sıra No",
+    "urun_kodu": "* Ürün Kodu",
+    "urun_adi": "* Ürün Adı",
+    "durum": "* Durumu",
+    "kaynak_tipi": "*Kaynak Tipi",
+    "envanter_tipi": "Envanter Tipi",
+    "plan_miktar": "*Plan Mkt.",
+    "gercek_miktar": "Gerçek Mkt.",
+    "kalan_miktar": "Kalan Mkt.",
+    "acilis_tarihi": "İşEmri Açma Tarihi",
+    "baslama_tarihi": "* İşEmri Başlama Tarihi",
+    "tahmini_bitis": "Tahmini Bitiş Tarihi",
+    "kapatma_tarihi": "İşEmri Kapatma Tarihi",
+    "ilk_stok_giris": "İlk Stok Giriş Tar.",
+    "son_stok_giris": "Son Stok Giriş Tar.",
+    "aciklama": "Açıklama",
+    "erp_siparis": "Sip. No",  # "…-<proje>-<sıra>-": iş emrinin bağlı olduğu sipariş satırı; yoksa "---"
+}
+ZORUNLU_IS_EMRI = ("is_emri_no", "sira_no", "urun_kodu", "durum")
+
+# Uygulamanın kendi "Makine numaraları" şablonu (ERP raporu değil): ekip şasi ve motor seri no'larını
+# doldurup yükler. Satır, uygulamanın verdiği kart no ile bulunur.
+NUMARA_SUTUNLARI = {
+    "kart_no": "Kart No",
+    "siparis_no": "Sipariş No",
+    "urun_kodu": "Ürün Kodu",
+    "seri_no": "Seri No",
+    "sasi_no": "Şasi No",
+    "motor_seri_no": "Motor Seri No",
+}
+ZORUNLU_NUMARA = ("kart_no", "sasi_no", "motor_seri_no")
+
+TARIH_ALANLARI = {
+    "teslim_tarihi", "talep_tarihi", "ilk_sevk_tarihi", "son_sevk_tarihi",
+    "acilis_tarihi", "baslama_tarihi", "tahmini_bitis", "kapatma_tarihi", "ilk_stok_giris", "son_stok_giris",
+}
+SAYI_ALANLARI = {"miktar", "sevk_miktari", "plan_miktar", "gercek_miktar", "kalan_miktar"}
+BOS_DEGERLER = {"---"}  # ERP'nin boş alan yerine yazdığı
 
 
 def _xls_satirlari(yol):
@@ -158,11 +199,12 @@ def tarih(deger):
     return None
 
 
-def siparis_satirlari(basliklar, satirlar):
-    """Sipariş talepleri raporunun satırlarını kayıtlara çevirir; eksik zorunlu sütunda OkumaHatasi."""
+def _kayitlar(basliklar, satirlar, sutunlar, zorunlu, anahtarlar, bos_degerler=()):
+    """Satırları alan → değer kayıtlarına çevirir; eksik zorunlu sütunda OkumaHatasi. Sıra numarası
+    tamsayıya çevrilir; anahtar alanlarından biri boş olan satır atlanır. bos_degerler boş sayılır."""
     bul = {sade(b): b for b in basliklar if b}
-    sutun = {alan: bul.get(sade(baslik)) for alan, baslik in SIPARIS_SUTUNLARI.items()}
-    eksik = [SIPARIS_SUTUNLARI[alan] for alan in ZORUNLU_SIPARIS if sutun[alan] is None]
+    sutun = {alan: bul.get(sade(baslik)) for alan, baslik in sutunlar.items()}
+    eksik = [sutunlar[alan] for alan in zorunlu if sutun[alan] is None]
     if eksik:
         raise OkumaHatasi("Şu sütunlar bulunamadı: " + ", ".join(eksik) + ".")
 
@@ -177,8 +219,27 @@ def siparis_satirlari(basliklar, satirlar):
                 kayit[alan] = sayi(deger)
             else:
                 kayit[alan] = metin(deger)
-        sira = sayi(kayit["sira_no"])
-        kayit["sira_no"] = int(sira) if sira is not None else None
-        if kayit["siparis_no"] and kayit["urun_kodu"] and kayit["sira_no"] is not None:
+                if kayit[alan] in bos_degerler:
+                    kayit[alan] = None
+        if "sira_no" in kayit:
+            sira = sayi(kayit["sira_no"])
+            kayit["sira_no"] = int(sira) if sira is not None else None
+        if all(kayit[alan] is not None for alan in anahtarlar):
             kayitlar.append(kayit)
     return kayitlar
+
+
+def siparis_satirlari(basliklar, satirlar):
+    """Sipariş talepleri raporunun satırlarını kayıtlara çevirir; eksik zorunlu sütunda OkumaHatasi."""
+    return _kayitlar(basliklar, satirlar, SIPARIS_SUTUNLARI, ZORUNLU_SIPARIS, ("siparis_no", "urun_kodu", "sira_no"))
+
+
+def is_emri_satirlari(basliklar, satirlar):
+    """Açık ya da kapalı iş emirleri raporunun satırlarını kayıtlara çevirir (ana satır ve kırılımlar)."""
+    return _kayitlar(basliklar, satirlar, IS_EMRI_SUTUNLARI, ZORUNLU_IS_EMRI,
+                     ("is_emri_no", "urun_kodu", "sira_no"), BOS_DEGERLER)
+
+
+def numara_satirlari(basliklar, satirlar):
+    """"Makine numaraları" şablonunun satırlarını kayıtlara çevirir; kart no'su olmayan satır atlanır."""
+    return _kayitlar(basliklar, satirlar, NUMARA_SUTUNLARI, ZORUNLU_NUMARA, ("kart_no",))

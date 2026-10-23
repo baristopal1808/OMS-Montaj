@@ -1,0 +1,119 @@
+{% extends "taban.html" %}
+{% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
+{% block icerik %}
+{% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
+<p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
+
+{% set marka = musteri_markasi(urun.siparis_no) %}
+<div class="kutu kart-baslik{% if marka %} musterili{% endif %}"
+  {%- if marka %} style="--musteri-renk: {{ marka.renk }};{% if marka.logo %} --musteri-logo: url('{{ marka.logo }}');{% endif %}"{% endif %}>
+  <div class="baslik-satiri">
+    <h1>{{ urun.urun_kodu }}</h1>
+    <span class="rozetler">
+      {% if revize %}<a class="etiket revize" href="{{ siparis_adresi }}#revizyonlar">Revize edildi · {{ revize | tarih }}</a>{% endif %}
+      {% if urun.erp_durum == 'Beklemede' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}
+      <span class="etiket asama">{{ ASAMALAR[urun.asama] }}</span>
+    </span>
+  </div>
+  <p class="musteri">{{ urun.urun_adi or '' }} · {{ AILE_ADLARI.get(urun.aile, urun.aile) }}</p>
+  <dl class="bilgiler">
+    <div><dt>Sipariş</dt><dd><a class="duz-baglanti" href="{{ siparis_adresi }}">{{ urun.siparis_no }}</a></dd></div>
+    {% if urun.musteri %}<div><dt>Müşteri</dt><dd>{{ urun.musteri }}</dd></div>{% endif %}
+    <div><dt>Seri no</dt><dd>{{ urun.seri_no or '—' }}</dd></div>
+    {% if urun.miktar > 1 %}<div><dt>Adet</dt><dd>{{ urun.adet_sira }} / {{ urun.miktar | sayi }}</dd></div>{% endif %}
+    <div><dt>Teslim tarihi</dt><dd>{{ (urun.teslim_tarihi | tarih) or '—' }}
+      {% if kalan %}<span class="etiket {{ kalan[1] }}">{{ kalan[0] }}</span>{% endif %}</dd></div>
+    {% if urun.son_sevk_tarihi %}<div><dt>Sevk</dt><dd>{{ urun.son_sevk_tarihi | tarih }}</dd></div>{% endif %}
+  </dl>
+  <span class="cipler">
+    {% if renk %}<span class="cip">Renk: {{ renk }}</span>{% endif %}
+    {% if urun.aile == 'PP' %}
+      {% if yag %}<span class="cip">{% if yag[0] == 'yagsiz' %}Yağsız sevk{% else %}Yağlı sevk: {{ yag[1] }}{% endif %}</span>
+      {% else %}<span class="cip uyari">Yağ bilgisi yok; netleştirilmeli</span>{% endif %}
+    {% endif %}
+    {% if urun.erp_urun_durumu and not dis_tedarik %}<span class="cip">Planlama birimi ürün üretim durumu: <strong>{{ urun.erp_urun_durumu }}</strong>
+      <small>ERP verisi {{ urun.veri_zamani | tarih }}</small></span>{% endif %}
+  </span>
+</div>
+
+{% if numaralar %}
+<section class="bolum">
+  <h2>Makine numaraları</h2>
+  <div class="kutu">
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('urunler.numaralar', urun_id=urun.id) }}" class="numara-formu">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      {% for alan, ad, deger, kaynak in numaralar %}
+      <label class="alan">
+        <span>{{ ad }}</span>
+        <input type="text" name="{{ alan }}" value="{{ urun[alan] or '' }}" autocomplete="off"
+          placeholder="{% if kaynak and kaynak != 'ekip' %}{{ deger }}{% endif %}">
+        <small class="soluk">
+          {% if kaynak == 'ekip' %}Ekip girdi{% if urun.numara_degisme %} · {{ urun.numara_degisme | zaman }}{% endif %}. Silerseniz ERP'den okunan görünür.
+          {% elif kaynak %}Okunan ({{ KAYNAKLAR[kaynak] }}): <strong>{{ deger }}</strong>. Doğruysa boş bırakın; yanlışsa doğrusunu yazın.
+          {% else %}Henüz girilmedi.{% endif %}
+        </small>
+      </label>
+      {% endfor %}
+      <button type="submit" class="dugme">Kaydet</button>
+    </form>
+    {% else %}
+    <dl class="bilgiler">
+      {% for alan, ad, deger, kaynak in numaralar %}
+      <div><dt>{{ ad }}</dt><dd>{{ deger or '—' }}{% if kaynak %} <small class="soluk">{{ KAYNAKLAR[kaynak] }}</small>{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<section class="bolum">
+  <h2>İş emri</h2>
+  {% if ie %}
+  <div class="kutu is-emri-kutusu">
+    <div class="baslik-satiri">
+      <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong></span>
+      <span class="etiket ie-{{ ie_durumu[1] }}">{{ ie_durumu[0] }}</span>
+    </div>
+    <dl class="bilgiler">
+      <div><dt>Açılış</dt><dd>{{ (ie.acilis_tarihi | tarih) or '—' }}</dd></div>
+      <div><dt>Başlama</dt><dd>{{ (ie.baslama_tarihi | tarih) or '—' }}</dd></div>
+      {% if ie.kapatma_tarihi %}<div><dt>Kapanış</dt><dd>{{ ie.kapatma_tarihi | tarih }}</dd></div>
+      {% else %}<div><dt>Tahmini bitiş</dt><dd>{{ (ie.tahmini_bitis | tarih) or '—' }}</dd></div>{% endif %}
+      <div><dt>Stoğa giren / planlanan</dt><dd>{{ (ie.gercek_miktar or 0) | sayi }} / {{ ie.plan_miktar | sayi }}</dd></div>
+      {% if ie.ilk_stok_giris %}<div><dt>İlk stok girişi</dt><dd>{{ ie.ilk_stok_giris | tarih }}</dd></div>{% endif %}
+    </dl>
+    {% if ie.aciklama %}<p class="soluk kucuk">ERP açıklaması: {{ ie.aciklama }}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="kutu"><p class="soluk">Bu ürüne henüz iş emri bağlanmadı.{% if urun.bagli_is_emri_no %} Sipariş satırında iş emri {{ urun.bagli_is_emri_no }} yazıyor ama iş emri listelerinde yok.{% endif %}</p></div>
+  {% endif %}
+</section>
+
+{% if kirilimlar %}
+<section class="bolum">
+  <h2>Kırılımlar (alt montajlar ve işlemler)</h2>
+  <div class="kirilim-ozeti">
+    <span><strong>{{ kirilimlar | length }}</strong> kırılımdan <strong>{{ tamamlanan }}</strong> tanesi tamamlandı</span>
+    <span class="ilerleme" role="img" aria-label="{{ tamamlanan }} / {{ kirilimlar | length }} tamamlandı"><span style="width: {{ (100 * tamamlanan / kirilimlar | length) | round | int }}%"></span></span>
+  </div>
+  <div class="pano-karti kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>Sıra</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th></tr></thead>
+      <tbody>
+        {% for k in kirilimlar %}
+        <tr>
+          <td class="sayisal">{{ k.satir.sira_no }}</td>
+          <td class="sayisal">{{ k.satir.urun_kodu }}</td>
+          <td>{{ k.satir.urun_adi or '' }}</td>
+          <td><span class="etiket ie-{{ k.durum[1] }}">{{ k.durum[0] }}</span></td>
+          <td class="sayisal">{{ (k.satir.gercek_miktar or 0) | sayi }}/{{ k.satir.plan_miktar | sayi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

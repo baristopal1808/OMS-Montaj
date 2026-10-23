@@ -115,6 +115,23 @@ def yag(aciklama):
     return None
 
 
+# Motor seri no'ları iş emri açıklamalarında etiketsiz yazılıyor: "<proje> - 0000 111 101 - …" (Volvo:
+# 4+3+3 rakam) ya da "<proje> / N5F00001 / STANDART / YAĞSIZ SEVK" (CAT: harf, rakam, harf, 5 rakam;
+# ya da 3 harf, 5 rakam). Proje kodu (2 harf, 4 rakam) ve RAL kodu bu biçimlere uymaz.
+MOTOR_SERI = re.compile(r"(?<!\w)(\d{4})[ .]?(\d{3})[ .]?(\d{3})(?!\w)|(?<!\w)([A-Z]\d[A-Z]\d{5}|[A-Z]{3}\d{5})(?!\w)")
+
+
+def motor_seri_nolari(*metinler):
+    """Metinlerde geçen motor seri no'ları, yazıldıkları sırayla ve birer kez: Volvo '0000 111 101', CAT 'N5F00001'."""
+    bulunan = []
+    for metin in metinler:
+        for e in MOTOR_SERI.finditer((metin or "").upper()):
+            no = " ".join(e.group(1, 2, 3)) if e.group(1) else e.group(4)
+            if no not in bulunan:
+                bulunan.append(no)
+    return bulunan
+
+
 def seri_nolar(planlama_bilgisi):
     """'A & B & C' → ['A', 'B', 'C']; boş ya da '-' ise boş liste."""
     parcalar = (p.strip() for p in (planlama_bilgisi or "").split("&"))

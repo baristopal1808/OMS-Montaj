@@ -1,5 +1,6 @@
-{# Siparişler listesinde ve özet sayfasında bir siparişin kutusu. Kutunun tamamı sipariş kartını açar;
-   ürün kutucukları kartta o ürün ailesinin bölümüne gider. #}
+{# Siparişler listesinde ve özet sayfasında bir siparişin kutusu. Kutunun tamamı sipariş kartını
+   (bütün kalemler) açar; ürün kutucuğu o aileden tek makine varsa onun sayfasını, birden çok varsa
+   sipariş kartında o ailenin bölümünü açar (oradan her makine kendi sayfasına gider). #}
 {% macro siparis_kutusu(o) -%}
 {% set s = o.siparis %}
 {% set adres = url_for('siparisler.kart', siparis_no=s.siparis_no) %}
@@ -25,7 +26,8 @@
     {% elif o.son_sevk %}Sevk {{ o.son_sevk | tarih }}{% endif %}
   </span>
   <span class="sk-urunler">
-    {% for aile, adet in o.urunler %}<a class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[aile] }}" href="{{ adres }}#aile-{{ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
+    {% for aile, adet in o.urunler %}<a class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[aile] }}"
+      href="{{ url_for('urunler.sayfa', urun_id=o.tek_urun[aile]) if aile in o.tek_urun else adres ~ '#aile-' ~ aile }}"><strong>{{ adet }}</strong> {{ aile }}</a>{% endfor %}
     {% if o.diger_kalem %}<span class="sk-urun soluk">{{ o.diger_kalem }} diğer kalem</span>{% endif %}
   </span>
 </div>

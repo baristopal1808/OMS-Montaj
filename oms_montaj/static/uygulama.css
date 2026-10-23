@@ -342,6 +342,33 @@ a.satir-baslik:hover { color: var(--vurgu); }
 .etiket.durum-listede_yok { color: #fff; background: #6b7280; }
 .etiket.asama { color: #fff; background: #3a4150; }
 .etiket.revize { color: var(--bilgi); background: var(--bilgi-zemin); text-decoration: none; }
+/* İş emrinin ERP'deki durumu */
+.etiket.ie-acik { color: var(--bilgi); background: var(--bilgi-zemin); }
+.etiket.ie-kismen { color: #8a4b00; background: #fff1dc; }
+.etiket.ie-kapali { color: #1f5c38; background: #e3f3e8; }
+.etiket.ie-iptal { color: var(--soluk); background: #eef0f4; }
+.ie-cipi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.ie-cipi .etiket { font-size: .75rem; padding: 0 .5rem; }
+
+/* Ürün sayfası */
+.duz-baglanti { color: inherit; }
+.numara-formu { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem 1.5rem; align-items: start; }
+.numara-formu small { font-weight: 400; }
+.numara-formu .dugme { justify-self: start; align-self: end; }
+.is-emri-kutusu .baslik-satiri { margin-bottom: .5rem; }
+.ie-no { font-size: 1.1rem; }
+.kirilim-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-bottom: .75rem; }
+.ilerleme { flex: 0 1 16rem; height: .55rem; overflow: hidden; background: var(--cizgi); border-radius: 99px; }
+.ilerleme > span { display: block; height: 100%; background: #2e9d62; border-radius: inherit; }
+.sablon-kutusu { margin-top: 1rem; }
+.sablon-kutusu h2 { margin-top: 0; }
+
+/* Sipariş kartında ürünün tamamı kendi sayfasına gider; içindeki bağlantılar üstte kalır. */
+.urun.tiklanir-urun { position: relative; }
+.urun.tiklanir-urun:hover { background: #f7f8fa; }
+.urun-baglanti { color: inherit; text-decoration: none; }
+.urun-baglanti::after { content: ""; position: absolute; inset: 0; }
+.urun.tiklanir-urun a:not(.urun-baglanti) { position: relative; z-index: 1; }
 a.etiket.revize:hover { background: #d6e7f8; }
 .rev-deger { white-space: pre-wrap; max-width: 28rem; }
 
@@ -537,7 +564,7 @@ a.gosterge:hover { box-shadow: 0 6px 18px rgb(16 24 40 / 12%); }
 .sk.musterili .sk-musteri { transition: color .2s ease; }
 .sk.musterili:hover :is(.sk-musteri, .soluk), .kart-baslik.musterili :is(.musteri, dt, .soluk) { color: rgb(255 255 255 / 80%); }
 .sk.musterili:hover .sk-urun:not(.renkli) { background: rgb(255 255 255 / 14%); }
-.musterili .sk-urun.renkli { color: var(--yazi); }
+.musterili .sk-urun.renkli, .kart-baslik.musterili .cip { color: var(--yazi); }
 .kart-baslik.musterili .siparis-notu { background: rgb(0 0 0 / 18%); }
 /* Kırmızı zeminde "gün geçti" etiketi beyaz çerçeveyle ayrışır. */
 .sk.musterili:hover .etiket.gecikti, .kart-baslik.musterili .etiket.gecikti { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 85%); }

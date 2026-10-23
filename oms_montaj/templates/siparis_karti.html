@@ -15,9 +15,22 @@
   {% if deger is none %}<span class="soluk">—</span>{% elif r.alan == 'teslim_tarihi' %}{{ deger | tarih }}{% else %}{{ deger }}{% endif %}
 {%- endmacro %}
 
-{% macro kalem_bilgileri(satir) -%}
+{# İş emri: numarası, ERP'deki durumu ve en önemli tarihi #}
+{% macro ie_cipi(ie) -%}
+  {% set durum = is_emri_durumu(ie) %}
+  <span class="cip ie-cipi">İş emri <strong>{{ ie.is_emri_no }}</strong>
+    <span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span>
+    {% if durum[1] == 'kapali' %}<small>kapanış {{ ie.kapatma_tarihi | tarih }}</small>
+    {% elif durum[1] == 'kismen' %}<small>{{ ie.gercek_miktar | sayi }}/{{ ie.plan_miktar | sayi }} stoğa girdi · ilk giriş {{ ie.ilk_stok_giris | tarih }}</small>
+    {% elif durum[1] == 'acik' %}<small>açılış {{ ie.acilis_tarihi | tarih }}{% if ie.tahmini_bitis %} · tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}</small>
+    {% endif %}
+  </span>
+{%- endmacro %}
+
+{% macro kalem_bilgileri(satir, is_emirleri) -%}
   {% set k = satir.kalem %}
   <span class="cipler">
+    {% for ie in is_emirleri %}{{ ie_cipi(ie) }}{% endfor %}
     {% if satir.renk %}<span class="cip">Renk: {{ satir.renk }}</span>{% endif %}
     {% if satir.pp %}
       {% if satir.yag %}
@@ -26,7 +39,7 @@
       <span class="cip uyari">Yağ bilgisi yok; netleştirilmeli</span>
       {% endif %}
     {% endif %}
-    {% if k.bagli_is_emri_no %}<span class="cip">İş emri {{ k.bagli_is_emri_no }}</span>{% endif %}
+    {% if k.bagli_is_emri_no and not satir.is_emirleri %}<span class="cip">İş emri {{ k.bagli_is_emri_no }}{% if is_emri_yuklu %} <small>iş emri listelerinde yok</small>{% endif %}</span>{% endif %}
     {% if satir.dis_tedarik %}
     <span class="cip">Dış tedarik</span>
     {% elif k.erp_urun_durumu %}
@@ -41,17 +54,19 @@
   {% set k = satir.kalem %}
   {% if satir.urunler %}
     {% for u in satir.urunler %}
-    <li class="urun{% if k.erp_durum == 'İptal' %} iptal{% endif %}">
+    <li class="urun tiklanir-urun{% if k.erp_durum == 'İptal' %} iptal{% endif %}">
       <div class="urun-ust">
-        <span class="urun-ad"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi }}</span>
+        <a class="urun-ad urun-baglanti" href="{{ url_for('urunler.sayfa', urun_id=u.id) }}"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi }}</a>
         <span class="etiket asama">{{ ASAMALAR[u.asama] }}</span>
       </div>
       <div class="urun-seri">
         {% if u.seri_no %}Seri no <strong>{{ u.seri_no }}</strong>{% else %}<span class="soluk">Seri no yok</span>{% endif %}
         {% if k.miktar > 1 %}<span class="soluk"> · {{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
+        {% for alan, ad, deger, kaynak in satir.numaralar[u.id] %}<span class="soluk"> · </span>{{ ad }} <strong>{{ deger }}</strong>{% endfor %}
         {{ kalem_rozetleri(satir) }}
       </div>
-      {{ kalem_bilgileri(satir) }}
+      {{ kalem_bilgileri(satir, ([is_emri_haritasi[u.is_emri_id]] if u.is_emri_id in is_emri_haritasi else [])
+                                + (satir.dagitilmamis if loop.first else [])) }}
     </li>
     {% endfor %}
   {% else %}
@@ -61,7 +76,7 @@
         <span class="soluk">{{ k.miktar | sayi }} {{ k.birim or '' }}</span>
       </div>
       <div class="urun-seri">{{ kalem_rozetleri(satir) }}</div>
-      {{ kalem_bilgileri(satir) }}
+      {{ kalem_bilgileri(satir, satir.is_emirleri) }}
     </li>
   {% endif %}
 {%- endmacro %}
@@ -88,7 +103,7 @@
   </dl>
   {% if s.notu %}<p class="siparis-notu"><strong>Not:</strong> {{ s.notu }}</p>{% endif %}
   {% if ozet.durum == 'listede_yok' %}<p class="cip uyari eksik-satirlar">Bu sipariş en son yüklenen ERP sipariş listesinde yok; açık siparişlerden çıkarıldı. Kaydı silinmedi; listede yeniden görünürse geri gelir.</p>{% endif %}
-  {% if eksik %}<p class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if eksik | length > 1 %}satırları{% else %}satırı{% endif %} yüklenen ERP listesinde yok. Liste alınırken bir süzgeç uygulanmış olabilir.</p>{% endif %}
+  {% if eksik %}<p class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if eksik | length > 1 %}satırları{% else %}satırı{% endif %} yüklenen ERP listelerinin hiçbirinde görünmedi; hangi ürün olduğu bilinmiyor. Satır ERP'de silinmiş ya da liste bir süzgeçle alınmış olabilir.</p>{% endif %}
   {% if son_veri %}<p class="soluk kucuk">ERP verisi: {{ son_veri | zaman }}</p>{% endif %}
 </div>
 
@@ -143,10 +158,36 @@
         <span class="miktar">{{ k.miktar | sayi }} {{ k.birim or '' }}{% if k.sevk_miktari %} <span class="soluk">· sevk {{ k.sevk_miktari | sayi }}</span>{% endif %}</span>
       </div>
       <div class="urun-seri">{{ kalem_rozetleri(satir) }}</div>
-      {{ kalem_bilgileri(satir) }}
+      {{ kalem_bilgileri(satir, satir.is_emirleri) }}
     </li>
     {% endfor %}
   </ul>
+</section>
+{% endif %}
+
+{% if alt_is_emirleri %}
+<section class="bolum">
+  <h2>Alt montajlar ve yarı mamuller</h2>
+  <p class="soluk kucuk">Açıklamasında bu siparişin proje kodu geçen, ürünü siparişte olmayan iş emirleri.</p>
+  <div class="pano-karti kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>İş emri</th><th>Ürün</th><th>Ürün adı</th><th>Motor seri no</th><th>Durum</th><th>Miktar</th><th>Tarih</th></tr></thead>
+      <tbody>
+        {% for ie in alt_is_emirleri %}
+        {% set durum = is_emri_durumu(ie) %}
+        <tr>
+          <td class="sayisal"><strong>{{ ie.is_emri_no }}</strong></td>
+          <td class="sayisal">{{ ie.urun_kodu }}</td>
+          <td>{{ ie.urun_adi or '' }}</td>
+          <td class="sayisal">{{ alt_motorlar[ie.id] or '' }}</td>
+          <td><span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span></td>
+          <td class="sayisal">{{ ie.gercek_miktar | sayi }}/{{ ie.plan_miktar | sayi }}</td>
+          <td class="sayisal">{% if ie.kapatma_tarihi %}kapanış {{ ie.kapatma_tarihi | tarih }}{% elif ie.tahmini_bitis %}tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endif %}
 

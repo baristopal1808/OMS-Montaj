@@ -111,6 +111,61 @@ GOCLER = [
        AND trim(replace(replace(COALESCE(planlama_bilgisi, ''), '&', ''), '-', '')) = '';
     DELETE FROM urunler WHERE kalem_id IN (SELECT id FROM siparis_kalemleri WHERE tur NOT IN ('kart', 'servis'));
     """,
+    # 6: iş emirleri (açık ve kapalı listelerden), kırılımları ve sipariş satırına bağlantısı
+    """
+    CREATE TABLE is_emirleri (
+        id INTEGER PRIMARY KEY,
+        is_emri_no TEXT NOT NULL UNIQUE,
+        urun_kodu TEXT,               -- ana ürün (0. satır); ana satır henüz yüklenmediyse boş
+        urun_adi TEXT,
+        durum TEXT,                   -- ERP: Açık, Kapalı
+        kaynak_tipi TEXT,             -- Montaj, Üretim, Bakım-Onarım
+        envanter_tipi TEXT,           -- Son Ürün, Yarı Mamul
+        plan_miktar REAL,
+        gercek_miktar REAL,           -- stoğa girilen
+        kalan_miktar REAL,
+        acilis_tarihi TEXT,
+        baslama_tarihi TEXT,
+        tahmini_bitis TEXT,
+        kapatma_tarihi TEXT,
+        ilk_stok_giris TEXT,
+        son_stok_giris TEXT,
+        aciklama TEXT,
+        erp_siparis TEXT,             -- ERP'nin "Sip. No"su: …-<proje>-<sıra>-
+        siparis_id INTEGER REFERENCES siparisler(id),
+        kalem_id INTEGER REFERENCES siparis_kalemleri(id),
+        baglanti TEXT,                -- erp, aciklama, proje, stok, kullanici; boşsa bağlanamadı
+        ilk_yukleme_id INTEGER REFERENCES erp_yuklemeler(id),
+        son_yukleme_id INTEGER REFERENCES erp_yuklemeler(id)
+    );
+    CREATE INDEX is_emirleri_siparis ON is_emirleri (siparis_id);
+    CREATE INDEX is_emirleri_kalem ON is_emirleri (kalem_id);
+
+    CREATE TABLE is_emri_satirlari (  -- kırılımlar: 0 dışındaki sıralar (alt montajlar, işlemler)
+        id INTEGER PRIMARY KEY,
+        is_emri_id INTEGER NOT NULL REFERENCES is_emirleri(id),
+        sira_no INTEGER NOT NULL,
+        urun_kodu TEXT NOT NULL,
+        urun_adi TEXT,
+        durum TEXT,
+        envanter_tipi TEXT,
+        plan_miktar REAL,
+        gercek_miktar REAL,
+        kalan_miktar REAL,
+        UNIQUE (is_emri_id, sira_no)
+    );
+
+    ALTER TABLE urunler ADD COLUMN is_emri_id INTEGER REFERENCES is_emirleri(id);
+    """,
+    # 7: makine numaraları (ekibin girdiği; ERP'den okunanın önüne geçer) ve kırılımların açıklaması
+    #    (motor seri no'ları çoğu zaman motor montajı kırılımının açıklamasında yazıyor)
+    """
+    ALTER TABLE urunler ADD COLUMN sasi_no TEXT;
+    ALTER TABLE urunler ADD COLUMN motor_seri_no TEXT;
+    ALTER TABLE urunler ADD COLUMN numara_degisme TEXT;          -- son değişikliğin zamanı
+    ALTER TABLE urunler ADD COLUMN numara_degistiren_id INTEGER REFERENCES kullanicilar(id);
+    ALTER TABLE is_emri_satirlari ADD COLUMN aciklama TEXT;
+    """,
 ]
 
 

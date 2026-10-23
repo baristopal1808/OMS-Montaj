@@ -102,6 +102,7 @@ Her adımın sonunda kullanıcı deneyebileceği bir şey görür. Kullanıcı d
 
 - 1. adım bitti (21/10/2026). Kullanıcının isteğiyle giriş ekranı, logo ve yan menü eklendi.
 - 2. adım bitti (21/10/2026). Gerçek listelerle denendi. Kullanıcının isteğiyle Özet ana ekranı, sevk edilecek makineler, Sevkiyat ve Yedek parça ekranları eklendi.
+- 3. adım sürüyor (23/10/2026): iş emirlerinin yüklenmesi ve kendiliğinden bağlanması bitti; ürün sayfası (4. adımdan öne alındı) ve makine numaraları (motor seri no, şasi no) eklendi. Kalanlar: bağlanamayan iş emirlerinin sorulması, eksik malzeme, "İmalatta" uyarısı, Yapılacaklar.
 
 | Adım | Ne yapılır | Kullanıcı ne dener |
 |---|---|---|

@@ -266,6 +266,7 @@ def siparis_ozeti(sayac):
     if sayac["eksik_sira"]:
         ozet += (
             f" Uyarı: {sayac['eksik_sirali_siparis']} siparişte toplam {sayac['eksik_sira']} satır listede yok"
-            " (satır numaraları atlanıyor). ERP'den liste alınırken bir süzgeç uygulanmış olabilir."
+            " (satır numaraları atlanıyor). Satırlar ERP'de silinmiş ya da liste bir süzgeçle alınmış olabilir;"
+            " sipariş kartlarında hangi satırların görünmediği yazar."
         )
     return ozet

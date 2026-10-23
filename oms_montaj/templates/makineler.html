@@ -50,7 +50,7 @@
       <thead><tr><th>Ürün</th><th>Ürün adı</th><th>Seri no</th><th>Aşama</th><th>Planlama durumu</th><th>İş emri</th><th>Teslim</th></tr></thead>
       <tbody>
         {% for m in g.makineler %}
-        <tr class="tiklanir" data-adres="{{ adres }}#aile-{{ m.aile }}">
+        <tr class="tiklanir" data-adres="{{ url_for('urunler.sayfa', urun_id=m.id) }}">
           <td><span class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[m.aile] }}">{{ m.aile }}</span> <strong>{{ m.urun_kodu }}</strong></td>
           <td>{{ m.urun_adi or '' }}</td>
           <td class="sayisal">{{ m.seri_no or '—' }}</td>

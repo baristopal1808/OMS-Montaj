@@ -14,7 +14,9 @@ from datetime import date, timedelta
 from flask import Blueprint, abort, render_template, request
 
 from .erp_aktarim import BEKLEMEDE, IPTAL, REVIZYON_ADLARI, eksik_siralar, kapali_mi
-from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, dis_tedarik_mi, renk, yag
+from .is_emri_aktarim import is_emri_durumu
+from .numaralar import urun_numaralari
+from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, VIBROHAMMER, dis_tedarik_mi, motor_seri_nolari, renk, yag
 from .veritabani import baglanti
 
 bp = Blueprint("siparisler", __name__)
@@ -65,8 +67,8 @@ def yakin_revizyon(zaman):
     return bool(zaman) and date.fromisoformat(zaman[:10]) >= date.today() - timedelta(days=REVIZYON_GUN)
 
 
-def ozetle(siparis, kalemler, son_revizyon=None):
-    """Listede ve kartın başında gösterilen özet."""
+def ozetle(siparis, kalemler, son_revizyon=None, urun_idleri=None):
+    """Listede ve kartın başında gösterilen özet. urun_idleri: kalem → ürün kartları (ürün kutucuğunun adresi için)."""
     gorunen = [k for k in kalemler if k["tur"] != "hizmet"]
     durum = siparis_durumu(gorunen)
     if durum in ("acik", "onay_bekliyor") and not siparis["erp_listede"]:
@@ -76,9 +78,11 @@ def ozetle(siparis, kalemler, son_revizyon=None):
     kesin = [k for k in acik if k["erp_durum"] != BEKLEMEDE]
     teslim = min((k["teslim_tarihi"] for k in (kesin or acik or etkin) if k["teslim_tarihi"]), default=None)
     urunler = Counter()
+    kartlar = defaultdict(list)
     for kalem in etkin:
         if kalem["aile"]:
             urunler[kalem["aile"]] += round(kalem["miktar"] or 0)
+            kartlar[kalem["aile"]].extend((urun_idleri or {}).get(kalem["id"], []))
     return {
         "siparis": siparis,
         "durum": durum,
@@ -88,6 +92,8 @@ def ozetle(siparis, kalemler, son_revizyon=None):
         "urunler": [(aile, urunler[aile]) for aile in AILE_SIRASI if urunler[aile]],
         "diger_kalem": sum(1 for k in etkin if not k["aile"]),
         "aileler": set(urunler),
+        # Siparişte o aileden tek makine varsa ürün kutucuğu doğrudan onun sayfasını açar.
+        "tek_urun": {aile: idler[0] for aile, idler in kartlar.items() if len(idler) == 1},
         "revizyon": son_revizyon if yakin_revizyon(son_revizyon) else None,
         # Haftalık takvimden gelen tarih süzgeci için: açık makine kalemlerinin teslim tarihleri
         "makine_teslimleri": {k["teslim_tarihi"] for k in kesin if k["aile"] in ANA_URUNLER and k["teslim_tarihi"]},
@@ -102,7 +108,13 @@ def tum_ozetler(vt):
         "SELECT r.siparis_id, MAX(y.zaman) FROM siparis_revizyonlari r"
         " JOIN erp_yuklemeler y ON y.id = r.yukleme_id GROUP BY r.siparis_id"
     ).fetchall())
-    return [ozetle(s, kalemler[s["id"]], son_revizyon.get(s["id"])) for s in vt.execute("SELECT * FROM siparisler")]
+    urun_idleri = defaultdict(list)
+    for urun in vt.execute("SELECT id, kalem_id FROM urunler ORDER BY adet_sira"):
+        urun_idleri[urun["kalem_id"]].append(urun["id"])
+    return [
+        ozetle(s, kalemler[s["id"]], son_revizyon.get(s["id"]), urun_idleri)
+        for s in vt.execute("SELECT * FROM siparisler")
+    ]
 
 
 def acik_mi(ozet):
@@ -231,6 +243,14 @@ def kart(siparis_no):
     ).fetchall()
     revize_siralar = {r["sira_no"] for r in revizyonlar if yakin_revizyon(r["zaman"])}
 
+    is_emirleri = vt.execute(
+        "SELECT * FROM is_emirleri WHERE siparis_id = ? ORDER BY acilis_tarihi, is_emri_no", (siparis["id"],)
+    ).fetchall()
+    kalem_is_emirleri = defaultdict(list)
+    for ie in is_emirleri:
+        if ie["kalem_id"]:
+            kalem_is_emirleri[ie["kalem_id"]].append(ie)
+
     ozet = ozetle(siparis, kalemler, revizyonlar[0]["zaman"] if revizyonlar else None)
     bolumler = {aile: [] for aile in AILE_SIRASI}
     servis, listelenen, iptal_edilenler = [], [], []
@@ -246,6 +266,13 @@ def kart(siparis_no):
             "kapali": kapali_mi(kalem),
             "dis_tedarik": dis_tedarik_mi(kalem["urun_kodu"]),
             "revize": kalem["sira_no"] in revize_siralar,
+            "is_emirleri": kalem_is_emirleri[kalem["id"]],
+            # Ürün kartlarına dağıtılmamış iş emirleri (üretimsiz kapatılan, adetten fazla açılan) ilk üründe görünür.
+            "dagitilmamis": [ie for ie in kalem_is_emirleri[kalem["id"]]
+                             if ie["id"] not in {u["is_emri_id"] for u in urunler[kalem["id"]]}],
+            # Makinelerin girilmiş ya da ERP'den okunmuş numaraları (şasi no, motor seri no)
+            "numaralar": {u["id"]: [n for n in urun_numaralari(vt, u, kalem["aile"], siparis["id"]) if n[2]]
+                          for u in urunler[kalem["id"]]},
         }
         if kalem["erp_durum"] == IPTAL and ozet["durum"] != "iptal":
             # Devam eden siparişte iptal edilmiş (çoğu zaman yanlış girilip düzeltilmiş) satır
@@ -266,6 +293,16 @@ def kart(siparis_no):
         iptal_edilenler=iptal_edilenler,
         revizyonlar=revizyonlar,
         REVIZYON_ADLARI=REVIZYON_ADLARI,
+        is_emri_haritasi={ie["id"]: ie for ie in is_emirleri},
+        alt_is_emirleri=[ie for ie in is_emirleri if not ie["kalem_id"]],
+        # Motor-pompa hattı gibi alt montajların açıklamasında yazan motor seri no'ları
+        alt_motorlar={
+            ie["id"]: " / ".join(motor_seri_nolari(ie["aciklama"], *(r[0] for r in vt.execute(
+                "SELECT aciklama FROM is_emri_satirlari WHERE is_emri_id = ?", (ie["id"],)))))
+            for ie in is_emirleri if not ie["kalem_id"]
+        },
+        is_emri_yuklu=vt.execute("SELECT 1 FROM is_emirleri LIMIT 1").fetchone() is not None,
+        is_emri_durumu=is_emri_durumu,
         REVIZYON_GUN=REVIZYON_GUN,
         eksik=eksik_siralar(k["sira_no"] for k in kalemler),
         son_veri=max((k["veri_zamani"] for k in kalemler if k["veri_zamani"]), default=None),

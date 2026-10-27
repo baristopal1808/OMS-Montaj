@@ -79,6 +79,10 @@ def test_is_emirleri_siparise_baglanir(istemci, ekip, yukle):  # noqa: F811
         assert beklenen in kart, beklenen
     assert "900105" not in kart and "900106" not in kart
     assert "iş emri listelerinde yok" not in kart
+    # Seri no ve iş emri no ürünün satırında aynı düzeyde; seri no'su olmayan kirişte "Seri no yok" yazmaz
+    assert "Seri no yok" not in kart
+    assert '<span class="bilgi">İş emri <a class="duz-baglanti" href="/is-emri/900107"><strong>900107</strong></a></span>' in kart
+    assert '<span class="bilgi">Seri no <strong>OZ-TS0001-VH-01</strong></span>' in kart
 
 
 def test_asama_erpye_gore_ilerler_geri_gelmez(istemci, uygulama, ekip, yukle):  # noqa: F811

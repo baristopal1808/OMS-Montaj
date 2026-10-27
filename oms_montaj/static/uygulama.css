@@ -442,6 +442,38 @@ a.suzgec-cip:hover { border-color: var(--yazi); }
 .depo-var { color: #7a5a00; background: #fff6d6; border-color: #f1d98a; }
 .depo-kismen { color: #8a4b00; background: #ffe9d1; border-color: #f3c08d; }
 .depo-yok { color: #a61b1b; background: #fdeceb; border-color: #f2b8b5; }
+.depo-geldi { color: #1d6b43; background: #e7f5ec; border-color: #a9d8bb; }
+/* Kırılımlar tıklanır; tıklayınca eksikleri altında açılır */
+.kirilim-listesi { display: grid; gap: .4rem; margin: .5rem 0; }
+details.kirilim { background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: 8px; }
+details.kirilim > summary { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .55rem .8rem; cursor: pointer; list-style: none; }
+details.kirilim > summary::-webkit-details-marker { display: none; }
+details.kirilim > summary::before { content: "▸"; color: var(--soluk); transition: transform .15s ease; }
+details.kirilim[open] > summary::before { transform: rotate(90deg); }
+details.kirilim > summary:hover { background: var(--zemin); border-radius: 8px; }
+.kirilim-ad { flex: 1; font-weight: 600; }
+details.kirilim > :not(summary) { margin: 0 .8rem .7rem; }
+details.kirilim .dugmeler { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+.secim-sutunu { width: 2.2rem; text-align: center; }
+.secim-sutunu input { width: 1.1rem; height: 1.1rem; }
+.eksik-tablosu tr.geldi td { color: var(--soluk); }
+.baglanti-dugmesi { padding: 0; font: inherit; font-size: .82rem; color: var(--vurgu); cursor: pointer; background: none; border: 0; text-decoration: underline; }
+/* Sipariş kartında ürünün satırı: seri no · iş emri · motor seri no aynı düzeyde */
+.urun-seri .bilgi + .bilgi::before { content: "·"; margin: 0 .45rem; color: var(--soluk); }
+/* Makine numaraları: kilitli; değiştirmek için "Değiştir" açılır, sebep yazılır */
+.numara-kutusu { display: grid; gap: .9rem; }
+.numara-alani { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; }
+.numara-ad { min-width: 9rem; font-weight: 600; }
+.numara-deger { display: inline-flex; align-items: center; gap: .35rem; font-size: 1.1rem; }
+.numara-deger .simge { width: 1rem; height: 1rem; color: var(--soluk); }
+.numara-degistir { flex-basis: 100%; }
+.numara-degistir > summary { display: inline-block; color: var(--vurgu); cursor: pointer; font-size: .9rem; }
+.numara-degistir form { max-width: 36rem; margin-top: .5rem; padding: .8rem; background: #fff8eb; border: 1px solid #f3d29d; border-radius: 8px; }
+.uyari-metni { margin: 0 0 .5rem; color: #8a4b00; font-size: .9rem; }
+.numara-degistir textarea { font: inherit; }
+.numara-gir { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex-basis: 100%; }
+.numara-gir input { max-width: 16rem; }
+.numara-gecmisi > summary { color: var(--soluk); cursor: pointer; font-size: .9rem; }
 .eksik-ozeti { margin: .35rem 0; }
 .eksik-ozeti .depo-cip { margin-left: .25rem; }
 .eksik-ayrinti { margin: .5rem 0; }

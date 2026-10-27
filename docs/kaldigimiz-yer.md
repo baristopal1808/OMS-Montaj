@@ -1,46 +1,33 @@
 # Kaldığımız yer
 
-**23/10/2026, 18:06.** 3. adım (iş emirleri) yazıldı ve kullanıcının denemesini bekliyor: bağlanamayan iş emirleri, eksik malzeme ve "İmalatta" uyarısı Yapılacaklar'da soruluyor. Kullanıcı pazartesi (26/10/2026) devam edecek; sırada kullanıcının denemesi ve 4. adım var.
+**27/10/2026, 18:04.** 3. adımın kullanıcıdan gelen düzeltmeleri yapıldı (eksik malzemenin görünümü, imalattan beklenen yarı mamuller, kilitli makine numaraları, opsiyonel ekipmanlar); kullanıcının denemesini bekliyor. Sırada deneme ve 4. adım var.
 
 ## Bu oturumda yapılanlar
 
-- Aşamalar ERP'ye göre ilerliyor:
-  - Yeni aşama "Montaj tamamlandı" (Montaj ile Teste hazır arasında).
-  - İş emri açıldı → Malzeme hazırlık; bir kırılım stoğa girdi → Montaj; iş emri tamamlandı → Montaj tamamlandı.
-  - Aşama yalnızca ileri gidiyor.
-  - Gerçek veride açık siparişlerde 13 ürün ilerledi.
-- Asistan simgesi: üzerine gelince simgenin kutusu sola uzuyor, içinde "Montaj Asistanı" yazıyor.
-
-- Yapılacaklar ekranı (`yapilacaklar.py`). Üç konu var:
-  - **Eksik malzeme** (`uyarilar.py`): "Çıkış yapılamayan malzeme" raporu yükleniyor. Ürün sayfasında eksikler kırılım kırılım görünüyor; depoda olan sarı, olmayan kırmızı. İş emri başına "Bilginiz var mı?" diye soruluyor. Yeni eksik gelirse soru yeniden geliyor.
-  - **ERP'de "İmalatta":** iş emri stoğa girmiş ama ERP "İmalatta" diyor. Her ürün ve iş emri için ayrı soruluyor.
-  - **Bağlanamayan iş emirleri:** hangi siparişe ait olduğunu ekip seçiyor.
-- Yapılacaklar'ın görünümü:
-  - Konu ve ürün ailesi süzgeçleri var. Aile seçilince bölümler çıkıyor (PP'de motor-pompa hattı, hortum seti…).
-  - Kaydet sayfayı yenilemiyor, liste yerinde kalıyor.
-- İki motorlu güç üniteleri (model no 1000 ve üstü): "Motor 1 seri no" ve "Motor 2 seri no" ayrı ayrı görünüyor.
-  - Göç 11 ile ikinci motor alanı eklendi.
-  - Motor no ERP'den okunurken önce iş emrinin kendi açıklamasına bakılıyor.
-- Siparişler ekranındaki kutucuklarda tam ürün kodu yazıyor.
-- Birlikte yüklenen ERP listeleri doğru sırayla işleniyor: siparişler, iş emirleri, eksik malzeme.
-- Yapay zekâ asistanı:
-  - Her ekranın sağ altında sohbet kutusu; `baslat.bat` gerçek veriyle açıyor.
-  - Kullanıcının OMS simgesi 128×128 boyutunda sayfaya gömülü; üzerine gelince "Montaj Asistanı" yazısı kayarak çıkıyor.
-  - Kutu açılırken büyüyerek açılıyor.
-  - Kullanıcı Anthropic'in iade cevabını beklediği için şimdilik soru sormuyor.
-- Göçler 9–12. 118 otomatik test geçiyor; gerçek verinin kopyasında 885 sayfa hatasız açılıyor.
+- Eksik malzeme:
+  - Ürün sayfasında kırılımlar tıklanır liste; tıklanan kırılımın eksikleri altında açılıyor. Kırılım tablosundaki eksik sayısı da ilgili kırılımı açıyor.
+  - İmalat fabrikasından gelen yarı mamuller ayrı bölümde ("İmalattan beklenen yarı mamuller"). Parça parça ya da "Hepsi geldi" ile işaretleniyor, geri alınabiliyor; işaret rapor yeniden yüklense de kalıyor (göç 13).
+  - "Bilginiz var mı?" sorusu yalnızca satın alınan malzemeler için. Gerçek veride eksik malzeme soruları 52'den 38'e indi.
+- İş emri sayfası (`/is-emri/<no>`): ürüne dağıtılmayan iş emirleri (alt montaj, yarı mamul) için; sipariş kartındaki iş emri numarası buraya gidiyor.
+- Makine numaraları kilitli:
+  - Motor seri no (iki motorlularda iki numara) ve şasi no ürün sayfasının başında, sipariş ve müşterinin yanında.
+  - Numara bir kez girilince kilitleniyor. Değiştirmek için "Değiştir", uyarı ve zorunlu sebep; değişiklik geçmişi saklanıyor (göç 13).
+  - "Makine numaraları" şablonu yalnızca boş numaraları dolduruyor.
+- "PP'ye takılacak" yerine "Opsiyonel ekipmanlar"; son durum "Montaj tamamlandı" ve sipariş kartında görünüyor.
+- Sipariş kartında her ürünün satırında seri no, iş emri ve motor/şasi no aynı satırda; kirişte "Seri no yok" yerine iş emri numarası.
+- 119 otomatik test geçiyor; gerçek verinin kopyasında 1.256 sayfa hatasız açılıyor. Yapılacaklar'da bugün 76 soru (38 eksik malzeme, 5 İmalatta, 33 bağlanamayan).
 
 ## Sıradaki iş
 
-1. Kullanıcının 3. adımı denemesi: eksik malzeme raporunu yeniden yükleyip Yapılacaklar'daki soruları cevaplaması. Gelen düzeltmeler yapılır.
+1. Kullanıcının denemesi: `baslat.bat` yeniden açılınca göç 13 çalışır. Ürün sayfasındaki kırılımlar, yarı mamullerde "Geldi", numaraların kilidi ve Yapılacaklar'daki sorular denenir; gelen düzeltmeler yapılır.
 2. 4. adım (ürün sayfası ve pano): aşama değiştirme, kontrol listeleri ve PP şablonu, notlar ve zaman akışı, fotoğraf, atama, etiketler, pano. Eksik satır uyarısına "Kontrol ettim, satır silinmiş" düğmesi. Önce sorular adım adım sorulur.
-3. Yapılacaklar'daki soru sayısı (bugün 93) fazla gelirse azaltma: örneğin eksik malzeme yalnızca teslimi yakın siparişlerde sorulur.
+3. Yapılacaklar'daki soru sayısı fazla gelirse azaltma: örneğin eksik malzeme yalnızca teslimi yakın siparişlerde sorulur.
 4. ERP'den canlı veri (API, 15 dakikada bir): ERP sorumlusundan adres, belge ve salt okunur erişim gelince.
 
 ## Kullanıcıdan beklenenler
 
-- `baslat.bat`'ı yeniden açıp açık ve kapalı iş emirleri listesiyle "Çıkış yapılamayan malzeme" raporunu birlikte yüklemek: aşamalar güncellenir; eksik malzeme raporunun önceki yüklemesi yalnızca tanınmıştı, kaydedilmemişti.
-- Yapılacaklar'daki soruları deneyip görüşlerini söylemek.
+- Yeni ekranları deneyip görüşlerini söylemek.
+- Yarı mamuller için kalıcı çözüm: imalat fabrikasının parçayı gönderirken ERP'de depo transferi, montajın da iş emrine çıkış yapması. ERP sorumlusu ve planlamayla konuşulacak.
 - "Makine numaraları" şablonunu doldurup yüklemek (şasi no'lar; iki motorlu PP'lerde ikinci motor).
 - Asistan: Anthropic'in iade cevabı gelince denemeye karar vermek.
 - ERP sorumlusundan: API adresi ve belgesi, salt okunur kullanıcı, hazır görünümlerin adları.

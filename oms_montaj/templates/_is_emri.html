@@ -1,0 +1,54 @@
+{# İş emri parçaları: ürün sayfasında ve iş emri sayfasında kullanılır. #}
+
+{# İş emrinin kutusu: numarası, ERP'deki durumu, tarihleri, stoğa giren miktar ve açıklaması #}
+{% macro is_emri_kutusu(ie, durum) -%}
+<div class="kutu is-emri-kutusu ie-kutu-{{ durum[1] }}">
+  <div class="baslik-satiri">
+    <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong></span>
+    <span class="etiket ie-{{ durum[1] }}">{{ durum[0] }}</span>
+  </div>
+  <dl class="bilgiler">
+    <div><dt>Açılış</dt><dd>{{ (ie.acilis_tarihi | tarih) or '—' }}</dd></div>
+    <div><dt>Başlama</dt><dd>{{ (ie.baslama_tarihi | tarih) or '—' }}</dd></div>
+    {% if ie.kapatma_tarihi %}<div><dt>Kapanış</dt><dd>{{ ie.kapatma_tarihi | tarih }}</dd></div>
+    {% else %}<div><dt>Tahmini bitiş</dt><dd>{{ (ie.tahmini_bitis | tarih) or '—' }}</dd></div>{% endif %}
+    <div><dt>Stoğa giren / planlanan</dt><dd>{{ (ie.gercek_miktar or 0) | sayi }} / {{ ie.plan_miktar | sayi }}</dd></div>
+    {% if ie.ilk_stok_giris %}<div><dt>İlk stok girişi</dt><dd>{{ ie.ilk_stok_giris | tarih }}</dd></div>{% endif %}
+  </dl>
+  {% if ie.aciklama %}<p class="soluk kucuk">ERP açıklaması: {{ ie.aciklama }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Kırılımlar tablosu; eksik: kırılımın sıra no'su → eksik grubu (uyarilar.is_emri_eksikleri). Eksik ya da
+   beklenen yarı mamulü olan kırılımda o kırılımı açan bağlantı görünür. #}
+{% macro kirilim_bolumu(kirilimlar, tamamlanan, eksik) -%}
+<section class="bolum">
+  <h2>Kırılımlar (alt montajlar ve işlemler)</h2>
+  <div class="kirilim-ozeti">
+    <span><strong>{{ kirilimlar | length }}</strong> kırılımdan <strong>{{ tamamlanan }}</strong> tanesi tamamlandı</span>
+    <span class="ilerleme" role="img" aria-label="{{ tamamlanan }} / {{ kirilimlar | length }} tamamlandı"><span style="width: {{ (100 * tamamlanan / kirilimlar | length) | round | int }}%"></span></span>
+  </div>
+  <div class="pano-karti kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>Sıra</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th>{% if eksik %}<th>Eksik</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for k in kirilimlar %}
+        {% set grup = eksik.get(k.satir.sira_no) %}
+        <tr>
+          <td class="sayisal">{{ k.satir.sira_no }}</td>
+          <td class="sayisal">{{ k.satir.urun_kodu }}</td>
+          <td>{{ k.satir.urun_adi or '' }}</td>
+          <td><span class="etiket ie-{{ k.durum[1] }}">{{ k.durum[0] }}</span></td>
+          <td class="sayisal">{{ (k.satir.gercek_miktar or 0) | sayi }}/{{ k.satir.plan_miktar | sayi }}</td>
+          {% if eksik %}<td>{% if grup %}
+            {% if grup.malzemeler %}<a class="depo-cip {% if grup.depoda_olmayan %}depo-yok{% else %}depo-var{% endif %}"
+              href="?acik=eksik-{{ grup.sira }}#eksik-{{ grup.sira }}">{{ grup.malzemeler | length }} malzeme</a>{% endif %}
+            {% if grup.bekleyen %}<a class="depo-cip depo-kismen" href="?acik=yari-{{ grup.sira }}#yari-{{ grup.sira }}">{{ grup.bekleyen }} yarı mamul</a>{% endif %}
+          {% endif %}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{%- endmacro %}

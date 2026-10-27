@@ -59,7 +59,7 @@ def urun_is_emri_sinifi(asama, kalem, ie):
 
 
 def siparis_durum_ozeti(vt, siparis):
-    """Siparişteki ürünlerin iş emri durumları ve PP'ye takılacak kalemlerin montaj durumları:
+    """Siparişteki ürünlerin iş emri durumları ve güç ünitesinin opsiyonel ekipmanlarının montaj durumları:
     {"toplam", "urunler": [(sınıf, ad, adet)], "eklentiler": [(durum, ad, adet)]}."""
     urunler = Counter()
     for u in vt.execute(
@@ -387,7 +387,7 @@ def kart(siparis_no):
 @bp.route("/siparisler/kalem/<int:kalem_id>/montaj", methods=["POST"])
 @ekip_gerekli
 def montaj_durumu(kalem_id):
-    """PP'ye takılan kalemin (kablosuz kumanda seti, uzaktan erişim modülü) montaj durumunu kaydeder."""
+    """Opsiyonel ekipmanın (kablosuz kumanda seti, uzaktan erişim modülü) montaj durumunu kaydeder."""
     durum = request.form.get("montaj_durumu")
     if durum not in EKLENTI_DURUMLARI:
         abort(400)

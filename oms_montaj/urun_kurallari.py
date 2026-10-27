@@ -37,14 +37,14 @@ ANA_URUNLER = ("SVR", "OVR", "PP", "OVF", "WD")
 # (OVF-300-BF-LM-B gibi; kullanıcı kararı, 21/10/2026). Kart olmaz, sipariş kartında listelenir.
 SERI_NOSUZ_PARCA = {"OVF", "WD"}
 
-# Güç ünitesine (PP) takılan, dışarıdan alınan kalemler (soru 21): makine siparişinde montaj durumu izlenir.
-# Kod listesi 6. adımda Ayarlar'a taşınır.
+# Güç ünitesinin opsiyonel ekipmanları (soru 21): dışarıdan alınıp güç ünitesine entegre edilir; makine
+# siparişinde montaj durumu izlenir. Kod listesi 6. adımda Ayarlar'a taşınır.
 PP_EKLENTILERI = {"OZ04314": "Kablosuz kumanda seti", "OZ04082": "Uzaktan erişim modülü"}
 EKLENTI_DURUMLARI = {
     "talep_acilacak": "Sipariş talebi açılacak",
     "talep_acildi": "Sipariş talebi açıldı, bekleniyor",
-    "montaj_edilmedi": "Geldi, montaj edilmedi",
-    "montaj_edildi": "PP'ye montaj edildi",
+    "montaj_edilmedi": "Geldi, montaj bekliyor",
+    "montaj_edildi": "Montaj tamamlandı",
 }
 VARSAYILAN_EKLENTI_DURUMU = "talep_acilacak"
 

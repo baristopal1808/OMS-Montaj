@@ -113,7 +113,7 @@ def test_asistan_araclari(uygulama, ekip, yukle):  # noqa: F811
         assert pp["numaralar"]["Motor seri no"].startswith("0000 111 101")
         svr = next(u for u in bilgi["urunler"] if u["aile"] == "SVR")
         assert svr["numaralar"]["Şasi no"] == "girilmedi"
-        assert bilgi["pp_ye_takilacak_kalemler"][0]["montaj_durumu"] == "Sipariş talebi açılacak"
+        assert bilgi["opsiyonel_ekipmanlar"][0]["montaj_durumu"] == "Sipariş talebi açılacak"
         assert "bulunamadi" in json.loads(asistan.siparis_bilgisi("OZ-TS9999"))
 
         bulunan = json.loads(asistan.siparis_ara("TS0001"))

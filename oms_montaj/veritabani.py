@@ -240,6 +240,31 @@ GOCLER = [
         PRIMARY KEY (urun_id, is_emri_id)
     );
     """,
+    # 13: makine numaralarının değişiklik geçmişi (numara girilince kilitlenir; değiştirmek için sebep
+    #     yazılır) ve imalat fabrikasından gelen yarı mamullerin "geldi" işaretleri (ERP'de çıkışları
+    #     yapılmıyor; ekip uygulamada işaretler)
+    """
+    CREATE TABLE numara_degisiklikleri (
+        id INTEGER PRIMARY KEY,
+        urun_id INTEGER NOT NULL REFERENCES urunler(id),
+        alan TEXT NOT NULL,           -- sasi_no, motor_seri_no, motor2_seri_no
+        eski TEXT,                    -- değişiklikten önce görünen (ERP'den okunan da olabilir)
+        yeni TEXT NOT NULL,
+        sebep TEXT,                   -- ilk girişte boş
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL
+    );
+    CREATE INDEX numara_degisiklikleri_urun ON numara_degisiklikleri (urun_id);
+
+    CREATE TABLE gelen_yari_mamuller (
+        is_emri_no TEXT NOT NULL,
+        sira_no INTEGER NOT NULL,
+        malzeme_kodu TEXT NOT NULL,
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL,
+        PRIMARY KEY (is_emri_no, sira_no, malzeme_kodu)
+    );
+    """,
 ]
 
 

@@ -98,7 +98,8 @@ def siparis_ara(metin: str) -> str:
 
 def siparis_bilgisi(siparis_no: str) -> str:
     """Bir siparişin bütün bilgisi: müşteri, durum, teslim tarihi, ürünler (seri no, aşama, iş emri ve
-    durumu, motor seri no, şasi no), PP'ye takılacak kalemler, alt montajlar ve siparişin durum özeti.
+    durumu, motor seri no, şasi no), güç ünitesinin opsiyonel ekipmanları (kablosuz kumanda, uzaktan erişim
+    modülü) ve montaj durumları, alt montajlar ve siparişin durum özeti.
 
     Args:
         siparis_no: Tam sipariş numarası; örnek: "OZ-TS0001".
@@ -146,7 +147,7 @@ def siparis_bilgisi(siparis_no: str) -> str:
         "teslime_kalan": (teslim_bilgisi(o["teslim"]) or ("",))[0] if o["durum"] == "acik" else None,
         "son_sevk": o["son_sevk"], "notu": s["notu"],
         "durum_ozeti": {ad: adet for _, ad, adet in durum["urunler"]},
-        "urunler": urunler, "pp_ye_takilacak_kalemler": eklentiler, "diger_kalemler": diger,
+        "urunler": urunler, "opsiyonel_ekipmanlar": eklentiler, "diger_kalemler": diger,
         "alt_montaj_is_emirleri": alt,
     })
 

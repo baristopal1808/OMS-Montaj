@@ -1,5 +1,5 @@
 {# Sipariş kartının ve ürün sayfasının başındaki "Siparişin durumu": ürünlerin iş emri durumu ve
-   PP'ye takılacak kalemlerin montaj durumu (siparisler.siparis_durum_ozeti). Her durum tıklanınca
+   güç ünitesinin opsiyonel ekipmanlarının montaj durumu (siparisler.siparis_durum_ozeti). Her durum tıklanınca
    sipariş kartı yalnızca o durumdaki kalemlerle açılır; secili: o an seçili durum. #}
 {% macro durum_ozeti_kutusu(o, siparis_no, secili=None) -%}
 {% if o.urunler or o.eklentiler %}
@@ -11,7 +11,7 @@
   </span>
   {% endif %}
   {% if o.eklentiler %}
-  <span class="do-satir"><span class="do-ad">PP'ye takılacak</span>
+  <span class="do-satir"><span class="do-ad">Opsiyonel ekipmanlar</span>
     {% for durum, ad, adet in o.eklentiler %}{{ _cip('ek-' ~ durum, ad, adet, siparis_no, secili) }}{% endfor %}
   </span>
   {% endif %}
@@ -24,14 +24,15 @@
   href="{{ url_for('siparisler.kart', siparis_no=siparis_no, goster=anahtar) }}#kalemler"><strong>{{ adet }}</strong> {{ ad }}</a>
 {%- endmacro %}
 
-{# PP'ye takılan kalemin montaj durumu: ekip seçer (seçince kaydedilir), izleyici yalnızca görür. #}
+{# Opsiyonel ekipmanın (güç ünitesine entegre edilir) montaj durumu: ekip seçer (seçince kaydedilir),
+   izleyici yalnızca görür. #}
 {% macro eklenti_durumu(kalem_id, durum) -%}
 {% set durum = durum or 'talep_acilacak' %}
 {% if g.kullanici.rol == 'ekip' %}
 <form method="post" action="{{ url_for('siparisler.montaj_durumu', kalem_id=kalem_id) }}" class="eklenti-formu" data-otomatik>
   <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
   <input type="hidden" name="sonra" value="{{ request.path }}">
-  <label><span>PP'ye montaj</span>
+  <label><span>Güç ünitesine montaj</span>
     <select name="montaj_durumu" class="ek-{{ durum }}">
       {% for anahtar, ad in EKLENTI_DURUMLARI.items() %}<option value="{{ anahtar }}"{% if anahtar == durum %} selected{% endif %}>{{ ad }}</option>{% endfor %}
     </select>

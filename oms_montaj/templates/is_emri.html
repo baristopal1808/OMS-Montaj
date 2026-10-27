@@ -1,0 +1,23 @@
+{% extends "taban.html" %}
+{% block baslik %}İş emri {{ ie.is_emri_no }}{% endblock %}
+{% block icerik %}
+{% from "_uyarilar.html" import uyari_bolumleri with context %}
+{% from "_is_emri.html" import is_emri_kutusu, kirilim_bolumu with context %}
+{% if ie.siparis_no %}<p class="geri"><a href="{{ url_for('siparisler.kart', siparis_no=ie.siparis_no) }}">← {{ ie.siparis_no }} siparişinin bütün kalemleri</a></p>{% endif %}
+
+<h1>İş emri {{ ie.is_emri_no }}</h1>
+<p class="soluk"><strong>{{ ie.urun_kodu or '' }}</strong> {{ ie.urun_adi or '' }}{% if ie.envanter_tipi %} · {{ ie.envanter_tipi }}{% endif %}</p>
+<p>
+  {% if ie.siparis_no %}Sipariş <a href="{{ url_for('siparisler.kart', siparis_no=ie.siparis_no) }}">{{ ie.siparis_no }}</a>
+    · {% if ie.kalem_sira %}{{ ie.kalem_sira }}. satır{% else %}alt montaj / yarı mamul{% endif %}{% if ie.musteri %} · {{ ie.musteri }}{% endif %}
+  {% elif ie.baglanti %}Bağlantı: {{ BAGLANTILAR[ie.baglanti] }}
+  {% else %}Siparişe bağlanmadı (<a href="{{ url_for('yapilacaklar.liste', konu='baglanamayan') }}">Yapılacaklar</a>'da sorulur){% endif %}
+  {% if urun %} · <a href="{{ url_for('urunler.sayfa', urun_id=urun.id) }}">ürünün sayfası</a>{% endif %}
+</p>
+
+{{ is_emri_kutusu(ie, ie_durumu) }}
+
+{% if eksik %}{{ uyari_bolumleri(ie.is_emri_no, eksik_ozet, eksik, eksik_zamani, aile, request.path, request.args.get('acik')) }}{% endif %}
+
+{% if kirilimlar %}{{ kirilim_bolumu(kirilimlar, tamamlanan, eksik_sirasi) }}{% endif %}
+{% endblock %}

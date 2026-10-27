@@ -42,18 +42,18 @@ def test_iki_motorlu_guc_unitesi(istemci, uygulama, gonder, ekip, yukle):  # noq
     yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
     pp = urun_id(uygulama, "PP-1072-NF")
     sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert "Motor 1 seri no" in sayfa and "Motor 2 seri no" in sayfa and 'name="motor2_seri_no"' in sayfa
-    # Her motorun numarası kendi alanında (iş emri açıklamasında ikisi yan yana yazıyor)
-    assert "açıklamasından): <strong>0000 111 101</strong>" in sayfa and "açıklamasından): <strong>0000 111 102</strong>" in sayfa
+    # Her motorun numarası kendi alanında (iş emri açıklamasında ikisi yan yana yazıyor); kartın başında da
+    assert "<dt>Motor 1 seri no</dt>" in sayfa and "<dt>Motor 2 seri no</dt>" in sayfa
+    assert "<strong>0000 111 101</strong>" in sayfa and "<strong>0000 111 102</strong>" in sayfa
     kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
     assert "Motor 1 seri no <strong>0000 111 101</strong>" in kart and "Motor 2 seri no <strong>0000 111 102</strong>" in kart
     makineler = unescape(istemci.get("/makineler").get_data(as_text=True))
     assert "Motor 1:</small> 0000 111 101" in makineler and "Motor 2:</small> 0000 111 102" in makineler
-    # Ekip ikinci motoru düzeltir; birinci ERP'den okunmaya devam eder
-    gonder(f"/urun/{pp}/numaralar", motor_seri_no="", motor2_seri_no="0000111103")
+    # Ekip ikinci motoru sebebiyle değiştirir; birinci ERP'den okunmaya devam eder
+    gonder(f"/urun/{pp}/numara/motor2_seri_no", deger="0000111103", sebep="TEST SEBEP")
     kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
     assert "Motor 1 seri no <strong>0000 111 101</strong>" in kart and "Motor 2 seri no <strong>0000 111 103</strong>" in kart
-    # Şablonda iki motor ayrı sütunlarda; tek motorlu makinede Motor 2 Seri No yok sayılır
+    # Şablonda iki motor ayrı sütunlarda; şablon yalnızca boş numarayı doldurur (motor 1 ERP'den okundu, kilitli)
     kitap = openpyxl.load_workbook(io.BytesIO(istemci.get("/makine-numaralari.xlsx").data))
     sayfa_ = kitap.active
     satirlar = {r[0].value: r for r in sayfa_.iter_rows(min_row=2)}
@@ -61,13 +61,17 @@ def test_iki_motorlu_guc_unitesi(istemci, uygulama, gonder, ekip, yukle):  # noq
     assert [satirlar[pp][i].value for i in (8, 9, 10)] == ["0000 111 103", "0000 111 101", "0000 111 102"]
     satirlar[pp][7].value = "0000 111 104"
     svr = urun_id(uygulama, "SVR-50-NF-BSP")
-    satirlar[svr][8].value = "0000 111 105"
+    satirlar[svr][6].value = "TEST-SASI-001"
+    satirlar[svr][8].value = "0000 111 105"  # tek motorlu olmayan makinede yok sayılır
     tampon = io.BytesIO()
     kitap.save(tampon)
     yukle(tampon.getvalue(), ad="makine numaralari.xlsx")
-    assert "Motor 1 seri no <strong>0000 111 104</strong>" in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert ("1 makinenin boş numarası dolduruldu; 1 makinede numara zaten vardı, kilitli olduğu için değiştirilmedi"
+            in unescape(istemci.get("/erp-yukleme").get_data(as_text=True)))
+    assert "Motor 1 seri no <strong>0000 111 101</strong>" in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
     with uygulama.app_context():
-        assert baglanti().execute("SELECT motor2_seri_no FROM urunler WHERE id = ?", (svr,)).fetchone()[0] is None
+        assert baglanti().execute("SELECT sasi_no, motor2_seri_no FROM urunler WHERE id = ?", (svr,)).fetchone()[:] == (
+            "TEST-SASI-001", None)
 
 
 def motorlu_is_emirleri():
@@ -108,16 +112,27 @@ def test_urun_sayfasi(istemci, uygulama, ekip, yukle):  # noqa: F811
     assert istemci.get("/urun/999999").status_code == 404
 
 
-def test_numaralar_elle_girilir(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+def test_numaralar_kilitli(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
     yuklenmis(yukle)
     pp, svr = urun_id(uygulama, "PP-536-NF"), urun_id(uygulama, "SVR-50-NF-BSP")
-    gonder(f"/urun/{svr}/numaralar", sasi_no="  TEST-SASI-001 ")
-    gonder(f"/urun/{pp}/numaralar", motor_seri_no="0000111102")
-    assert "TEST-SASI-001" in istemci.get(f"/urun/{svr}").get_data(as_text=True)
+    # Boş şasi no bir kez girilir, sonra kilitlenir
+    sayfa = unescape(istemci.get(f"/urun/{svr}").get_data(as_text=True))
+    assert "Kaydedince kilitlenir" in sayfa and "<dt>Şasi no</dt><dd><a" in sayfa
+    gonder(f"/urun/{svr}/numara/sasi_no", deger="  TEST-SASI-001 ")
+    sayfa = unescape(istemci.get(f"/urun/{svr}").get_data(as_text=True))
+    assert "<strong>TEST-SASI-001</strong>" in sayfa and "Kaydedince kilitlenir" not in sayfa and "İlk giriş" in sayfa
+    # ERP'den okunan motor seri no da kilitli: sebepsiz değişmez
+    gonder(f"/urun/{pp}/numara/motor_seri_no", deger="0000111102")
     sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert 'value="0000 111 102"' in sayfa and "Ekip girdi" in sayfa  # ekibin girdiği ERP'den okunanın önüne geçer
-    gonder(f"/urun/{pp}/numaralar", motor_seri_no="")
-    assert "ERP iş emri açıklamasından" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "kilitli: değiştirmek için sebebini yazın" in sayfa and "<strong>0000 111 102</strong>" not in sayfa
+    assert "<dt>Motor seri no</dt><dd><a" in sayfa and "Değiştirme sebebi" in sayfa
+    gonder(f"/urun/{pp}/numara/motor_seri_no", deger="0000111102", sebep="TEST SEBEP")
+    sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "<strong>0000 111 102</strong>" in sayfa and "ekip girdi" in sayfa
+    gecmis = sayfa[sayfa.index("Değişiklik geçmişi"):]
+    assert "0000 111 101" in gecmis and "TEST SEBEP" in gecmis  # eski numara, yeni numara ve sebep saklanır
+    # Makinede olmayan alan girilmez
+    assert gonder(f"/urun/{svr}/numara/motor_seri_no", deger="0000111102").status_code == 404
 
 
 def test_izleyici_numara_giremez(istemci, uygulama, ekle, giris, gonder, ekip, yukle):  # noqa: F811
@@ -125,8 +140,8 @@ def test_izleyici_numara_giremez(istemci, uygulama, ekle, giris, gonder, ekip, y
     svr = urun_id(uygulama, "SVR-50-NF-BSP")
     ekle("test.izleyici", rol="izleyici")
     giris("test.izleyici")
-    assert 'name="sasi_no"' not in istemci.get(f"/urun/{svr}").get_data(as_text=True)
-    assert gonder(f"/urun/{svr}/numaralar", sasi_no="TEST-SASI-001").status_code == 403
+    assert 'name="deger"' not in istemci.get(f"/urun/{svr}").get_data(as_text=True)
+    assert gonder(f"/urun/{svr}/numara/sasi_no", deger="TEST-SASI-001").status_code == 403
 
 
 def test_makine_numaralari_sablonu(istemci, uygulama, ekip, yukle):  # noqa: F811
@@ -146,7 +161,7 @@ def test_makine_numaralari_sablonu(istemci, uygulama, ekip, yukle):  # noqa: F81
     tampon = io.BytesIO()
     kitap.save(tampon)
     yukle(tampon.getvalue(), ad="makine numaralari.xlsx")
-    assert ("Makine numaraları: 3 satır okundu; 1 makinenin numarası güncellendi; 1 satır hiçbir makineyle eşleşmedi"
+    assert ("Makine numaraları: 3 satır okundu; 1 makinenin boş numarası dolduruldu; 1 satır hiçbir makineyle eşleşmedi"
             in unescape(istemci.get("/erp-yukleme").get_data(as_text=True)))
     assert "TEST-SASI-002" in istemci.get(f"/urun/{svr}").get_data(as_text=True)
 
@@ -165,12 +180,13 @@ def test_pp_eklentisinin_montaj_durumu(istemci, uygulama, gonder, ekip, yukle): 
     yanit = gonder(f"/siparisler/kalem/{kalem_id}/montaj", montaj_durumu="montaj_edildi", sonra="/siparisler/OZ-TS0001")
     assert yanit.status_code == 302 and yanit.headers["Location"].endswith("/siparisler/OZ-TS0001")
     kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
-    assert 'value="montaj_edildi" selected' in kart and "<strong>1</strong> PP'ye montaj edildi" in kart
+    assert 'value="montaj_edildi" selected' in kart and "<strong>1</strong> Montaj tamamlandı" in kart
+    assert "Opsiyonel ekipmanlar" in kart
     secili = istemci.get("/siparisler/OZ-TS0001?goster=ek-montaj_edildi").get_data(as_text=True)
     assert "OZ04314" in secili and "SVR-50-NF-BSP" not in secili
     # Güç ünitesinin sayfasında da görünür
     pp = urun_id(uygulama, "PP-536-NF")
-    assert "PP'ye takılacak kalemler" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "Güç ünitesinin opsiyonel ekipmanları" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
     # ERP yüklemesi ekibin girdiği durumu değiştirmez
     yukle(excel(eklentili_siparis()))
     assert 'value="montaj_edildi" selected' in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)

@@ -8,6 +8,11 @@ yazıyor; bu yüzden gereken sayıda numara içeren ilk açıklama alınır. Eki
 "Makine numaraları" şablonuyla girdiği değer ERP'den okunanın önüne geçer; ERP yüklemesi bu değeri
 değiştirmez. Şasi no ERP'de yok (Planner notlarında "Şasi No" ve "Şanzıman (Seri) No" olarak
 tutuluyordu); yalnızca ekipten gelir.
+
+Numaralar kilitlidir (kullanıcı kararı, 26/10/2026): ERP'den okunan ya da bir kez girilen numara ürün
+sayfasında düz yazı olarak görünür; değiştirmek için "Değiştir"e basılır, yeni numara ve sebep yazılır.
+Her giriş ve değişiklik (eski, yeni, sebep, kim, ne zaman) numara_degisiklikleri tablosunda saklanır.
+Şablon yalnızca boş numaraları doldurur.
 """
 
 import io
@@ -119,13 +124,28 @@ def numara_yaz(deger, alan):
     return deger or None
 
 
-def numaralari_kaydet(vt, urun_id, degerler, kullanici_id):
-    """Ekibin girdiği numaraları yazar; boş değer ekibin girdiğini siler (ERP'den okunan yeniden görünür)."""
+def numara_degistir(vt, urun_id, alan, eski, yeni, sebep, kullanici_id):
+    """Ekibin girdiği numarayı yazar ve değişiklik geçmişine ekler (eski: o an görünen numara, ERP'den
+    okunan da olabilir; ilk girişte boş)."""
+    zaman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     vt.execute(
-        f"UPDATE urunler SET {', '.join(f'{alan} = ?' for alan in degerler)},"
-        " numara_degisme = ?, numara_degistiren_id = ? WHERE id = ?",
-        (*degerler.values(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), kullanici_id, urun_id),
+        f"UPDATE urunler SET {alan} = ?, numara_degisme = ?, numara_degistiren_id = ? WHERE id = ?",
+        (yeni, zaman, kullanici_id, urun_id),
     )
+    vt.execute(
+        "INSERT INTO numara_degisiklikleri (urun_id, alan, eski, yeni, sebep, kullanici_id, zaman)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (urun_id, alan, eski, yeni, sebep, kullanici_id, zaman),
+    )
+
+
+def numara_gecmisi(vt, urun_id):
+    """Makinenin numara değişiklikleri, yeniden eskiye."""
+    return vt.execute(
+        "SELECT d.*, k.ad_soyad FROM numara_degisiklikleri d LEFT JOIN kullanicilar k ON k.id = d.kullanici_id"
+        " WHERE d.urun_id = ? ORDER BY d.id DESC",
+        (urun_id,),
+    ).fetchall()
 
 
 # "Makine numaraları" şablonu: uygulama doldurur, ekip şasi ve motor seri no'larını ekleyip geri yükler.
@@ -135,8 +155,9 @@ SABLON_BASLIKLARI = (
 )
 SABLON_ACIKLAMASI = (
     "Şasi No ve Motor Seri No sütunlarını doldurup dosyayı ERP yükleme ekranından yükleyin.",
-    "Boş bırakılan hücre değiştirilmez; bir numarayı silmek için makinenin sayfasını kullanın.",
-    "Motor Seri No yalnızca ERP'den okunan numara yanlış ya da eksikse doldurulur; doldurulan, ERP'den okunanın önüne geçer.",
+    "Şablon yalnızca boş numaraları doldurur: numarası olan (ekibin girdiği ya da ERP'den okunan) makinede numara"
+    " kilitlidir ve değiştirilmez. Değiştirmek için makinenin sayfasında \"Değiştir\" kullanılır; sebep yazılır.",
+    "Motor Seri No, ERP'den okunamadıysa doldurulur (ERP'den okunanı \"ERP'den okunan motor seri no\" sütununda görürsünüz).",
     "İki motorlu güç ünitelerinde (PP-1072, PP-1536 gibi model numarası 1000 ve üstü) birinci motor Motor Seri No,"
     " ikinci motor Motor 2 Seri No sütununa yazılır. Tek motorlu makinelerde Motor 2 Seri No boş kalır.",
     "Kart No sütununu değiştirmeyin: satır makineyle bu numarayla eşleşir.",
@@ -185,7 +206,7 @@ def numaralari_isle(vt, kayitlar, kullanici_id):
             sayac["eslesmeyen"] += 1
             continue
         urun = vt.execute(
-            "SELECT u.id, u.sasi_no, u.motor_seri_no, u.motor2_seri_no, k.urun_kodu, k.aile, s.siparis_no FROM urunler u"
+            "SELECT u.*, k.urun_kodu, k.aile, k.siparis_id, s.siparis_no FROM urunler u"
             " JOIN siparis_kalemleri k ON k.id = u.kalem_id JOIN siparisler s ON s.id = k.siparis_id WHERE u.id = ?",
             (urun_id,),
         ).fetchone()
@@ -193,20 +214,27 @@ def numaralari_isle(vt, kayitlar, kullanici_id):
         if urun is None or any(kayit[a] and kayit[a] != urun[a] for a in ("siparis_no", "urun_kodu")):
             sayac["eslesmeyen"] += 1
             continue
-        degisen = {}
-        # Yalnızca makinede izlenen alanlar yazılır (tek motorlu güç ünitesinde Motor 2 Seri No yok sayılır).
-        for alan in numara_alanlari(urun["aile"], urun["urun_kodu"]):
+        # Yalnızca makinede izlenen ve boş olan alanlar yazılır; numarası olan alan kilitlidir.
+        guncellendi = kilitli = False
+        for alan, _, deger, _ in urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"], urun["urun_kodu"]):
             yeni = numara_yaz(kayit.get(alan), alan)
-            if yeni and yeni != urun[alan]:
-                degisen[alan] = yeni
-        if degisen:
-            numaralari_kaydet(vt, urun_id, degisen, kullanici_id)
-            sayac["guncellenen"] += 1
+            if not yeni or yeni == deger:
+                continue
+            if deger:
+                kilitli = True
+                continue
+            numara_degistir(vt, urun_id, alan, None, yeni, None, kullanici_id)
+            guncellendi = True
+        sayac["guncellenen"] += guncellendi
+        sayac["kilitli"] += kilitli
     return sayac
 
 
 def numara_ozeti(sayac):
-    parcalar = [f"{sayac['satir']} satır okundu", f"{sayac['guncellenen']} makinenin numarası güncellendi"]
+    parcalar = [f"{sayac['satir']} satır okundu", f"{sayac['guncellenen']} makinenin boş numarası dolduruldu"]
+    if sayac["kilitli"]:
+        parcalar.append(f"{sayac['kilitli']} makinede numara zaten vardı, kilitli olduğu için değiştirilmedi"
+                        " (değiştirmek için makinenin sayfasında \"Değiştir\")")
     if sayac["eslesmeyen"]:
         parcalar.append(f"{sayac['eslesmeyen']} satır hiçbir makineyle eşleşmedi (Kart No değişmiş olabilir)")
     return "; ".join(parcalar) + "."

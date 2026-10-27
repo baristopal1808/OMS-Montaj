@@ -2,7 +2,8 @@
 {% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
 {% block icerik %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
-{% from "_uyarilar.html" import eksik_tablosu, eksik_cumlesi, onceki_cevap, eksik_formu, imalatta_metni, imalatta_formu with context %}
+{% from "_uyarilar.html" import uyari_bolumleri, imalatta_metni, imalatta_formu with context %}
+{% from "_is_emri.html" import is_emri_kutusu, kirilim_bolumu with context %}
 {% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
 <p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
 
@@ -21,7 +22,10 @@
   <dl class="bilgiler">
     <div><dt>Sipariş</dt><dd><a class="duz-baglanti" href="{{ siparis_adresi }}">{{ urun.siparis_no }}</a></dd></div>
     {% if urun.musteri %}<div><dt>Müşteri</dt><dd>{{ urun.musteri }}</dd></div>{% endif %}
-    <div><dt>Seri no</dt><dd>{{ urun.seri_no or '—' }}</dd></div>
+    {# Makinenin numaraları: seri no (kirişte yok), iş emri, motor seri no / şasi no #}
+    {% if urun.seri_no %}<div><dt>Seri no</dt><dd>{{ urun.seri_no }}</dd></div>{% endif %}
+    <div><dt>İş emri</dt><dd>{{ ie.is_emri_no if ie else 'Açılmadı' }}</dd></div>
+    {% for alan, ad, deger, kaynak in numaralar %}<div><dt>{{ ad }}</dt><dd><a class="duz-baglanti" href="#numaralar">{{ deger or 'Girilmedi' }}</a></dd></div>{% endfor %}
     {% if urun.miktar > 1 %}<div><dt>Adet</dt><dd>{{ urun.adet_sira }} / {{ urun.miktar | sayi }}</dd></div>{% endif %}
     <div><dt>Teslim tarihi</dt><dd>{{ (urun.teslim_tarihi | tarih) or '—' }}
       {% if kalan %}<span class="etiket {{ kalan[1] }}">{{ kalan[0] }}</span>{% endif %}</dd></div>
@@ -49,33 +53,65 @@
 </div>
 {% endfor %}
 
+{# Makine numaraları kilitlidir: ERP'den okunan ya da bir kez girilen numara düz yazıdır; değiştirmek için
+   "Değiştir" açılır, yeni numara ve sebep yazılır. Boş numara bir kez girilir, sonra kilitlenir. #}
 {% if numaralar %}
-<section class="bolum">
+<section class="bolum" id="numaralar">
   <h2>Makine numaraları</h2>
-  <div class="kutu">
-    {% if g.kullanici.rol == 'ekip' %}
-    <form method="post" action="{{ url_for('urunler.numaralar', urun_id=urun.id) }}" class="numara-formu">
-      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-      {% for alan, ad, deger, kaynak in numaralar %}
-      <label class="alan">
-        <span>{{ ad }}</span>
-        <input type="text" name="{{ alan }}" value="{{ urun[alan] or '' }}" autocomplete="off"
-          placeholder="{% if kaynak and kaynak != 'ekip' %}{{ deger }}{% endif %}">
-        <small class="soluk">
-          {% if kaynak == 'ekip' %}Ekip girdi{% if urun.numara_degisme %} · {{ urun.numara_degisme | zaman }}{% endif %}. Silerseniz ERP'den okunan görünür.
-          {% elif kaynak %}Okunan ({{ KAYNAKLAR[kaynak] }}): <strong>{{ deger }}</strong>. Doğruysa boş bırakın; yanlışsa doğrusunu yazın.
-          {% else %}Henüz girilmedi.{% endif %}
-        </small>
-      </label>
-      {% endfor %}
-      <button type="submit" class="dugme">Kaydet</button>
-    </form>
-    {% else %}
-    <dl class="bilgiler">
-      {% for alan, ad, deger, kaynak in numaralar %}
-      <div><dt>{{ ad }}</dt><dd>{{ deger or '—' }}{% if kaynak %} <small class="soluk">{{ KAYNAKLAR[kaynak] }}</small>{% endif %}</dd></div>
-      {% endfor %}
-    </dl>
+  <div class="kutu numara-kutusu">
+    {% for alan, ad, deger, kaynak in numaralar %}
+    <div class="numara-alani">
+      <span class="numara-ad">{{ ad }}</span>
+      {% if deger %}
+      <span class="numara-deger">{{ simge('kilit') }} <strong>{{ deger }}</strong></span>
+      <small class="soluk">{{ KAYNAKLAR[kaynak] }}</small>
+      {% if g.kullanici.rol == 'ekip' %}
+      <details class="numara-degistir">
+        <summary>Değiştir</summary>
+        <form method="post" action="{{ url_for('urunler.numara', urun_id=urun.id, alan=alan) }}" class="form">
+          <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+          <p class="uyari-metni">{{ ad }} makinenin en önemli bilgilerinden; yanlış bir değişiklik karışıklığa yol açar.
+            Yalnızca numaranın yanlış olduğundan eminseniz değiştirin. Eski numara, yeni numara, sebep ve kimin değiştirdiği kaydedilir.</p>
+          <label class="alan"><span>Yeni {{ ad | lower }}</span><input type="text" name="deger" required autocomplete="off"></label>
+          <label class="alan"><span>Değiştirme sebebi</span><textarea name="sebep" rows="2" required placeholder="Örneğin: motor üzerindeki etikette farklı numara yazıyor"></textarea></label>
+          <button type="submit" class="dugme">Değiştir</button>
+        </form>
+      </details>
+      {% endif %}
+      {% else %}
+      <span class="soluk">Girilmedi{% if alan != 'sasi_no' %} · ERP iş emri açıklamasında bulunamadı{% endif %}</span>
+      {% if g.kullanici.rol == 'ekip' %}
+      <form method="post" action="{{ url_for('urunler.numara', urun_id=urun.id, alan=alan) }}" class="numara-gir">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <input type="text" name="deger" required autocomplete="off" aria-label="{{ ad }}" placeholder="{{ ad }}">
+        <button type="submit" class="dugme ikincil">Kaydet</button>
+        <small class="soluk">Kaydedince kilitlenir.</small>
+      </form>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if numara_gecmisi %}
+    <details class="numara-gecmisi">
+      <summary>Değişiklik geçmişi ({{ numara_gecmisi | length }})</summary>
+      <div class="kaydirilabilir">
+        <table class="tablo">
+          <thead><tr><th>Ne zaman</th><th>Kim</th><th>Numara</th><th>Eski</th><th>Yeni</th><th>Sebep</th></tr></thead>
+          <tbody>
+            {% for d in numara_gecmisi %}
+            <tr>
+              <td class="sayisal">{{ d.zaman | zaman }}</td>
+              <td>{{ d.ad_soyad or '' }}</td>
+              <td>{{ numara_adlari.get(d.alan, d.alan) }}</td>
+              <td class="sayisal">{{ d.eski or '—' }}</td>
+              <td class="sayisal"><strong>{{ d.yeni }}</strong></td>
+              <td>{{ d.sebep or 'İlk giriş' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
     {% endif %}
   </div>
 </section>
@@ -84,21 +120,7 @@
 <section class="bolum">
   <h2>İş emri</h2>
   {% if ie %}
-  <div class="kutu is-emri-kutusu ie-kutu-{{ ie_durumu[1] }}">
-    <div class="baslik-satiri">
-      <span class="ie-no">İş emri <strong>{{ ie.is_emri_no }}</strong></span>
-      <span class="etiket ie-{{ ie_durumu[1] }}">{{ ie_durumu[0] }}</span>
-    </div>
-    <dl class="bilgiler">
-      <div><dt>Açılış</dt><dd>{{ (ie.acilis_tarihi | tarih) or '—' }}</dd></div>
-      <div><dt>Başlama</dt><dd>{{ (ie.baslama_tarihi | tarih) or '—' }}</dd></div>
-      {% if ie.kapatma_tarihi %}<div><dt>Kapanış</dt><dd>{{ ie.kapatma_tarihi | tarih }}</dd></div>
-      {% else %}<div><dt>Tahmini bitiş</dt><dd>{{ (ie.tahmini_bitis | tarih) or '—' }}</dd></div>{% endif %}
-      <div><dt>Stoğa giren / planlanan</dt><dd>{{ (ie.gercek_miktar or 0) | sayi }} / {{ ie.plan_miktar | sayi }}</dd></div>
-      {% if ie.ilk_stok_giris %}<div><dt>İlk stok girişi</dt><dd>{{ ie.ilk_stok_giris | tarih }}</dd></div>{% endif %}
-    </dl>
-    {% if ie.aciklama %}<p class="soluk kucuk">ERP açıklaması: {{ ie.aciklama }}</p>{% endif %}
-  </div>
+  {{ is_emri_kutusu(ie, ie_durumu) }}
   {% else %}
   <div class="kutu is-emri-kutusu ie-kutu-yok">
     <div class="baslik-satiri">
@@ -110,22 +132,11 @@
   {% endif %}
 </section>
 
-{% if eksik %}
-<section class="bolum" id="eksik">
-  <h2>Eksik malzeme <span class="soluk">(çıkışı yapılmamış)</span></h2>
-  <div class="kutu" data-yapilacak data-aile="{{ urun.aile }}" data-konu="eksik">
-    <p class="eksik-ozeti">{{ eksik_cumlesi(eksik_ozet) }}</p>
-    {{ onceki_cevap(eksik_ozet) }}
-    {% if eksik_ozet.bekliyor and g.kullanici.rol == 'ekip' %}{{ eksik_formu(ie.is_emri_no, sonra=request.path ~ '#eksik') }}{% endif %}
-    {{ eksik_tablosu(eksik) }}
-    <p class="soluk kucuk">ERP verisi: {{ eksik_zamani | zaman }} ("Çıkış yapılamayan malzeme" raporu)</p>
-  </div>
-</section>
-{% endif %}
+{% if eksik %}{{ uyari_bolumleri(ie.is_emri_no, eksik_ozet, eksik, eksik_zamani, urun.aile, request.path, request.args.get('acik')) }}{% endif %}
 
 {% if eklentiler %}
 <section class="bolum">
-  <h2>PP'ye takılacak kalemler</h2>
+  <h2>Güç ünitesinin opsiyonel ekipmanları</h2>
   <ul class="urun-listesi">
     {% for k in eklentiler %}
     <li class="urun">
@@ -140,30 +151,5 @@
 </section>
 {% endif %}
 
-{% if kirilimlar %}
-<section class="bolum">
-  <h2>Kırılımlar (alt montajlar ve işlemler)</h2>
-  <div class="kirilim-ozeti">
-    <span><strong>{{ kirilimlar | length }}</strong> kırılımdan <strong>{{ tamamlanan }}</strong> tanesi tamamlandı</span>
-    <span class="ilerleme" role="img" aria-label="{{ tamamlanan }} / {{ kirilimlar | length }} tamamlandı"><span style="width: {{ (100 * tamamlanan / kirilimlar | length) | round | int }}%"></span></span>
-  </div>
-  <div class="pano-karti kaydirilabilir">
-    <table class="tablo">
-      <thead><tr><th>Sıra</th><th>Ürün</th><th>Ürün adı</th><th>Durum</th><th>Miktar</th>{% if eksik %}<th>Eksik malzeme</th>{% endif %}</tr></thead>
-      <tbody>
-        {% for k in kirilimlar %}
-        <tr>
-          <td class="sayisal">{{ k.satir.sira_no }}</td>
-          <td class="sayisal">{{ k.satir.urun_kodu }}</td>
-          <td>{{ k.satir.urun_adi or '' }}</td>
-          <td><span class="etiket ie-{{ k.durum[1] }}">{{ k.durum[0] }}</span></td>
-          <td class="sayisal">{{ (k.satir.gercek_miktar or 0) | sayi }}/{{ k.satir.plan_miktar | sayi }}</td>
-          {% if eksik %}<td>{% if eksik_sirasi.get(k.satir.sira_no) %}<a class="depo-cip depo-yok" href="#eksik">{{ eksik_sirasi[k.satir.sira_no] }} eksik</a>{% endif %}</td>{% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% endif %}
+{% if kirilimlar %}{{ kirilim_bolumu(kirilimlar, tamamlanan, eksik_sirasi) }}{% endif %}
 {% endblock %}

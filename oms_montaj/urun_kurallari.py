@@ -131,6 +131,27 @@ def yag(aciklama):
     return None
 
 
+# Yağın adını taşıyan cümle: viskozite sınıfı ya da yağ markası geçer
+YAG_ADI = re.compile(r"iso\s*vg|\bmobil|\bshell\b|\btotal\b|\bcastrol\b|petrol ofisi|\bopet\b|hidrolik\s+ya[gğ]", re.IGNORECASE)
+
+
+def yag_metni(aciklama):
+    """Formlara yazılan yağ durumu: "Yağsız sevk"; yağlı sevkte sipariş talebinde yazıyorsa doğrudan yağın
+    modeli ("Mobil DTE 26 ULTRA (ISO VG 68)"), yazmıyorsa "Yağlı sevk"; yağ bilgisi yoksa boş. Açıklamalar
+    çok farklı yazıldığı için ekip form ekranında kontrol edip düzeltir (kullanıcı kararları, 02/11/2026)."""
+    durum = yag(aciklama)
+    if not durum:
+        return ""
+    if durum[0] == "yagsiz":
+        return "Yağsız sevk"
+    for cumle in re.split(r"(?<=[.!])\s+|\s*\n\s*", aciklama.strip()):
+        cumle = re.sub(r"\s+", " ", cumle).strip(" .")
+        if YAG_ADI.search(cumle) and len(cumle) <= 70:
+            ad = re.sub(r"\s*-?\s*hidrolik\s+ya[gğ]$", "", cumle, flags=re.IGNORECASE).strip(" -")
+            return ad or "Yağlı sevk"
+    return "Yağlı sevk"
+
+
 # Motor seri no'ları iş emri açıklamalarında etiketsiz yazılıyor: "<proje> - 0000 111 1011 - …" (Volvo:
 # 4+3+4 rakam, daha az 4+3+3; bir yıllık listede 421'e 120) ya da "<proje> / N5F00001 / STANDART / YAĞSIZ
 # SEVK" (CAT: harf, rakam, harf, 5 rakam; ya da 3 harf, 5 rakam). Proje kodu (2 harf, 4 rakam) ve RAL

@@ -109,8 +109,11 @@ def test_asama_erpye_gore_ilerler_geri_gelmez(istemci, uygulama, ekip, yukle):  
                        " WHERE urun_kodu = 'SVR-50-NF-BSP')")
     liste[0].update({"* Durumu": "Kapalı", "Gerçek Mkt.": 1, "İşEmri Kapatma Tarihi": datetime(2026, 10, 20)})
     yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
-    assert asamalar()["PP-536-NF/1"] == "montaj_tamamlandi" and asamalar()["SVR-50-NF-BSP/1"] == "test"
-    assert "Montaj tamamlandı" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    # Güç ünitesi montaj formları (proje kodlaması, test öncesi kontrol) basılmadığı için Montaj'da bekler
+    assert asamalar()["PP-536-NF/1"] == "montaj" and asamalar()["SVR-50-NF-BSP/1"] == "test"
+    assert "1 güç ünitesi çıktıları (proje takip kartı, formlar) alınmadığı için bekliyor" in istemci.get(
+        "/erp-yukleme").get_data(as_text=True)
+    assert "Montaj tamamlandı" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)  # KCN'nin
 
 
 def test_once_is_emri_sonra_siparis_yuklenince_de_baglanir(istemci, ekip, yukle):  # noqa: F811

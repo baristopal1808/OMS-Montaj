@@ -1,12 +1,18 @@
 {% extends "taban.html" %}
 {% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
 {% block icerik %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
 {% from "_uyarilar.html" import uyari_bolumleri, imalatta_metni, imalatta_formu with context %}
 {% from "_is_emri.html" import is_emri_kutusu, kirilim_bolumu with context %}
+{% from "_numaralar.html" import numara_degeri with context %}
 {% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
 <p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
 
+{# Geniş ekranda iki sütun: solda ürünün kendisi (başlık, aşama, numaralar, iş emri…), sağda notlar ve zaman
+   akışı. Dar ekranda (telefon) tek sütun: başlık, aşama, notlar ve zaman akışı, sonra gerisi. #}
+<div class="urun-duzeni">
+<div class="urun-ust">
 {% set marka = musteri_markasi(urun.siparis_no) %}
 <div class="kutu kart-baslik{% if marka %} musterili{% endif %}"
   {%- if marka %} style="--musteri-renk: {{ marka.renk }};{% if marka.logo %} --musteri-logo: url('{{ marka.logo }}');{% endif %}"{% endif %}>
@@ -25,7 +31,7 @@
     {# Makinenin numaraları: seri no (kirişte yok), iş emri, motor seri no / şasi no #}
     {% if urun.seri_no %}<div><dt>Seri no</dt><dd>{{ urun.seri_no }}</dd></div>{% endif %}
     <div><dt>İş emri</dt><dd>{{ ie.is_emri_no if ie else 'Açılmadı' }}</dd></div>
-    {% for alan, ad, deger, kaynak in numaralar %}<div><dt>{{ ad }}</dt><dd><a class="duz-baglanti" href="#numaralar">{{ deger or 'Girilmedi' }}</a></dd></div>{% endfor %}
+    {% for alan, ad, deger, kaynak in numaralar %}<div><dt>{{ ad }}</dt><dd><a class="duz-baglanti" href="#numaralar">{{ numara_degeri(deger, kaynak, 'Girilmedi', kalin=False) }}</a></dd></div>{% endfor %}
     {% if urun.miktar > 1 %}<div><dt>Adet</dt><dd>{{ urun.adet_sira }} / {{ urun.miktar | sayi }}</dd></div>{% endif %}
     <div><dt>Teslim tarihi</dt><dd>{{ (urun.teslim_tarihi | tarih) or '—' }}
       {% if kalan %}<span class="etiket {{ kalan[1] }}">{{ kalan[0] }}</span>{% endif %}</dd></div>
@@ -52,32 +58,157 @@
   {% elif g.kullanici.rol == 'ekip' %}{{ imalatta_formu(u, sonra=request.path) }}{% endif %}
 </div>
 {% endfor %}
+</div>
 
+{# Aşama (zaman_akisi.py): ekip aşamayı ileri ya da geri alır; geri alırken sebep yazmak zorunludur.
+   Çıktılar (formlar.py, form_kurallari.py): güç ünitesinde proje takip kartı, test öncesi kontrol, test ve kurulum
+   formu; aşama kutusunun sağ altında. Çıktısı alınmamış düğme gri, alınmış yeşil (kullanıcı istedi, 02/11/2026).
+   Çıktı alınmadan ürün sonraki aşamaya geçmez. #}
+{% macro ciktilar() -%}
+{% set durumlar, bekleyen = formlar %}
+<div class="ciktilar" id="formlar">
+  <span class="ciktilar-baslik">Çıktılar</span>
+  <div class="cikti-dugmeleri">
+    {% for f in durumlar %}
+    {% set aciklama %}{{ f.ad }} · {{ f.asama }} aşamasında{% if f.son %} · {{ f.son.ad_soyad or '' }}, {{ f.son.zaman | zaman }}{% else %} · çıktısı alınmadı{% endif %}{% endset %}
+    {% if f.son %}
+    <span class="cikti basildi{% if yeni_form == f.son.id %} yeni{% endif %}">
+      <a href="{{ url_for('formlar.dosya', urun_id=urun.id, form_id=f.son.id) }}" target="_blank" rel="noopener" title="{{ aciklama }} · PDF'i aç">{{ simge('onay') }}{{ f.kisa }}</a>
+      {%- if g.kullanici.rol == 'ekip' %}<a class="cikti-yenile" href="{{ url_for('formlar.form', urun_id=urun.id, tur=f.tur) }}" title="Yeniden hazırla" aria-label="{{ f.kisa }}: yeniden hazırla">{{ simge('yenile') }}</a>{% endif %}
+    </span>
+    {% elif g.kullanici.rol == 'ekip' %}
+    <a class="cikti" href="{{ url_for('formlar.form', urun_id=urun.id, tur=f.tur) }}" title="{{ aciklama }}">{{ simge('yazici') }}{{ f.kisa }}</a>
+    {% else %}
+    <span class="cikti" title="{{ aciklama }}">{{ f.kisa }}</span>
+    {% endif %}
+    {% endfor %}
+  </div>
+  <p class="ciktilar-not">{% if forma_tabi %}Çıktı alınmadan ürün sonraki aşamaya geçmez.{% else %}Bu üründe çıktılar isteğe bağlı (kural başlamadan ilerlemişti).{% endif %}</p>
+</div>
+{%- endmacro %}
+<section class="bolum urun-asama" id="asama">
+  <h2>Aşama</h2>
+  <div class="kutu">
+    {% if formlar %}
+    {% for f in formlar[0] if f.son and f.son.id == yeni_form %}
+    <p class="bildirim cikti-hazir" role="status">{{ f.ad }} hazır. <a href="{{ url_for('formlar.dosya', urun_id=urun.id, form_id=f.son.id) }}" target="_blank" rel="noopener">PDF'i aç ve yazdır</a></p>
+    {% endfor %}
+    {% endif %}
+    <ol class="asama-cizgisi" aria-label="Aşamalar">
+      {% for anahtar, ad in asama_secenekleri.items() %}
+      <li class="{% if anahtar == urun.asama %}simdiki{% elif asama_sirasi[anahtar] < asama_sirasi[urun.asama] %}gecti{% endif %}"
+        {%- if anahtar == urun.asama %} aria-current="step"{% endif %}>{{ ad }}</li>
+      {% endfor %}
+    </ol>
+    {% if formlar and formlar[1] %}<p class="uyari-metni">İş emri ERP'de ilerledi; çıktılar alınınca ürün kendiliğinden "{{ ASAMALAR[formlar[1]] }}" aşamasına geçecek.</p>{% endif %}
+    {% if formlar and motor_eksik %}<p class="uyari-metni">Çıktı almak için önce {{ motor_eksik | join(', ') | lower }} <a href="#numaralar">teyit edilmeli</a>.</p>{% endif %}
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('urunler.asama', urun_id=urun.id) }}" class="form asama-formu" autocomplete="off" data-asama-formu>
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <label class="alan"><span>Aşamayı değiştir</span>
+        <select name="asama" data-simdiki="{{ asama_sirasi[urun.asama] if urun.asama != 'stokta' else -1 }}">
+          {%- for anahtar, ad in asama_secenekleri.items() %}<option value="{{ anahtar }}" data-sira="{{ asama_sirasi[anahtar] }}"{% if anahtar == urun.asama %} selected{% endif %}>{{ ad }}</option>{% endfor -%}
+        </select></label>
+      <label class="alan"><span>Not <small class="soluk" data-not-ipucu>(isteğe bağlı; geri alırken sebebi zorunlu)</small></span>
+        <textarea name="not" rows="2" placeholder="Örneğin: kabin boyadan geldi, montaja başlandı"></textarea></label>
+      <div class="asama-alt">
+        <button type="submit" class="dugme">Aşamayı kaydet</button>
+        {% if formlar %}{{ ciktilar() }}{% endif %}
+      </div>
+    </form>
+    {% elif formlar %}{{ ciktilar() }}{% endif %}
+  </div>
+</section>
+
+{# Notlar ve zaman akışı (zaman_akisi.py): ekip not yazar; notu yazan düzeltebilir, önceki hâli saklanır.
+   Akışın son 6 kaydı açık, eskileri katlanır. #}
+{% macro akis_ogesi(o) -%}
+<li class="akis-oge akis-{{ o.tur }}">
+  <div class="akis-ust">
+    <strong>{{ o.baslik }}</strong>
+    <span class="soluk">{% if o.kim %}{{ o.kim }} · {% endif %}{{ (o.zaman | tarih) if o.gun else (o.zaman | zaman) }}{% if o.olay and o.olay.duzeltme %} · düzeltildi{% endif %}</span>
+  </div>
+  {% if o.metin %}<p class="akis-metin">{{ o.metin }}</p>{% endif %}
+  {% if o.form %}<a class="kucuk" href="{{ url_for('formlar.dosya', urun_id=urun.id, form_id=o.form) }}" target="_blank" rel="noopener">PDF'i aç</a>{% endif %}
+  {% if o.onceki %}
+  <details class="akis-ek"><summary>Önceki hâli</summary>
+    {% for d in o.onceki %}<p class="akis-metin soluk"><small>{{ d.zaman | zaman }} tarihinde düzeltilmeden önce:</small><br>{{ d.eski_metin or '—' }}</p>{% endfor %}
+  </details>
+  {% endif %}
+  {% if o.olay and o.metin and o.olay.kullanici_id == g.kullanici.id and g.kullanici.rol == 'ekip' %}
+  <details class="akis-ek"><summary>Düzelt</summary>
+    <form method="post" action="{{ url_for('urunler.not_duzeltme', urun_id=urun.id, olay_id=o.olay.id) }}" class="form">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <textarea name="metin" rows="3" required aria-label="Notun yeni hâli">{{ o.metin }}</textarea>
+      <button type="submit" class="dugme kucuk-dugme">Düzeltmeyi kaydet</button>
+    </form>
+  </details>
+  {% endif %}
+</li>
+{%- endmacro %}
+<aside class="bolum urun-yan" id="akis" aria-labelledby="akis-baslik">
+  <div class="kutu akis-kutusu">
+    <h2 id="akis-baslik">Notlar ve zaman akışı</h2>
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('urunler.not_yaz', urun_id=urun.id) }}" class="form akis-not-formu">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <label class="alan"><span class="gizli">Not ekle</span>
+        <textarea name="metin" rows="3" required placeholder="Not ekle: montajda fark edilen sorun, bekleyen parça, testin sonucu…"></textarea></label>
+      <button type="submit" class="dugme ikincil">Notu kaydet</button>
+    </form>
+    {% endif %}
+    {% if akis %}
+    <ol class="akis">{% for o in akis[:6] %}{{ akis_ogesi(o) }}{% endfor %}</ol>
+    {% if akis | length > 6 %}
+    <details class="akis-devami"><summary>Daha eski {{ akis | length - 6 }} kayıt</summary>
+      <ol class="akis">{% for o in akis[6:] %}{{ akis_ogesi(o) }}{% endfor %}</ol>
+    </details>
+    {% endif %}
+    {% else %}<p class="soluk">Henüz kayıt yok.</p>{% endif %}
+  </div>
+</aside>
+
+<div class="urun-govde">
 {# Makine numaraları kilitlidir: ERP'den okunan ya da bir kez girilen numara düz yazıdır; değiştirmek için
-   "Değiştir" açılır, yeni numara ve sebep yazılır. Boş numara bir kez girilir, sonra kilitlenir. #}
+   "Değiştir" açılır, yeni numara ve sebep yazılır. Boş numara bir kez girilir, sonra kilitlenir. ERP'den okunan
+   motor seri no "!" ile görünür; kutucuk işaretlenip teyit edilince nihai numara olur. #}
+{% macro degistir_formu(alan, ad, baslik='Değiştir') -%}
+<details class="numara-degistir">
+  <summary>{{ baslik }}</summary>
+  <form method="post" action="{{ url_for('urunler.numara', urun_id=urun.id, alan=alan) }}" class="form">
+    <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+    <p class="uyari-metni">{{ ad }} makinenin en önemli bilgilerinden; yanlış bir değişiklik karışıklığa yol açar.
+      Yalnızca numaranın yanlış olduğundan eminseniz değiştirin. Eski numara, yeni numara, sebep ve kimin değiştirdiği kaydedilir.</p>
+    <label class="alan"><span>Yeni {{ ad | lower }}</span><input type="text" name="deger" required autocomplete="off"></label>
+    <label class="alan"><span>Değiştirme sebebi</span><textarea name="sebep" rows="2" required placeholder="Örneğin: motor üzerindeki etikette farklı numara yazıyor"></textarea></label>
+    <button type="submit" class="dugme">Değiştir</button>
+  </form>
+</details>
+{%- endmacro %}
 {% if numaralar %}
 <section class="bolum" id="numaralar">
   <h2>Makine numaraları</h2>
   <div class="kutu numara-kutusu">
     {% for alan, ad, deger, kaynak in numaralar %}
+    {% set kayit = son_kayit[alan] %}
     <div class="numara-alani">
       <span class="numara-ad">{{ ad }}</span>
-      {% if deger %}
-      <span class="numara-deger">{{ simge('kilit') }} <strong>{{ deger }}</strong></span>
-      <small class="soluk">{{ KAYNAKLAR[kaynak] }}</small>
+      {% if deger and kaynak in TEYITSIZ %}
+      <span class="numara-deger">{{ numara_degeri(deger, kaynak) }}</span>
+      <small class="soluk">{{ KAYNAKLAR[kaynak] }} okundu · teyit edilmedi</small>
       {% if g.kullanici.rol == 'ekip' %}
-      <details class="numara-degistir">
-        <summary>Değiştir</summary>
-        <form method="post" action="{{ url_for('urunler.numara', urun_id=urun.id, alan=alan) }}" class="form">
-          <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-          <p class="uyari-metni">{{ ad }} makinenin en önemli bilgilerinden; yanlış bir değişiklik karışıklığa yol açar.
-            Yalnızca numaranın yanlış olduğundan eminseniz değiştirin. Eski numara, yeni numara, sebep ve kimin değiştirdiği kaydedilir.</p>
-          <label class="alan"><span>Yeni {{ ad | lower }}</span><input type="text" name="deger" required autocomplete="off"></label>
-          <label class="alan"><span>Değiştirme sebebi</span><textarea name="sebep" rows="2" required placeholder="Örneğin: motor üzerindeki etikette farklı numara yazıyor"></textarea></label>
-          <button type="submit" class="dugme">Değiştir</button>
-        </form>
-      </details>
+      <form method="post" action="{{ url_for('urunler.numara_teyit', urun_id=urun.id, alan=alan) }}" class="numara-teyit">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="deger" value="{{ deger }}">
+        <label class="secenek"><input type="checkbox" name="teyit" value="1" required><span>Numarayı kontrol ettim, doğru</span></label>
+        <button type="submit" class="dugme kucuk-dugme">Teyit et</button>
+      </form>
+      {{ degistir_formu(alan, ad, 'Numara yanlışsa değiştir') }}
       {% endif %}
+      {% elif deger %}
+      <span class="numara-deger">{{ simge('kilit') }} <strong>{{ deger }}</strong></span>
+      <small class="soluk">{% if not kayit %}{{ KAYNAKLAR[kaynak] }}{% elif kayit.sebep == TEYIT %}ERP'den okundu, teyit edildi{% elif kayit.eski %}ekip değiştirdi{% else %}ekip girdi{% endif %}
+        {%- if kayit %} · {{ kayit.ad_soyad or '' }}, {{ kayit.zaman | zaman }}{% endif %}</small>
+      {% if g.kullanici.rol == 'ekip' %}{{ degistir_formu(alan, ad) }}{% endif %}
       {% else %}
       <span class="soluk">Girilmedi{% if alan != 'sasi_no' %} · ERP iş emri açıklamasında bulunamadı{% endif %}</span>
       {% if g.kullanici.rol == 'ekip' %}
@@ -152,4 +283,6 @@
 {% endif %}
 
 {% if kirilimlar %}{{ kirilim_bolumu(kirilimlar, tamamlanan, eksik_sirasi) }}{% endif %}
+</div>
+</div>
 {% endblock %}

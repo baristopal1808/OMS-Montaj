@@ -25,7 +25,7 @@ from .asamalar import ASAMALAR
 from .erp_aktarim import IPTAL
 from .is_emri_aktarim import is_emri_durumu
 from .makineler import sevk_edilecek_makineler
-from .numaralar import KAYNAKLAR, urun_numaralari
+from .numaralar import numara_metni, urun_numaralari
 from .siparisler import (
     DURUMLAR, TIPLER, URUN_DURUMLARI, ozetle, siparis_durum_ozeti, teslim_bilgisi, urun_is_emri_sinifi,
 )
@@ -133,7 +133,7 @@ def siparis_bilgisi(siparis_no: str) -> str:
                             "stoga_giren": ie["gercek_miktar"], "planlanan": ie["plan_miktar"]} if ie else None,
                 "is_emri_durumu": URUN_DURUMLARI[urun_is_emri_sinifi(u["asama"], k, ie)],
                 "planlama_birimi_urun_durumu": k["erp_urun_durumu"],
-                "numaralar": {ad: (f"{deger} ({KAYNAKLAR[kaynak]})" if deger else "girilmedi")
+                "numaralar": {ad: numara_metni(deger, kaynak)
                               for _, ad, deger, kaynak in urun_numaralari(vt, u, k["aile"], s["id"], k["urun_kodu"])},
                 "renk": renk(k["aciklama"]),
                 "yag": (yag(k["aciklama"]) or ("bilgi yok",))[0] if k["aile"] == "PP" else None,
@@ -173,7 +173,7 @@ def makine_ara(metin: str) -> str:
         sonuc.append({
             "siparis_no": u["siparis_no"], "musteri": u["musteri"], "urun": f'{u["urun_kodu"]} {u["urun_adi"]}',
             "seri_no": u["seri_no"], "asama": ASAMALAR[u["asama"]],
-            "numaralar": {ad: (f"{deger} ({KAYNAKLAR[kaynak]})" if deger else "girilmedi")
+            "numaralar": {ad: numara_metni(deger, kaynak)
                           for _, ad, deger, kaynak in urun_numaralari(vt, u, u["aile"], u["siparis_id"], u["urun_kodu"])},
         })
     return _json(sonuc or {"bulunamadi": f'"{metin}" ile eşleşen makine yok.'})

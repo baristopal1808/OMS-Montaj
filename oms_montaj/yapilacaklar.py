@@ -27,8 +27,9 @@ from .is_emri_aktarim import BAGLANTILAR, KULLANICI_BAGLANTILARI, is_emirlerini_
 from .kimlik import ekip_gerekli, guvenli_adres
 from .urun_kurallari import AILE_SIRASI, AILELER, onek, sade, satir_turu
 from .uyarilar import (
-    DEPO_DURUMLARI, EKSIK_CEVAPLARI, IMALATTA_CEVAPLARI, bekleyen_eksikler, bekleyen_imalatta, depo_durumu, depolar,
-    eksik_cevapla, eksik_miktari, imalatta_cevapla, imalatta_uyarilari, is_emri_eksikleri,
+    DEPO_DURUMLARI, EKSIK_CEVAPLARI, HAZIR_DURUMLAR, IMALATTA_CEVAPLARI, YARI_MAMUL_DURUMLARI, bekleyen_eksikler,
+    bekleyen_imalatta, depo_durumu, depolar, eksik_cevapla, eksik_miktari, imalatta_cevapla, imalatta_uyarilari,
+    is_emri_eksikleri,
 )
 from .veritabani import baglanti
 
@@ -135,6 +136,7 @@ def sablon_degiskenleri():
     return {
         "yapilacak_sayisi": sayi, "eksik_miktari": eksik_miktari, "depo_durumu": depo_durumu, "depolar": depolar,
         "DEPO_DURUMLARI": DEPO_DURUMLARI, "EKSIK_CEVAPLARI": EKSIK_CEVAPLARI, "IMALATTA_CEVAPLARI": IMALATTA_CEVAPLARI,
+        "YARI_MAMUL_DURUMLARI": YARI_MAMUL_DURUMLARI, "HAZIR_DURUMLAR": HAZIR_DURUMLAR,
     }
 
 

@@ -20,15 +20,18 @@ Kullanıcının Yapılacaklar'da yaptığı seçim (kullanici, kullanici_stok, y
 Siparişe bağlı iş emirleri, sipariş satırının ürün kartlarına adet sırasıyla dağıtılır ve
 ürün ERP'nin gösterdiği aşamaya ilerler (docs/ihtiyaclar.md 3.1): iş emri açıldı → "Malzeme
 hazırlık", kırılımlarından biri stoğa girdi → "Montaj", iş emri tamamlandı (ürün stoğa girdi)
-→ "Montaj tamamlandı". Aşama yalnızca ileri gider; ekibin ileri aldığı ürün geri gelmez.
+→ "Montaj tamamlandı". Aşama yalnızca ileri gider; ekibin ileri aldığı ürün geri gelmez, ekibin geri
+aldığı ürün de ERP'de yeni bir gelişme olmadıkça yeniden ileri itilmez.
 Üretim girişi olmadan kapatılan iş emri ürüne dağıtılmaz.
 """
 
 import re
 from collections import Counter, defaultdict
+from datetime import datetime
 
-from .asamalar import ASAMALAR, erp_asamasi, ileri
+from .asamalar import ASAMALAR, SIRA, erp_asamasi, ileri
 from .erp_aktarim import IPTAL
+from .form_kurallari import basilan_formlar, forma_tabi_mi, sinirla
 from .urun_kurallari import sade
 
 ACIK = "Açık"
@@ -203,7 +206,10 @@ def is_emirlerini_bagla(vt):
 def _urunlere_dagit(vt, sayac):
     """Sipariş satırına bağlı iş emirlerini o satırın ürün kartlarına adet sırasıyla dağıtır ve ürünü ERP'nin
     gösterdiği aşamaya ilerletir (asamalar.erp_asamasi; geri götürmez). Birden çok adetlik iş emrinde stoğa
-    giren miktar kadar ürün "Montaj tamamlandı" sayılır."""
+    giren miktar kadar ürün "Montaj tamamlandı" sayılır. ERP'nin gösterdiği aşama ürünün erp_asama alanında
+    saklanır; ürün yalnızca bu değişince (ERP'de yeni bir gelişme) ilerletilir, böylece ekibin geri aldığı ürün
+    sonraki yüklemede yeniden ileri itilmez. Aşama değişikliği zaman akışına ERP yüklemesi olarak yazılır.
+    Montaj formları basılmamış güç ünitesi formların izin verdiği aşamada bekler (form_kurallari)."""
     yuvalar = defaultdict(list)  # kalem → her adet için bir iş emri
     stoga_giren = {}
     for ie in vt.execute(
@@ -217,17 +223,31 @@ def _urunlere_dagit(vt, sayac):
         "SELECT DISTINCT is_emri_id FROM is_emri_satirlari WHERE COALESCE(gercek_miktar, 0) > 0"
     )}
     kacinci = Counter()  # iş emrinin kaçıncı ürünü
-    for urun in vt.execute("SELECT id, kalem_id, adet_sira, asama, is_emri_id FROM urunler ORDER BY kalem_id, adet_sira").fetchall():
+    zaman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    basilan = basilan_formlar(vt)
+    for urun in vt.execute(
+        "SELECT u.id, u.kalem_id, u.adet_sira, u.asama, u.erp_asama, u.is_emri_id, u.form_muaf, k.aile, k.tur"
+        " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id ORDER BY u.kalem_id, u.adet_sira"
+    ).fetchall():
         sira = urun["adet_sira"] - 1
         ie_id = yuvalar[urun["kalem_id"]][sira] if sira < len(yuvalar[urun["kalem_id"]]) else None
-        asama = urun["asama"]
+        asama, erp = urun["asama"], urun["erp_asama"]
         if ie_id:
             kacinci[ie_id] += 1
-            asama = ileri(asama, erp_asamasi(stoga_giren[ie_id] >= kacinci[ie_id], ie_id in kirilimi_giren))
-        if (ie_id, asama) != (urun["is_emri_id"], urun["asama"]):
-            vt.execute("UPDATE urunler SET is_emri_id = ?, asama = ? WHERE id = ?", (ie_id, asama, urun["id"]))
+            erp = erp_asamasi(stoga_giren[ie_id] >= kacinci[ie_id], ie_id in kirilimi_giren)
+            if erp != urun["erp_asama"]:
+                hedef = sinirla(erp, basilan.get(urun["id"], set())) if forma_tabi_mi(urun) else erp
+                sayac["form_bekliyor"] += hedef != erp and SIRA[asama] < SIRA[erp]
+                asama = ileri(asama, hedef)
+        if (ie_id, asama, erp) != (urun["is_emri_id"], urun["asama"], urun["erp_asama"]):
+            vt.execute("UPDATE urunler SET is_emri_id = ?, asama = ?, erp_asama = ? WHERE id = ?",
+                       (ie_id, asama, erp, urun["id"]))
             if asama != urun["asama"]:
                 sayac[f"gecen:{asama}"] += 1
+                vt.execute(
+                    "INSERT INTO urun_olaylari (urun_id, tur, zaman, eski_asama, yeni_asama) VALUES (?, 'asama', ?, ?, ?)",
+                    (urun["id"], zaman, urun["asama"], asama),
+                )
 
 
 def baglanti_ozeti(sayac):
@@ -244,4 +264,7 @@ def baglanti_ozeti(sayac):
     gecenler = [f'{sayac["gecen:" + asama]} ürün "{ad}"' for asama, ad in ASAMALAR.items() if sayac["gecen:" + asama]]
     if gecenler:
         ozet += f" Aşaması ilerleyen: {', '.join(gecenler)}."
+    if sayac["form_bekliyor"]:
+        ozet += (f" {sayac['form_bekliyor']} güç ünitesi çıktıları (proje takip kartı, formlar) alınmadığı için bekliyor;"
+                 " çıktılar alınınca ilerler.")
     return ozet

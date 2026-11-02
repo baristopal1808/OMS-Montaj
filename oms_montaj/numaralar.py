@@ -13,6 +13,10 @@ Numaralar kilitlidir (kullanıcı kararı, 26/10/2026): ERP'den okunan ya da bir
 sayfasında düz yazı olarak görünür; değiştirmek için "Değiştir"e basılır, yeni numara ve sebep yazılır.
 Her giriş ve değişiklik (eski, yeni, sebep, kim, ne zaman) numara_degisiklikleri tablosunda saklanır.
 Şablon yalnızca boş numaraları doldurur.
+
+ERP'den okunan motor seri no teyit bekler (kullanıcı kararı, 02/11/2026): her yerde yanında "!" görünür;
+ekip ürün sayfasında kutucuğu işaretleyip teyit edince numara ekibin numarası olarak yazılır (nihai numara;
+geçmişte "teyit edildi" diye görünür) ve ERP yüklemesi onu artık değiştirmez.
 """
 
 import io
@@ -34,6 +38,8 @@ KAYNAKLAR = {
     "erp": "ERP iş emri açıklamasından",
     "proje": "projenin motor-pompa hattı iş emrinden",
 }
+TEYITSIZ = ("erp", "proje")  # ERP'den okunan, ekibin henüz teyit etmediği numara
+TEYIT = "ERP'den okunan numara teyit edildi"  # teyidin geçmişteki sebebi
 
 
 def numara_alanlari(aile, urun_kodu):
@@ -114,6 +120,13 @@ def urun_numaralari(vt, urun, aile, siparis_id, urun_kodu):
             deger, kaynak = None, None
         sonuc.append((alan, numara_adi(alan, alanlar), deger, kaynak))
     return sonuc
+
+
+def numara_metni(deger, kaynak):
+    """Asistan için: '0000 111 101 (ERP iş emri açıklamasından; teyit edilmedi)' ya da 'girilmedi'."""
+    if not deger:
+        return "girilmedi"
+    return f"{deger} ({KAYNAKLAR[kaynak]}{'; teyit edilmedi' if kaynak in TEYITSIZ else ''})"
 
 
 def numara_yaz(deger, alan):

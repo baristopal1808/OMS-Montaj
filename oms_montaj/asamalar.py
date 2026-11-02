@@ -25,6 +25,12 @@ def ileri(simdiki, hedef):
     return hedef if SIRA[hedef] > SIRA[simdiki] else simdiki
 
 
+def geri_mi(simdiki, hedef):
+    """Ekibin değişikliği aşamayı geri alıyor mu? Geri alırken sebep yazılması zorunludur (02/11/2026).
+    "Stokta" listenin sonundadır ama stoktaki ürün siparişe atanınca testten devam eder; bu geri alma sayılmaz."""
+    return simdiki != "stokta" and SIRA[hedef] < SIRA[simdiki]
+
+
 def erp_asamasi(stoga_girdi, kirilim_girdi):
     """İş emri açılan ürünün ERP'ye göre aşaması: iş emri tamamlanıp ürün stoğa girdiyse "Montaj tamamlandı",
     kırılımlarından biri stoğa girdiyse "Montaj", yoksa "Malzeme hazırlık" (kullanıcı kararı, 23/10/2026)."""

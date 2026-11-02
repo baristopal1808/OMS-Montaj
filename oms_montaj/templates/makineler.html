@@ -2,7 +2,8 @@
 {% block baslik %}Makineler{% endblock %}
 {% block icerik_sinifi %}genis{% endblock %}
 {% block icerik %}
-{% set diger = dict(aile=secim.aile or None, teslim=secim.teslim or None, bas=secim.bas or None, bit=secim.bit or None) %}
+{% from "_numaralar.html" import numara_degeri with context %}
+{% set diger =dict(aile=secim.aile or None, teslim=secim.teslim or None, bas=secim.bas or None, bit=secim.bit or None) %}
 <p class="geri"><a href="{{ url_for('ozet.ana') }}">← Özet</a></p>
 <div class="baslik-satiri">
   <h1>Sevk edilecek makineler</h1>
@@ -54,7 +55,7 @@
           <td><span class="sk-urun renkli" style="--renk: {{ AILE_RENKLERI[m.aile] }}">{{ m.aile }}</span> <strong>{{ m.urun_kodu }}</strong></td>
           <td>{{ m.urun_adi or '' }}</td>
           <td class="sayisal">{{ m.seri_no or '—' }}</td>
-          <td class="sayisal">{% for alan, ad, deger, kaynak in numaralar[m.id] %}{% if loop.length > 1 %}<span class="numara-satiri"><small class="soluk">{{ ad | replace(' seri no', '') }}:</small> {{ deger or '—' }}</span>{% else %}<span title="{{ ad }}">{{ deger or '—' }}</span>{% endif %}{% endfor %}</td>
+          <td class="sayisal">{% for alan, ad, deger, kaynak in numaralar[m.id] %}{% if loop.length > 1 %}<span class="numara-satiri"><small class="soluk">{{ ad | replace(' seri no', '') }}:</small> {{ numara_degeri(deger, kaynak, '—', kalin=False) }}</span>{% else %}<span title="{{ ad }}">{{ numara_degeri(deger, kaynak, '—', kalin=False) }}</span>{% endif %}{% endfor %}</td>
           <td><span class="etiket asama">{{ ASAMALAR[m.asama] }}</span></td>
           <td>{{ m.erp_urun_durumu or 'Belirtilmemiş' }}</td>
           <td class="sayisal">{% if m.is_emri_no %}{{ m.is_emri_no }}<br><span class="etiket ie-{{ is_emri_durumlari[m.id][1] }}">{{ is_emri_durumlari[m.id][0] }}</span>{% else %}—{% endif %}</td>

@@ -28,6 +28,34 @@ document.querySelectorAll("[data-dosya-alani]").forEach(function (alan) {
   });
 });
 
+// Ürün sayfasında aşama geri alınırken not (sebep) zorunlu olur; sunucu da aynı kuralı denetler.
+document.querySelectorAll("[data-asama-formu]").forEach(function (form) {
+  var secim = form.querySelector("select[name=asama]");
+  var not = form.querySelector("textarea[name=not]");
+  var ipucu = form.querySelector("[data-not-ipucu]");
+  var ilkIpucu = ipucu.textContent;
+  function ayarla() {
+    var geri = Number(secim.selectedOptions[0].dataset.sira) < Number(secim.dataset.simdiki);
+    not.required = geri;
+    not.placeholder = geri ? "Aşamayı neden geri alıyorsunuz? Örneğin: testte hidrolik kaçak çıktı" : "Örneğin: kabin boyadan geldi, montaja başlandı";
+    ipucu.textContent = geri ? "(geri alırken sebebi zorunlu)" : ilkIpucu;
+    ipucu.classList.toggle("zorunlu", geri);
+  }
+  secim.addEventListener("change", ayarla);
+  ayarla();
+});
+
+// Form hazırlama: listeden bir vibro çakıcı seçilince seri no'su da gelir.
+document.querySelectorAll("[data-form-hazirla]").forEach(function (form) {
+  var vibro = form.querySelector("[data-vibro]");
+  var seri = form.querySelector("[data-vibro-seri]");
+  if (!vibro || !seri) return;
+  vibro.addEventListener("change", function () {
+    var secenek = Array.prototype.find.call(vibro.list.options, function (o) { return o.value === vibro.value; });
+    if (secenek) seri.value = secenek.dataset.seri || "";
+  });
+});
+
 // Telefonda yan menüyü açıp kapatır. Bilgisayarda menü hep açıktır; bu düğme orada görünmez.
 (function () {
   var dugme = document.querySelector(".menu-dugme");

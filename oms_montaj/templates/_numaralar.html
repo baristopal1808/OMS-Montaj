@@ -1,0 +1,8 @@
+{# Makine numarası (şasi no, motor seri no). ERP'den okunup henüz teyit edilmemiş numaranın yanında "!" görünür
+   (numaralar.TEYITSIZ); ekip ürün sayfasında teyit edince nihai numara olur ve ünlem kalkar. #}
+{% macro numara_degeri(deger, kaynak, yoksa='yok', kalin=True) -%}
+{% if deger -%}
+{% if kalin %}<strong>{{ deger }}</strong>{% else %}{{ deger }}{% endif -%}
+{% if kaynak in TEYITSIZ %}<span class="teyit-isareti" title="ERP iş emri açıklamasından okundu; teyit edilmedi" aria-label="teyit edilmedi">!</span>{% endif %}
+{%- else %}{{ yoksa }}{% endif %}
+{%- endmacro %}

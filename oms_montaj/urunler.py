@@ -3,9 +3,11 @@
 Ürün sayfası siparişteki ürüne tıklayınca açılır (sipariş kutusundaki ürün kutucuğu, sevk edilecek
 makineler listesi, sipariş kartındaki ürün); siparişe tıklayınca ise bütün kalemleriyle sipariş kartı açılır.
 Sayfada makinenin bilgileri, numaraları (şasi no, motor seri no; kilitli), iş emri ve iş emrinin kırılımları
-(alt montajlar: tamamlanan ve bekleyen) görünür. İş emrinin eksik malzemeleri ve imalattan beklenen yarı
-mamulleri (kırılıma tıklayınca açılır) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı da burada görünür
-ve cevaplanır. Kontrol listesi, notlar ve fotoğraflar 4. adımda.
+(alt montajlar: tamamlanan ve bekleyen) görünür. ERP'den okunan motor seri no teyit edilene kadar "!" ile
+görünür; teyit edilince nihai numara olur. İş emrinin eksik malzemeleri ve yarı mamulleri (kırılıma tıklayınca
+açılır) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı da burada görünür ve cevaplanır. Ekip aşamayı
+burada değiştirir ve not yazar; kartın zaman akışı (zaman_akisi.py) da burada görünür. Kontrol listesi ve
+fotoğraflar 4. adımın sonraki parçalarında.
 
 İş emri sayfası bir ürüne dağıtılmamış iş emirleri (alt montaj, yarı mamul, stok) için de aynı bilgileri verir.
 """
@@ -15,21 +17,33 @@ from datetime import date
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
 
+from .asamalar import ASAMALAR, SIRA, geri_mi
 from .erp_aktarim import IPTAL, kapali_mi
+from .form_kurallari import FORM_TURLERI, basilan_formlar, eksik_formlar, form_durumlari, forma_tabi_mi
 from .is_emri_aktarim import BAGLANTILAR, is_emri_durumu, kirilim_durumu
 from .kimlik import ekip_gerekli, guvenli_adres
 from .numaralar import (
-    KAYNAKLAR, numara_alanlari, numara_degistir, numara_gecmisi, numara_yaz, sablon, urun_numaralari,
+    KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, numara_alanlari, numara_degistir, numara_gecmisi, numara_yaz, sablon,
+    urun_numaralari,
 )
 from .siparisler import TIPLER, siparis_durum_ozeti, teslim_bilgisi, yakin_revizyon
 from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk, yag
 from .uyarilar import (
-    YARI_MAMUL, eksik_ozetleri, imalatta_uyarilari, is_emri_eksikleri, yari_mamul_geri_al, yari_mamul_isaretle,
+    HAZIR_DURUMLAR, eksik_ozetleri, imalatta_uyarilari, is_emri_eksikleri, yari_mamul_geri_al, yari_mamul_isaretle,
 )
 from .veritabani import baglanti
 from .yapilacaklar import is_emri_ailesi
+from .zaman_akisi import akis, asama_degistir, not_duzelt, not_ekle
 
 bp = Blueprint("urunler", __name__)
+
+# Ekibin seçebileceği aşamalar; "Stokta" siparişe bağlanmamış ürünler içindir (5. adım).
+SECILEBILIR_ASAMALAR = {anahtar: ad for anahtar, ad in ASAMALAR.items() if anahtar != "stokta"}
+
+
+@bp.app_context_processor
+def sablon_degiskenleri():
+    return {"TEYITSIZ": TEYITSIZ}
 
 
 def urun_kaydi(vt, urun_id):
@@ -64,6 +78,8 @@ def sayfa(urun_id):
     acik = urun["erp_durum"] != IPTAL and not kapali_mi(urun) and urun["asama"] != "sevk_edildi"
     siparis = {"id": urun["siparis_id"], "tip": urun["tip"]}
     numaralar = urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"], urun["urun_kodu"])
+    numara_adlari = {alan: ad for alan, ad, _, _ in numaralar}
+    gecmis = numara_gecmisi(vt, urun_id)
     # Eksik malzeme (çıkışı yapılmamış) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı
     eksik = is_emri_eksikleri(vt, ie["is_emri_no"]) if ie else []
     eksik_zamani = vt.execute(
@@ -87,8 +103,14 @@ def sayfa(urun_id):
         kirilimlar=kirilimlar,
         tamamlanan=sum(1 for k in kirilimlar if k["durum"][1] == "kapali"),
         numaralar=numaralar,
-        numara_adlari={alan: ad for alan, ad, _, _ in numaralar},
-        numara_gecmisi=numara_gecmisi(vt, urun_id),
+        numara_adlari=numara_adlari,
+        numara_gecmisi=gecmis,
+        akis=akis(vt, urun, numara_adlari),
+        asama_secenekleri=SECILEBILIR_ASAMALAR,
+        asama_sirasi=SIRA,
+        # Her numaranın son kaydı (kim girdi ya da teyit etti); geçmiş yeniden eskiye sıralı
+        son_kayit={alan: next((d for d in gecmis if d["alan"] == alan), None) for alan, _, _, _ in numaralar},
+        TEYIT=TEYIT,
         kalan=teslim_bilgisi(urun["teslim_tarihi"]) if acik else None,
         revize=revizyon if yakin_revizyon(revizyon) else None,
         renk=renk(urun["aciklama"]),
@@ -101,10 +123,85 @@ def sayfa(urun_id):
         eksik_sirasi={grup["sira"]: grup for grup in eksik},
         eksik_zamani=eksik_zamani[0] if eksik_zamani else None,
         imalatta=imalatta_uyarilari(vt, urun_id=urun_id),
+        formlar=form_durumlari(vt, urun) if urun["aile"] == "PP" and urun["tur"] == "kart" else None,
+        forma_tabi=forma_tabi_mi(urun),
+        motor_eksik=[ad for alan, ad, deger, kaynak in numaralar if alan in MOTOR_ALANLARI and (not deger or kaynak in TEYITSIZ)],
+        yeni_form=request.args.get("form", type=int),
         AILE_ADLARI=AILE_ADLARI,
         KAYNAKLAR=KAYNAKLAR,
         TIPLER=TIPLER,
     )
+
+
+def _metin(deger):
+    """Formdan gelen not: baştaki ve sondaki boşluklar atılır, satır sonları kalır; boşsa None."""
+    return (deger or "").strip() or None
+
+
+@bp.route("/urun/<int:urun_id>/asama", methods=["POST"])
+@ekip_gerekli
+def asama(urun_id):
+    """Ekip ürünün aşamasını ileri ya da geri alır; notla birlikte zaman akışına yazılır. Not ileri alırken
+    isteğe bağlı, geri alırken zorunludur (kullanıcı kararı, 02/11/2026)."""
+    vt = baglanti()
+    urun = urun_kaydi(vt, urun_id)
+    if urun is None:
+        abort(404)
+    yeni = request.form.get("asama")
+    if yeni not in SECILEBILIR_ASAMALAR:
+        abort(400)
+    metin = _metin(request.form.get("not"))
+    if yeni == urun["asama"]:
+        flash(f"Ürün zaten \"{ASAMALAR[yeni]}\" aşamasında; aşama değişmedi. Not yazmak için \"Not ekle\"yi kullanın.")
+    elif geri_mi(urun["asama"], yeni) and not metin:
+        flash(f"Aşama geri alınmadı: \"{ASAMALAR[urun['asama']]}\" aşamasından \"{ASAMALAR[yeni]}\" aşamasına geri alırken sebebini yazın.")
+    elif SIRA[yeni] > SIRA[urun["asama"]] and forma_tabi_mi(urun) and (
+        eksik := eksik_formlar(basilan_formlar(vt, [urun_id]).get(urun_id, set()), yeni)
+    ):
+        flash(f"Aşama değişmedi: \"{ASAMALAR[yeni]}\" aşamasına geçmeden önce şu çıktılar alınmalı (aşama kutusundaki düğmeler): "
+              f"{', '.join(FORM_TURLERI[t].lower() for t in eksik)}.")
+    else:
+        with vt:
+            asama_degistir(vt, urun_id, urun["asama"], yeni, metin, g.kullanici["id"])
+        flash(f"Aşama değişti: {ASAMALAR[urun['asama']]} → {ASAMALAR[yeni]}.")
+    return redirect(url_for(".sayfa", urun_id=urun_id) + "#akis")
+
+
+@bp.route("/urun/<int:urun_id>/not", methods=["POST"])
+@ekip_gerekli
+def not_yaz(urun_id):
+    vt = baglanti()
+    if urun_kaydi(vt, urun_id) is None:
+        abort(404)
+    if metin := _metin(request.form.get("metin")):
+        with vt:
+            not_ekle(vt, urun_id, metin, g.kullanici["id"])
+        flash("Not kaydedildi.")
+    else:
+        flash("Not boş olamaz.")
+    return redirect(url_for(".sayfa", urun_id=urun_id) + "#akis")
+
+
+@bp.route("/urun/<int:urun_id>/not/<int:olay_id>", methods=["POST"])
+@ekip_gerekli
+def not_duzeltme(urun_id, olay_id):
+    """Notu (ya da aşama değişikliğinin notunu) yalnızca yazan kişi düzeltir; önceki hâli saklanır, not silinmez."""
+    vt = baglanti()
+    olay = vt.execute("SELECT * FROM urun_olaylari WHERE id = ? AND urun_id = ?", (olay_id, urun_id)).fetchone()
+    if olay is None:
+        abort(404)
+    if olay["kullanici_id"] != g.kullanici["id"]:
+        abort(403)
+    metin = _metin(request.form.get("metin"))
+    if not metin:
+        flash("Not silinemez; boş bırakılamaz.")
+    elif metin == olay["metin"]:
+        flash("Not değişmedi.")
+    else:
+        with vt:
+            not_duzelt(vt, olay, metin)
+        flash("Not düzeltildi; önceki hâli saklandı.")
+    return redirect(url_for(".sayfa", urun_id=urun_id) + "#akis")
 
 
 @bp.route("/urun/<int:urun_id>/numara/<alan>", methods=["POST"])
@@ -133,10 +230,34 @@ def numara(urun_id, alan):
     return redirect(url_for(".sayfa", urun_id=urun_id) + "#numaralar")
 
 
+@bp.route("/urun/<int:urun_id>/numara/<alan>/teyit", methods=["POST"])
+@ekip_gerekli
+def numara_teyit(urun_id, alan):
+    """ERP'den okunan motor seri no'sunu teyit eder: numara ekibin numarası (nihai, kilitli) olarak yazılır,
+    geçmişe "teyit edildi" diye girer."""
+    vt = baglanti()
+    urun = urun_kaydi(vt, urun_id)
+    if urun is None or alan not in MOTOR_ALANLARI or alan not in numara_alanlari(urun["aile"], urun["urun_kodu"]):
+        abort(404)
+    ad, deger, kaynak = next((a, d, k) for f, a, d, k in urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"], urun["urun_kodu"])
+                             if f == alan)
+    if kaynak not in TEYITSIZ:
+        flash(f"{ad} ERP'den okunmuş bir numara değil; teyit gerekmiyor.")
+    elif request.form.get("deger") != deger:
+        flash(f"{ad} bu arada değişmiş; yeni numarayı kontrol edip yeniden teyit edin.")
+    elif not request.form.get("teyit"):
+        flash(f"{ad} teyit edilmedi: önce kutucuğu işaretleyin.")
+    else:
+        with vt:
+            numara_degistir(vt, urun_id, alan, None, deger, TEYIT, g.kullanici["id"])
+        flash(f"{ad} {deger} teyit edildi; artık nihai numara.")
+    return redirect(url_for(".sayfa", urun_id=urun_id) + "#numaralar")
+
+
 @bp.route("/is-emri/<is_emri_no>")
 def is_emri(is_emri_no):
     """İş emrinin sayfası: alt montaj ve yarı mamul iş emirleri gibi bir ürüne dağıtılmamış iş emirleri de
-    dahil; bilgileri, bağlantısı, eksik malzemeleri, imalattan beklenen yarı mamulleri ve kırılımları."""
+    dahil; bilgileri, bağlantısı, eksik malzemeleri, yarı mamulleri ve kırılımları."""
     vt = baglanti()
     ie = vt.execute(
         "SELECT i.*, s.siparis_no, s.musteri, k.sira_no AS kalem_sira FROM is_emirleri i"
@@ -175,29 +296,27 @@ def is_emri(is_emri_no):
 @bp.route("/is-emri/<is_emri_no>/yari-mamul", methods=["POST"])
 @ekip_gerekli
 def yari_mamul(is_emri_no):
-    """İmalattan beklenen yarı mamulleri "geldi" işaretler (seçilenler ya da kırılımın hepsi) ya da işareti geri alır."""
+    """Yarı mamulleri "Hazır" işaretler (seçilenler ya da kırılımın hazır olmayanlarının hepsi) ya da işareti geri alır."""
     vt = baglanti()
     try:
         sira = int(request.form.get("sira", ""))
     except ValueError:
         abort(400)
-    kodlar = [r[0] for r in vt.execute(
-        "SELECT malzeme_kodu FROM eksik_malzemeler WHERE is_emri_no = ? AND sira_no = ? AND envanter_turu = ?",
-        (is_emri_no, sira, YARI_MAMUL),
-    )]
-    if not kodlar:
+    grup = next((gr for gr in is_emri_eksikleri(vt, is_emri_no) if gr["sira"] == sira and gr["yari_mamuller"]), None)
+    if grup is None:
         abort(404)
+    kodlar = [m["malzeme_kodu"] for m in grup["yari_mamuller"] if m["durum"] not in HAZIR_DURUMLAR]
     with vt:
         if geri := request.form.get("geri_al"):
             yari_mamul_geri_al(vt, is_emri_no, sira, geri)
-            flash(f"{geri}: \"Geldi\" işareti geri alındı.")
+            flash(f"{geri}: \"Hazır\" işareti geri alındı.")
         else:
             secilen = kodlar if request.form.get("islem") == "hepsi" else [k for k in request.form.getlist("sec") if k in kodlar]
             if secilen:
                 yari_mamul_isaretle(vt, is_emri_no, [(sira, k) for k in secilen], g.kullanici["id"])
-                flash(f"{len(secilen)} yarı mamul \"geldi\" işaretlendi.")
+                flash(f"{len(secilen)} yarı mamul \"Hazır\" işaretlendi.")
             else:
-                flash("Gelen yarı mamulleri işaretleyin ya da \"Hepsi geldi\"ye basın.")
+                flash("Hazır olan yarı mamulleri işaretleyin ya da \"Hepsi hazır\"a basın.")
     adres = guvenli_adres(request.form.get("sonra") or url_for(".is_emri", is_emri_no=is_emri_no))
     return redirect(f"{adres}?acik=yari-{sira}#yari-{sira}")
 

@@ -4,6 +4,7 @@
 {% set s = ozet.siparis %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
 {% from "_uyarilar.html" import eksik_cipi with context %}
+{% from "_numaralar.html" import numara_degeri with context %}
 
 {% macro kalem_rozetleri(satir) -%}
   {% set k = satir.kalem %}
@@ -79,14 +80,14 @@
       <div class="urun-seri">
         {% if u.seri_no %}<span class="bilgi">Seri no <strong>{{ u.seri_no }}</strong></span>{% endif %}
         <span class="bilgi">{% if satirdaki %}İş emri <a class="duz-baglanti" href="{{ url_for('urunler.is_emri', is_emri_no=satirdaki.is_emri_no) }}"><strong>{{ satirdaki.is_emri_no }}</strong></a>{% else %}<span class="soluk">İş emri açılmadı</span>{% endif %}</span>
-        {% if numaralar | length == 1 %}{% for alan, ad, deger, kaynak in numaralar %}<span class="bilgi">{% if deger %}{{ ad }} <strong>{{ deger }}</strong>{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}</span>{% endfor %}{% endif %}
+        {% if numaralar | length == 1 %}{% for alan, ad, deger, kaynak in numaralar %}<span class="bilgi">{% if deger %}{{ ad }} {{ numara_degeri(deger, kaynak) }}{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}</span>{% endfor %}{% endif %}
         {% if k.miktar > 1 %}<span class="bilgi soluk">{{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
         {{ kalem_rozetleri(satir) }}
       </div>
       {% if numaralar | length > 1 %}
       {# İki motorlu güç ünitesi: her motorun numarası ayrı #}
       <div class="urun-numaralar">
-        {% for alan, ad, deger, kaynak in numaralar %}<span class="numara-cip{% if not deger %} soluk{% endif %}">{{ ad }} <strong>{{ deger or 'yok' }}</strong></span>{% endfor %}
+        {% for alan, ad, deger, kaynak in numaralar %}<span class="numara-cip{% if not deger %} soluk{% endif %}">{{ ad }} {{ numara_degeri(deger, kaynak, '<strong>yok</strong>' | safe) }}</span>{% endfor %}
       </div>
       {% endif %}
       {{ kalem_bilgileri(satir, ([is_emri_haritasi[u.is_emri_id]] if u.is_emri_id in is_emri_haritasi else [])
@@ -128,7 +129,29 @@
   {{ durum_ozeti_kutusu(durum_ozeti, s.siparis_no, suzgec[0] if suzgec) }}
   {% if s.notu %}<p class="siparis-notu"><strong>Not:</strong> {{ s.notu }}</p>{% endif %}
   {% if ozet.durum == 'listede_yok' %}<p class="cip uyari eksik-satirlar">Bu sipariş en son yüklenen ERP sipariş listesinde yok; açık siparişlerden çıkarıldı. Kaydı silinmedi; listede yeniden görünürse geri gelir.</p>{% endif %}
-  {% if eksik %}<p class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if eksik | length > 1 %}satırları{% else %}satırı{% endif %} yüklenen ERP listelerinin hiçbirinde görünmedi; hangi ürün olduğu bilinmiyor. Satır ERP'de silinmiş ya da liste bir süzgeçle alınmış olabilir.</p>{% endif %}
+  {# Listede görünmeyen satırlar: ekip "Kontrol ettim, satır silinmiş" deyince uyarı kalkar (yeni bir satır
+     görünmez olursa yeniden çıkar) #}
+  {% set coklu = eksik | length > 1 %}
+  {% if eksik and not eksik_kontrol %}
+  <div class="cip uyari eksik-satirlar">Siparişin {{ eksik | join(', ') }}. {% if coklu %}satırları{% else %}satırı{% endif %} yüklenen ERP listelerinin hiçbirinde görünmedi; hangi ürün olduğu bilinmiyor. Satır ERP'de silinmiş ya da liste bir süzgeçle alınmış olabilir.
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('siparisler.eksik_satir', siparis_no=s.siparis_no) }}" class="eksik-satir-formu">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <button type="submit" class="dugme ikincil kucuk-dugme">Kontrol ettim, {% if coklu %}satırlar{% else %}satır{% endif %} silinmiş</button>
+    </form>
+    {% endif %}
+  </div>
+  {% elif eksik %}
+  <div class="soluk kucuk eksik-satir-kontrol">Siparişin {{ eksik | join(', ') }}. {% if coklu %}satırları{% else %}satırı{% endif %} ERP listesinde yok;
+    {{ eksik_kontrol.kim or '' }} kontrol etti: {% if coklu %}satırlar{% else %}satır{% endif %} silinmiş ({{ eksik_kontrol.zaman | zaman }}).
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('siparisler.eksik_satir', siparis_no=s.siparis_no) }}" class="eksik-satir-formu">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="geri_al">
+      <button type="submit" class="dugme ikincil kucuk-dugme">Geri al</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if son_veri %}<p class="soluk kucuk">ERP verisi: {{ son_veri | zaman }}</p>{% endif %}
 </div>
 

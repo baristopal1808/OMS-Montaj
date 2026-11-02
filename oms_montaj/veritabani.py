@@ -241,8 +241,8 @@ GOCLER = [
     );
     """,
     # 13: makine numaralarının değişiklik geçmişi (numara girilince kilitlenir; değiştirmek için sebep
-    #     yazılır) ve imalat fabrikasından gelen yarı mamullerin "geldi" işaretleri (ERP'de çıkışları
-    #     yapılmıyor; ekip uygulamada işaretler)
+    #     yazılır) ve yarı mamullerin ekip işaretleri (02/11/2026'dan beri ekranda "Hazır"; ERP'nin
+    #     göstermediği hazır yarı mamuller için)
     """
     CREATE TABLE numara_degisiklikleri (
         id INTEGER PRIMARY KEY,
@@ -264,6 +264,69 @@ GOCLER = [
         zaman TEXT NOT NULL,
         PRIMARY KEY (is_emri_no, sira_no, malzeme_kodu)
     );
+    """,
+    # 14: ürünün zaman akışı: notlar ve aşama değişiklikleri (ekip ya da ERP yüklemesi; ERP'nin kendi olayları
+    #     tarihlerinden hesaplanır, saklanmaz), notların önceki hâlleri, ERP'nin son gösterdiği aşama (ekibin geri
+    #     aldığı ürünü ERP yeni bir gelişme olmadıkça yeniden ileri itmesin diye) ve siparişin eksik satır kontrolü
+    """
+    CREATE TABLE urun_olaylari (
+        id INTEGER PRIMARY KEY,
+        urun_id INTEGER NOT NULL REFERENCES urunler(id),
+        tur TEXT NOT NULL,            -- not, asama
+        zaman TEXT NOT NULL,
+        kullanici_id INTEGER REFERENCES kullanicilar(id),  -- ERP yüklemesinin değişikliğinde boş
+        eski_asama TEXT,
+        yeni_asama TEXT,
+        metin TEXT,                   -- not ya da aşama değişikliğinin notu
+        duzeltme TEXT                 -- son düzeltmenin zamanı
+    );
+    CREATE INDEX urun_olaylari_urun ON urun_olaylari (urun_id);
+
+    CREATE TABLE not_duzeltmeleri (
+        id INTEGER PRIMARY KEY,
+        olay_id INTEGER NOT NULL REFERENCES urun_olaylari(id),
+        eski_metin TEXT,
+        zaman TEXT NOT NULL
+    );
+
+    ALTER TABLE urunler ADD COLUMN erp_asama TEXT;
+    ALTER TABLE siparisler ADD COLUMN eksik_satir_kontrol TEXT;   -- kontrol edilen satır numaraları (JSON)
+    ALTER TABLE siparisler ADD COLUMN eksik_satir_kontrol_eden INTEGER REFERENCES kullanicilar(id);
+    ALTER TABLE siparisler ADD COLUMN eksik_satir_kontrol_zamani TEXT;
+    """,
+    # 15: montaj formları (proje kodlaması, test öncesi kontrol, test ve kurulum formu): basılan formlar ve forma
+    #     yazılan bilgiler, güç ünitesi modellerinin motor bilgileri (bir kez girilir); form kuralı başladığında
+    #     Montaj tamamlandı ya da daha ileri aşamada olan ürünler kuraldan muaf (kullanıcı kararı, 02/11/2026);
+    #     çıkış yapılamayan malzemenin rotası (rotası olan yarı mamul imalattan beklenir)
+    """
+    CREATE TABLE motor_bilgileri (
+        urun_kodu TEXT PRIMARY KEY,   -- güç ünitesinin ürün kodu
+        marka TEXT,
+        model TEXT NOT NULL,
+        guc_kw REAL,
+        guc_hp REAL,
+        devir INTEGER,                -- çalışma devri (rpm)
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL
+    );
+
+    CREATE TABLE urun_formlari (
+        id INTEGER PRIMARY KEY,
+        urun_id INTEGER NOT NULL REFERENCES urunler(id),
+        tur TEXT NOT NULL,            -- kodlama, test_oncesi, test, kurulum
+        sablon TEXT,                  -- kullanılan şablonun dosya adı (proje kodlamasında boş)
+        bilgiler TEXT NOT NULL,       -- forma yazılan bilgiler (JSON)
+        dosya TEXT,                   -- PDF'in veri klasörüne göre yolu
+        kullanici_id INTEGER REFERENCES kullanicilar(id),
+        zaman TEXT NOT NULL
+    );
+    CREATE INDEX urun_formlari_urun ON urun_formlari (urun_id);
+
+    ALTER TABLE urunler ADD COLUMN form_muaf INTEGER NOT NULL DEFAULT 0;
+    UPDATE urunler SET form_muaf = 1 WHERE asama IN
+        ('montaj_tamamlandi', 'teste_hazir', 'test', 'temizlik', 'sevke_hazir', 'sevk_edildi', 'stokta');
+
+    ALTER TABLE eksik_malzemeler ADD COLUMN rota_kodu TEXT;  -- boş: rotası yok; NULL: raporda rota sütunu yok
     """,
 ]
 

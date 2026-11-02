@@ -8,6 +8,7 @@ from test_siparisler import ekip, excel, makine_siparisi, yukle  # noqa: F401 (p
 from test_urunler import urun_id
 
 from oms_montaj.erp_okuyucu import cikis_satirlari, rapor_turu
+from oms_montaj.veritabani import baglanti
 
 CIKIS_BASLIKLAR = [
     "Malzeme Kodu", "Malzeme Adı", "Malzeme Envanter Türü", "Ürün Agac Miktar", "Toplam Eldeki Miktar", "",
@@ -76,7 +77,7 @@ def test_eksik_malzeme_gosterilir_ve_sorulur(istemci, uygulama, ekip, yukle):  #
     for beklenen in ("Eksik malzeme", '<details class="kirilim" id="eksik-25">', "PP Yag Tanki Montaji", "MLZ0001",
                      "MLZ0002", "Depoda var, çıkışı yapılmamış", "Depoda yok", "Montaj depo 20", "Bilginiz var mı?"):
         assert beklenen in urun, beklenen
-    assert "kırılım ·" not in urun and "İmalattan beklenen" not in urun  # yarı mamul yok
+    assert "kırılım ·" not in urun and 'id="yari-mamul"' not in urun  # yarı mamul yok
     assert '<details class="kirilim" id="eksik-25" open>' in unescape(
         istemci.get(f"/urun/{pp}?acik=eksik-25").get_data(as_text=True))  # kırılım tablosundaki bağlantı açar
     assert "MLZ0003" not in urun  # çıkışı tamam
@@ -100,44 +101,77 @@ def test_eksik_malzeme_gosterilir_ve_sorulur(istemci, uygulama, ekip, yukle):  #
     assert 'data-sayi-konu="eksik">2<' in sayfa and "Sonra yeni eksik geldi" in sayfa
 
 
-def test_imalattan_beklenen_yari_mamuller(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+def test_yari_mamuller(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
     yuklenmis(yukle)
     rapor = cikis_raporu() + [
-        malzeme("900101 / 25", "YRM0001", "Test Susturucu Montaji", plan=1, cikis=0, tur="Yarı Mamul"),
-        malzeme("900101 / 25", "YRM0002", "Test Egzoz Borusu", plan=1, cikis=0, tur="Yarı Mamul"),
+        # Montajı aynı iş emrinin 25. kırılımında yapılıyor (CP0001) ve siparişin alt montaj iş emrinde (900104)
+        malzeme("900101 / 0", "CP0001", "PP Yag Tanki Montaji", plan=1, cikis=0, tur="Yarı Mamul"),
+        malzeme("900101 / 0", "CP0002", "Disli Kutusu Montaji", plan=1, cikis=0, tur="Yarı Mamul"),
+        # Üreten kırılımı yok: depoda yok / depoda var
+        malzeme("900101 / 25", "YRM0001", "Test Susturucu", plan=1, cikis=0, tur="Yarı Mamul"),
+        malzeme("900101 / 25", "YRM0002", "Test Egzoz Borusu", plan=1, cikis=0, montaj=1, tur="Yarı Mamul"),
         malzeme("900104 / 0", "YRM0003", "Test Blok", plan=1, cikis=0, tur="Yarı Mamul"),  # alt montaj iş emri
     ]
     yukle(excel(rapor, basliklar=CIKIS_BASLIKLAR), ad="cikis.xlsx")
-    assert "ayrıca 3 yarı mamul imalattan bekleniyor" in unescape(istemci.get("/erp-yukleme").get_data(as_text=True))
+    assert "ayrıca 5 yarı mamulün çıkışı yapılmamış" in unescape(istemci.get("/erp-yukleme").get_data(as_text=True))
     # Yarı mamuller sorulmaz: 900104'te yalnızca yarı mamul var, soru yok
     sayfa = unescape(istemci.get("/yapilacaklar?konu=eksik").get_data(as_text=True))
     assert 'data-sayi-konu="eksik">2<' in sayfa and 'id="eksik-900104"' not in sayfa
-    assert "Ayrıca 2 yarı mamul imalattan bekleniyor" in sayfa
-    # Ürün sayfasında ayrı bölüm; sipariş kartında rozet
+    # Ürün sayfasında ayrı bölüm; durum ERP'den: üreten kırılım, depo
     pp = urun_id(uygulama, "PP-536-NF")
     urun = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    yari = urun[urun.index("İmalattan beklenen yarı mamuller"):]
-    assert "<strong>2 yarı mamul</strong>" in yari and "YRM0001" in yari and "MLZ0002" not in yari
+    yari = urun[urun.index('id="yari-mamul"'):]
+    assert "depo-imalat" not in yari and "<strong>3 yarı mamul</strong> henüz hazır değil · 1 tanesi hazır" in yari
+    for beklenen in ("Montajı bekliyor", "Sıra 25 kırılımı", "İş emri 900104", "Bekleniyor", "Depoda var", "Montaj depo 1"):
+        assert beklenen in yari, beklenen
+    assert "MLZ0002" not in yari
     kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
-    assert "2 yarı mamul bekleniyor" in kart and "1 yarı mamul bekleniyor" in kart  # PP ve alt montaj (900104)
-    # Seçilen "geldi" işaretlenir, sayfa o kırılımı açık getirir; "Hepsi geldi" kalanı işaretler; geri alınır
+    assert "3 yarı mamul bekleniyor" in kart and "1 yarı mamul bekleniyor" in kart  # PP ve alt montaj (900104)
+    # Kırılım stoğa girince yarı mamulü "Montajı tamamlandı" olur
+    liste = is_emirleri()
+    liste[1]["Gerçek Mkt."] = 1  # 900101'in 25. kırılımı (CP0001)
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    urun = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "Montajı tamamlandı" in urun and "<strong>2 yarı mamul</strong> henüz hazır değil · 2 tanesi hazır" in urun
+    # ERP'nin göstermediği hazır parça işaretlenir; sayfa o kırılımı açık getirir
     yanit = gonder("/is-emri/900101/yari-mamul", sira="25", islem="secilen", sec="YRM0001", sonra=f"/urun/{pp}")
     assert yanit.headers["Location"].endswith(f"/urun/{pp}?acik=yari-25#yari-25")
     urun = unescape(istemci.get(f"/urun/{pp}?acik=yari-25").get_data(as_text=True))
-    assert '<details class="kirilim" id="yari-25" open>' in urun and "1 bekleniyor" in urun and "1 geldi" in urun
-    gonder("/is-emri/900101/yari-mamul", sira="25", islem="hepsi")
-    assert "Bütün yarı mamuller geldi" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert "2 yarı mamul bekleniyor" not in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
+    assert '<details class="kirilim" id="yari-25" open>' in urun and "2 hazır" in urun and "TEST KULLANICI" in urun
+    # "Hepsi hazır" yalnızca hazır olmayanları işaretler
+    gonder("/is-emri/900101/yari-mamul", sira="0", islem="hepsi")
+    with uygulama.app_context():
+        isaretli = {r[0] for r in baglanti().execute("SELECT malzeme_kodu FROM gelen_yari_mamuller")}
+    assert isaretli == {"YRM0001", "CP0002"}
+    assert "Bütün yarı mamuller hazır" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "3 yarı mamul bekleniyor" not in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
     # İşaretler rapor yeniden yüklenince kalır; geri alınabilir
     yukle(excel(rapor, basliklar=CIKIS_BASLIKLAR), ad="cikis.xlsx")
-    assert "Bütün yarı mamuller geldi" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    gonder("/is-emri/900101/yari-mamul", sira="25", geri_al="YRM0002")
-    assert "<strong>1 yarı mamul</strong>" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "Bütün yarı mamuller hazır" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    gonder("/is-emri/900101/yari-mamul", sira="25", geri_al="YRM0001")
+    assert "<strong>1 yarı mamul</strong> henüz hazır değil" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
     # Ürüne dağıtılmamış (alt montaj) iş emrinin kendi sayfası
     ie_sayfasi = unescape(istemci.get("/is-emri/900104").get_data(as_text=True))
     assert "İş emri 900104" in ie_sayfasi and "YRM0003" in ie_sayfasi and "alt montaj / yarı mamul" in ie_sayfasi
     assert istemci.get("/is-emri/999999").status_code == 404
-    assert gonder("/is-emri/900101/yari-mamul", sira="0", islem="hepsi").status_code == 404  # 0. sırada yarı mamul yok
+    assert gonder("/is-emri/900101/yari-mamul", sira="7", islem="hepsi").status_code == 404  # 7. sırada yarı mamul yok
+
+
+def test_yari_mamulun_rotasi(istemci, uygulama, ekip, yukle):  # noqa: F811
+    # 26/10/2026 raporundan beri malzemenin rotası var: rotası olan parça imalatta işlenir, olmayan montajda yapılır
+    yuklenmis(yukle)
+    rapor = [
+        {**malzeme("900101 / 25", "YRM0001", "Test Mil", plan=1, cikis=0, tur="Yarı Mamul"), "Rota Kodu": "U_TEST"},
+        {**malzeme("900101 / 25", "YRM0002", "Test Kontrol Blogu Montaji", plan=1, cikis=0, tur="Yarı Mamul"), "Rota Kodu": "null"},
+    ]
+    yukle(excel(rapor, basliklar=CIKIS_BASLIKLAR + ["Rota Kodu"]), ad="cikis.xlsx")
+    with uygulama.app_context():
+        rotalar = dict(baglanti().execute("SELECT malzeme_kodu, rota_kodu FROM eksik_malzemeler"))
+    assert rotalar == {"YRM0001": "U_TEST", "YRM0002": ""}
+    urun = unescape(istemci.get(f"/urun/{urun_id(uygulama, 'PP-536-NF')}").get_data(as_text=True))
+    yari = urun[urun.index('id="yari-mamul"'):]
+    for beklenen in ("İmalattan bekleniyor", "Rota: U_TEST", "1 imalattan bekleniyor", "1 montajı bekliyor"):
+        assert beklenen in yari, beklenen
 
 
 def test_takip_edilmeyen_is_emri_sorulmaz(istemci, uygulama, ekip, yukle):  # noqa: F811

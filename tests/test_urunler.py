@@ -128,11 +128,43 @@ def test_numaralar_kilitli(istemci, uygulama, gonder, ekip, yukle):  # noqa: F81
     assert "<dt>Motor seri no</dt><dd><a" in sayfa and "Değiştirme sebebi" in sayfa
     gonder(f"/urun/{pp}/numara/motor_seri_no", deger="0000111102", sebep="TEST SEBEP")
     sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert "<strong>0000 111 102</strong>" in sayfa and "ekip girdi" in sayfa
+    assert "<strong>0000 111 102</strong>" in sayfa and "ekip değiştirdi" in sayfa
     gecmis = sayfa[sayfa.index("Değişiklik geçmişi"):]
     assert "0000 111 101" in gecmis and "TEST SEBEP" in gecmis  # eski numara, yeni numara ve sebep saklanır
     # Makinede olmayan alan girilmez
     assert gonder(f"/urun/{svr}/numara/motor_seri_no", deger="0000111102").status_code == 404
+
+
+def test_erp_motor_seri_no_teyit_edilir(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    yuklenmis(yukle)
+    pp, svr = urun_id(uygulama, "PP-536-NF"), urun_id(uygulama, "SVR-50-NF-BSP")
+    # ERP'den okunan numara her yerde ünlemle görünür; teyit kutucuğu ürün sayfasında
+    sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert 'class="teyit-isareti"' in sayfa and "okundu · teyit edilmedi" in sayfa and "Numarayı kontrol ettim, doğru" in sayfa
+    assert 'class="teyit-isareti"' in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    assert 'class="teyit-isareti"' in istemci.get("/makineler").get_data(as_text=True)
+    # Kutucuk işaretlenmeden ya da numara bu arada değiştiyse teyit edilmez
+    gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 101")
+    assert "önce kutucuğu işaretleyin" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 109", teyit="1")
+    assert "bu arada değişmiş" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    # Teyit edilince nihai numara: ünlem kalkar, geçmişte görünür
+    gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 101", teyit="1")
+    sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "teyit edildi; artık nihai numara" in sayfa and 'class="teyit-isareti"' not in sayfa
+    assert "ERP'den okundu, teyit edildi" in sayfa
+    assert "ERP'den okunan numara teyit edildi" in sayfa[sayfa.index("Değişiklik geçmişi"):]
+    assert 'class="teyit-isareti"' not in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
+    # ERP'deki açıklama değişse de teyit edilen numara değişmez
+    liste = motorlu_is_emirleri()
+    liste[0]["Açıklama"] = "OZ-TS0001 - 0000 111 102 - TEST FIRMA"
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "<strong>0000 111 101</strong>" in sayfa and "<strong>0000 111 102</strong>" not in sayfa
+    gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 101", teyit="1")
+    assert "teyit gerekmiyor" in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    # Şasi no ERP'den okunmaz, teyit edilmez
+    assert gonder(f"/urun/{svr}/numara/sasi_no/teyit", deger="TEST-SASI-001", teyit="1").status_code == 404
 
 
 def test_izleyici_numara_giremez(istemci, uygulama, ekle, giris, gonder, ekip, yukle):  # noqa: F811
@@ -142,6 +174,10 @@ def test_izleyici_numara_giremez(istemci, uygulama, ekle, giris, gonder, ekip, y
     giris("test.izleyici")
     assert 'name="deger"' not in istemci.get(f"/urun/{svr}").get_data(as_text=True)
     assert gonder(f"/urun/{svr}/numara/sasi_no", deger="TEST-SASI-001").status_code == 403
+    pp = urun_id(uygulama, "PP-536-NF")
+    sayfa = istemci.get(f"/urun/{pp}").get_data(as_text=True)
+    assert 'class="teyit-isareti"' in sayfa and 'name="teyit"' not in sayfa  # izleyici görür, teyit edemez
+    assert gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 101", teyit="1").status_code == 403
 
 
 def test_makine_numaralari_sablonu(istemci, uygulama, ekip, yukle):  # noqa: F811

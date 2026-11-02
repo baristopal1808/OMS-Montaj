@@ -7,10 +7,14 @@ depoda varsa (yalnızca çıkışı yapılmamışsa) sarı, depoda yoksa kırmı
 kez sorulur ("12 malzemenin çıkışı yapılmamış, bilginiz var mı?"); cevaptan sonra yeni bir malzeme eksik
 görünür ya da eksik miktarı artarsa yeniden sorulur. "Takip etme" denen iş emirleri sorulmaz.
 
-İmalattan beklenen yarı mamuller: envanter türü "Yarı Mamul" olan eksikler imalat fabrikasından geliyor; ERP'de
-çıkışları yapılmadığı için hep "depoda yok" görünürler (kullanıcı, 26/10/2026). Bunlar eksik malzemeden ayrı
-gösterilir ve sorulmaz; ekip geldiklerinde parça parça ya da kırılımın tamamı için "Geldi" işaretler (kim, ne
-zaman saklanır). İşaretler rapor yeniden yüklense de kalır; ERP'de çıkışı yapılan yarı mamul listeden kendiliğinden düşer.
+Yarı mamuller: envanter türü "Yarı Mamul" olan eksikler (alt montajlar ve parçalar) eksik malzemeden ayrı
+gösterilir ve sorulmaz. Rotası olmayanlar montaj atölyesinde yapılır; çoğunun montajı aynı iş emrinin bir
+kırılımında yapılır ve kırılım stoğa girince yarı mamul stoğu oluşur. Rotası olanlar (U_ talaşlı işleme, RT
+kaynak, LZR lazer, kumlama, astar, boya…) imalat fabrikasında işlenir ve oradan beklenir (kullanıcı kararları,
+02/11/2026; ERP'deki hatalı ve boş rotaları kullanıcı güncelleyecek). Durumları ERP'den okunur: yarı
+mamulü üreten kırılım (aynı iş emrinde, yoksa aynı siparişin iş emirlerinde) ve onun stok girişi, ayrıca
+depodaki miktar ve rota. ERP'nin göstermediği durumlar için ekip parça parça ya da kırılımın tamamı için "Hazır" işaretler (kim,
+ne zaman saklanır; işaretler rapor yeniden yüklense de kalır). ERP'de çıkışı yapılan yarı mamul listeden kendiliğinden düşer.
 
 "İmalatta" uyarısı: ürünün iş emri stoğa girmeye başlamış (kısmen ya da tamamen) ama planlama biriminin
 ERP'deki ürün durumu hâlâ "İmalatta" ise (imalat fabrikası başka yerleşkede; ERP geç güncellenebiliyor)
@@ -45,7 +49,17 @@ DEPOLAR = {
     "ana_urun_depo": "Ana ürün depo",
 }
 DEPO_DURUMLARI = {"var": "Depoda var, çıkışı yapılmamış", "kismen": "Bir kısmı depoda", "yok": "Depoda yok"}
-YARI_MAMUL = "Yarı Mamul"  # imalat fabrikasından gelir; ERP'de çıkışı yapılmıyor
+YARI_MAMUL = "Yarı Mamul"
+YARI_MAMUL_DURUMLARI = {
+    "hazir": "Hazır",  # ekip işaretledi
+    "tamamlandi": "Montajı tamamlandı",  # üreten kırılım stoğa girdi
+    "depoda": "Depoda var",
+    "kismen": "Montajı kısmen tamamlandı",
+    "montaj_bekliyor": "Montajı bekliyor",  # üreten kırılım henüz stoğa girmedi ya da rotası yok (montajda yapılır)
+    "imalattan": "İmalattan bekleniyor",  # rotası var (imalatta işlenir), depoda yok
+    "bekleniyor": "Bekleniyor",  # üreten kırılım bulunamadı, depoda yok, rotası bilinmiyor (eski rapor)
+}
+HAZIR_DURUMLAR = ("hazir", "tamamlandi", "depoda")
 
 
 def _simdi():
@@ -93,10 +107,11 @@ def eksikleri_isle(vt, kayitlar, yukleme_id):
         vt.execute(
             "INSERT INTO eksik_malzemeler (is_emri_no, sira_no, malzeme_kodu, malzeme_adi, envanter_turu, birim,"
             " plan_miktar, cikis_miktar, eldeki, ana_urun_depo, uretim_depo, montaj_depo, montaj_uretim_depo, sevk_depo,"
-            " yukleme_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " rota_kodu, yukleme_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (kayit["is_emri_no"], kayit["sira_no"], kayit["malzeme_kodu"], kayit["malzeme_adi"], kayit["envanter_turu"],
              kayit["birim"], kayit["plan_miktar"], kayit["cikis_miktar"], kayit["eldeki"], kayit["ana_urun_depo"],
-             kayit["uretim_depo"], kayit["montaj_depo"], kayit["montaj_uretim_depo"], kayit["sevk_depo"], yukleme_id),
+             kayit["uretim_depo"], kayit["montaj_depo"], kayit["montaj_uretim_depo"], kayit["sevk_depo"],
+             kayit.get("rota_kodu"), yukleme_id),
         )
     sayac["is_emri"], sayac["bilinmeyen"] = len(ieler), len(bilinmeyen)
     return sayac
@@ -108,7 +123,7 @@ def eksik_ozeti(sayac):
         parcalar.append(f"{sayac['is_emri']} iş emrinde {sayac['eksik']} malzemenin çıkışı yapılmamış"
                         f" ({sayac['depoda']} tanesi depoda var)")
         if sayac["yari_mamul"]:
-            parcalar.append(f"ayrıca {sayac['yari_mamul']} yarı mamul imalattan bekleniyor")
+            parcalar.append(f"ayrıca {sayac['yari_mamul']} yarı mamulün çıkışı yapılmamış")
     else:
         parcalar.append("çıkışı yapılmamış malzeme yok")
     ozet = "; ".join(parcalar) + "."
@@ -127,23 +142,107 @@ def _imza(malzemeler):
     return dict(imza)
 
 
-def _gelenler(vt, is_emri_nolari):
-    """"Geldi" işaretlenen yarı mamuller: {(iş emri no, sıra no, malzeme kodu): işaret}."""
+def _yer(degerler):
+    return ", ".join("?" * len(degerler))
+
+
+def _hazir_isaretleri(vt, is_emri_nolari):
+    """Ekibin "Hazır" işaretlediği yarı mamuller: {(iş emri no, sıra no, malzeme kodu): işaret}."""
     nolar = list(is_emri_nolari)
     if not nolar:
         return {}
-    return {(g["is_emri_no"], g["sira_no"], g["malzeme_kodu"]): g for g in vt.execute(
+    return {(i["is_emri_no"], i["sira_no"], i["malzeme_kodu"]): i for i in vt.execute(
         "SELECT y.*, k.ad_soyad FROM gelen_yari_mamuller y LEFT JOIN kullanicilar k ON k.id = y.kullanici_id"
-        f" WHERE y.is_emri_no IN ({', '.join('?' * len(nolar))})",
+        f" WHERE y.is_emri_no IN ({_yer(nolar)})",
         nolar,
     )}
 
 
-def eksik_ozetleri(vt, is_emri_nolari=None):
-    """İş emri no → {"toplam", "var", "kismen", "yok" (satın alınan eksik malzemeler), "yari_mamul" (imalattan
-    beklenen, "geldi" işaretlenmemiş yarı mamuller), "gelen", "cevap" (son cevap ya da None), "bekliyor"}.
-    Soru yalnızca satın alınan malzemeler için sorulur; cevaptan sonra yeni bir malzeme eksik görünürse ya da
-    eksik miktarı artarsa yeniden "bekliyor" olur."""
+def _ureticiler(vt, yari_mamuller):
+    """Yarı mamulleri üreten kırılımlar: {(tüketen iş emri no, malzeme kodu): [satır, …]}. Önce tüketen iş
+    emrinin kendi kırılımlarına, yoksa aynı siparişe bağlı öbür iş emirlerine (iş emrinin kendisi ve
+    kırılımları) bakılır. Satırlarda is_emri_no, sira_no (iş emrinin kendisiyse 0), durum, plan ve gerçekleşen."""
+    nolar = sorted({m["is_emri_no"] for m in yari_mamuller})
+    if not nolar:
+        return {}
+    siparis = {r["is_emri_no"]: r["siparis_id"] for r in vt.execute(
+        f"SELECT is_emri_no, siparis_id FROM is_emirleri WHERE is_emri_no IN ({_yer(nolar)})", nolar)}
+    siparisler = sorted({s for s in siparis.values() if s})
+    kosul, degerler = f"i.is_emri_no IN ({_yer(nolar)})", list(nolar)
+    if siparisler:
+        kosul += f" OR i.siparis_id IN ({_yer(siparisler)})"
+        degerler += siparisler
+    satirlar = vt.execute(
+        "SELECT i.is_emri_no, i.siparis_id, s.sira_no, s.urun_kodu, s.durum, s.plan_miktar, s.gercek_miktar"
+        f" FROM is_emri_satirlari s JOIN is_emirleri i ON i.id = s.is_emri_id WHERE {kosul} ORDER BY i.is_emri_no, s.sira_no",
+        degerler,
+    ).fetchall()
+    if siparisler:
+        satirlar += vt.execute(
+            "SELECT is_emri_no, siparis_id, 0 AS sira_no, urun_kodu, durum, plan_miktar, gercek_miktar FROM is_emirleri"
+            f" WHERE siparis_id IN ({_yer(siparisler)}) ORDER BY is_emri_no",
+            siparisler,
+        ).fetchall()
+    kendi, projede = defaultdict(list), defaultdict(list)
+    for s in satirlar:
+        kendi[(s["is_emri_no"], s["urun_kodu"])].append(s)
+        if s["siparis_id"]:
+            projede[(s["siparis_id"], s["urun_kodu"])].append(s)
+    sonuc = {}
+    for m in yari_mamuller:
+        no, kod = m["is_emri_no"], m["malzeme_kodu"]
+        bulunan = [s for s in kendi.get((no, kod), []) if s["sira_no"]] or [
+            s for s in projede.get((siparis.get(no), kod), []) if s["is_emri_no"] != no
+        ]
+        if bulunan:
+            sonuc[(no, kod)] = bulunan
+    return sonuc
+
+
+def _uretim_durumu(satirlar):
+    """Üreten kırılımların durumu: 'tamamlandi', 'kismen', 'montaj_bekliyor' ya da (üretimsiz kapandıysa) None."""
+    plan = sum(s["plan_miktar"] or 0 for s in satirlar)
+    gercek = sum(s["gercek_miktar"] or 0 for s in satirlar)
+    if gercek and (gercek >= plan or all(s["durum"] == KAPALI for s in satirlar)):
+        return "tamamlandi"
+    if gercek:
+        return "kismen"
+    return None if all(s["durum"] == KAPALI for s in satirlar) else "montaj_bekliyor"
+
+
+def yari_mamul_durumlari(vt, malzemeler):
+    """Yarı mamullerin durumu: {(iş emri no, sıra no, malzeme kodu): {"durum", "isaret", "uretici"}}. Sıra:
+    üreten kırılımın stoğa girmesi, ekibin "Hazır" işareti, depodaki miktar, üreten kırılımın durumu, rota
+    (rotası olan imalattan beklenir, rotası olmayan montajda yapılır)."""
+    yari = [m for m in malzemeler if yari_mamul_mu(m)]
+    isaretler = _hazir_isaretleri(vt, {m["is_emri_no"] for m in yari})
+    ureticiler = _ureticiler(vt, yari)
+    sonuc = {}
+    for m in yari:
+        anahtar = (m["is_emri_no"], m["sira_no"], m["malzeme_kodu"])
+        uretici = ureticiler.get((m["is_emri_no"], m["malzeme_kodu"]))
+        uretim = _uretim_durumu(uretici) if uretici else None
+        if uretim == "tamamlandi":
+            durum = uretim
+        elif anahtar in isaretler:
+            durum = "hazir"
+        elif depo_durumu(m) == "var":
+            durum = "depoda"
+        elif uretim:
+            durum = uretim
+        elif m["rota_kodu"]:
+            durum = "imalattan"
+        else:
+            durum = "bekleniyor" if m["rota_kodu"] is None else "montaj_bekliyor"
+        sonuc[anahtar] = {"durum": durum, "isaret": isaretler.get(anahtar), "uretici": uretici[0] if uretici else None}
+    return sonuc
+
+
+def eksik_ozetleri(vt, is_emri_nolari=None, yari_mamuller=True):
+    """İş emri no → {"toplam", "var", "kismen", "yok" (satın alınan eksik malzemeler), "yari_mamul" (hazır
+    olmayan yarı mamuller), "yari_hazir", "cevap" (son cevap ya da None), "bekliyor"}. Yarı mamullerin durumu
+    yalnızca yari_mamuller doğruysa hesaplanır. Soru yalnızca satın alınan malzemeler için sorulur; cevaptan
+    sonra yeni bir malzeme eksik görünürse ya da eksik miktarı artarsa yeniden "bekliyor" olur."""
     malzemeler = defaultdict(list)
     sorgu, degerler = "SELECT * FROM eksik_malzemeler", ()
     if is_emri_nolari is not None:
@@ -160,12 +259,13 @@ def eksik_ozetleri(vt, is_emri_nolari=None):
         f" WHERE c.id IN (SELECT MAX(id) FROM eksik_cevaplari WHERE is_emri_no IN ({yer}) GROUP BY is_emri_no)",
         list(malzemeler),
     )}
-    gelenler = _gelenler(vt, malzemeler)
+    yari_durumlari = yari_mamul_durumlari(vt, [m for liste in malzemeler.values() for m in liste]) if yari_mamuller else {}
     sonuc = {}
     for no, liste in malzemeler.items():
         satin_alinan = [m for m in liste if not yari_mamul_mu(m)]
         yari = [m for m in liste if yari_mamul_mu(m)]
-        gelen = sum(1 for m in yari if (no, m["sira_no"], m["malzeme_kodu"]) in gelenler)
+        hazir = sum(1 for m in yari if (d := yari_durumlari.get((no, m["sira_no"], m["malzeme_kodu"])))
+                    and d["durum"] in HAZIR_DURUMLAR)
         cevap = cevaplar.get(no)
         onceki = json.loads(cevap["eksikler"]) if cevap else None
         bekliyor = bool(satin_alinan) and (onceki is None or any(
@@ -173,29 +273,32 @@ def eksik_ozetleri(vt, is_emri_nolari=None):
         ))
         durumlar = Counter(depo_durumu(m) for m in satin_alinan)
         sonuc[no] = {"toplam": len(satin_alinan), "var": durumlar["var"], "kismen": durumlar["kismen"],
-                     "yok": durumlar["yok"], "yari_mamul": len(yari) - gelen, "gelen": gelen,
+                     "yok": durumlar["yok"], "yari_mamul": len(yari) - hazir if yari_mamuller else None, "yari_hazir": hazir,
                      "cevap": cevap, "bekliyor": bekliyor}
     return sonuc
 
 
 def is_emri_eksikleri(vt, is_emri_no):
     """İş emrinin eksikleri, kırılım kırılım: [{"sira", "ad", "malzemeler" (satın alınan), "depoda_olmayan",
-    "yari_mamuller" (imalattan; her birinde "geldi": işaret ya da None), "bekleyen" (gelmemiş yarı mamul sayısı)}]."""
+    "yari_mamuller" (her birinde yari_mamul_durumlari'ndaki "durum", "isaret", "uretici"), "bekleyen" (hazır
+    olmayan yarı mamul sayısı)}]."""
     ie = vt.execute("SELECT id, urun_adi FROM is_emirleri WHERE is_emri_no = ?", (is_emri_no,)).fetchone()
     adlar = {}
     if ie:
         adlar[0] = ie["urun_adi"]
         for r in vt.execute("SELECT sira_no, urun_adi FROM is_emri_satirlari WHERE is_emri_id = ?", (ie["id"],)):
             adlar[r["sira_no"]] = r["urun_adi"]
-    gelenler = _gelenler(vt, [is_emri_no])
+    malzemeler = vt.execute(
+        "SELECT * FROM eksik_malzemeler WHERE is_emri_no = ? ORDER BY sira_no, malzeme_kodu", (is_emri_no,)).fetchall()
+    yari_durumlari = yari_mamul_durumlari(vt, malzemeler)
     gruplar = {}
-    for m in vt.execute("SELECT * FROM eksik_malzemeler WHERE is_emri_no = ? ORDER BY sira_no, malzeme_kodu", (is_emri_no,)):
+    for m in malzemeler:
         grup = gruplar.setdefault(m["sira_no"], {"sira": m["sira_no"], "ad": adlar.get(m["sira_no"]),
                                                  "malzemeler": [], "yari_mamuller": [], "bekleyen": 0})
         if yari_mamul_mu(m):
-            geldi = gelenler.get((is_emri_no, m["sira_no"], m["malzeme_kodu"]))
-            grup["yari_mamuller"].append({**dict(m), "geldi": geldi})
-            grup["bekleyen"] += not geldi
+            durum = yari_durumlari[(is_emri_no, m["sira_no"], m["malzeme_kodu"])]
+            grup["yari_mamuller"].append({**dict(m), **durum})
+            grup["bekleyen"] += durum["durum"] not in HAZIR_DURUMLAR
         else:
             grup["malzemeler"].append(m)
     for grup in gruplar.values():
@@ -204,7 +307,7 @@ def is_emri_eksikleri(vt, is_emri_no):
 
 
 def yari_mamul_isaretle(vt, is_emri_no, anahtarlar, kullanici_id):
-    """Yarı mamulleri "geldi" işaretler; anahtarlar: [(sıra no, malzeme kodu)]."""
+    """Yarı mamulleri "Hazır" işaretler; anahtarlar: [(sıra no, malzeme kodu)]."""
     zaman = _simdi()
     vt.executemany(
         "INSERT OR IGNORE INTO gelen_yari_mamuller (is_emri_no, sira_no, malzeme_kodu, kullanici_id, zaman)"
@@ -221,7 +324,7 @@ def yari_mamul_geri_al(vt, is_emri_no, sira, kod):
 def bekleyen_eksikler(vt):
     """Sorulacak iş emirleri (eksik malzemesi olan, cevaplanmamış ya da yeni eksik gelmiş): [(iş emri, özet)].
     Siparişe bağlı olanlar önce. "Takip etme" denen iş emirleri sorulmaz."""
-    ozetler = {no: o for no, o in eksik_ozetleri(vt).items() if o["bekliyor"]}
+    ozetler = {no: o for no, o in eksik_ozetleri(vt, yari_mamuller=False).items() if o["bekliyor"]}
     if not ozetler:
         return []
     ieler = vt.execute(

@@ -37,16 +37,26 @@
 </div>
 {%- endmacro %}
 
-{# İmalat fabrikasından gelen yarı mamuller: ERP'de çıkışları yapılmadığı için ekip "Geldi" işaretler. Kırılımlar
-   tıklanır; acik: işaretlemeden sonra açık kalacak kırılım ("yari-<sıra>"); sonra: işaretten sonra dönülecek sayfa. #}
+{# Yarı mamulü üreten kırılım (sıra no ERP'deki gibi): "Sıra 25 kırılımı" (aynı iş emri) ya da
+   "İş emri 900105 · sıra 25 kırılımı" #}
+{% macro uretici_metni(u, is_emri_no) -%}
+{% if u.is_emri_no == is_emri_no %}Sıra {{ u.sira_no }} kırılımı
+{%- else %}<a href="{{ url_for('urunler.is_emri', is_emri_no=u.is_emri_no) }}">İş emri {{ u.is_emri_no }}</a>{% if u.sira_no %} · sıra {{ u.sira_no }} kırılımı{% endif %}{% endif %}
+{%- endmacro %}
+
+{# Yarı mamuller (alt montajlar, parçalar): durumları ERP'den gelir (üreten kırılımın stok girişi, depodaki miktar);
+   ERP'nin göstermediği hazır parçayı ekip "Hazır" işaretler. Kırılımlar tıklanır; acik: işaretlemeden sonra açık
+   kalacak kırılım ("yari-<sıra>"); sonra: işaretten sonra dönülecek sayfa. #}
 {% macro yari_mamul_akordiyon(is_emri_no, gruplar, sonra, acik=None) -%}
 <div class="kirilim-listesi">
 {% for grup in gruplar if grup.yari_mamuller %}
-{% set gelen = grup.yari_mamuller | length - grup.bekleyen %}
+{% set hazir = grup.yari_mamuller | length - grup.bekleyen %}
+{% set imalattan = grup.yari_mamuller | selectattr('durum', 'equalto', 'imalattan') | list | length %}
 <details class="kirilim" id="yari-{{ grup.sira }}"{% if acik == 'yari-' ~ grup.sira %} open{% endif %}>
   <summary><span class="kirilim-ad">{{ kirilim_adi(grup) }}</span>
-    {% if grup.bekleyen %}<span class="depo-cip depo-kismen">{{ grup.bekleyen }} bekleniyor</span>{% endif %}
-    {% if gelen %}<span class="depo-cip depo-geldi">{{ gelen }} geldi</span>{% endif %}</summary>
+    {% if grup.bekleyen - imalattan %}<span class="depo-cip depo-kismen">{{ grup.bekleyen - imalattan }} montajı bekliyor</span>{% endif %}
+    {% if imalattan %}<span class="depo-cip depo-imalat">{{ imalattan }} imalattan bekleniyor</span>{% endif %}
+    {% if hazir %}<span class="depo-cip depo-hazir">{{ hazir }} hazır</span>{% endif %}</summary>
   <form method="post" action="{{ url_for('urunler.yari_mamul', is_emri_no=is_emri_no) }}">
     <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
     <input type="hidden" name="sonra" value="{{ sonra }}"><input type="hidden" name="sira" value="{{ grup.sira }}">
@@ -55,14 +65,18 @@
         <thead><tr>{% if g.kullanici.rol == 'ekip' %}<th class="secim-sutunu"></th>{% endif %}<th>Yarı mamul</th><th>Adı</th><th class="sayisal">Miktar</th><th>Durum</th></tr></thead>
         <tbody>
           {% for m in grup.yari_mamuller %}
-          <tr{% if m.geldi %} class="geldi"{% endif %}>
-            {% if g.kullanici.rol == 'ekip' %}<td class="secim-sutunu">{% if not m.geldi %}<input type="checkbox" name="sec" value="{{ m.malzeme_kodu }}" aria-label="{{ m.malzeme_kodu }} geldi">{% endif %}</td>{% endif %}
+          {% set hazir_mi = m.durum in HAZIR_DURUMLAR %}
+          <tr{% if hazir_mi %} class="hazir"{% endif %}>
+            {% if g.kullanici.rol == 'ekip' %}<td class="secim-sutunu">{% if not hazir_mi %}<input type="checkbox" name="sec" value="{{ m.malzeme_kodu }}" aria-label="{{ m.malzeme_kodu }} hazır">{% endif %}</td>{% endif %}
             <td class="sayisal">{{ m.malzeme_kodu }}</td>
             <td>{{ m.malzeme_adi or '' }}</td>
             <td class="sayisal">{{ eksik_miktari(m) | sayi }} {{ m.birim or '' }}</td>
-            <td>{% if m.geldi %}<span class="depo-cip depo-geldi">Geldi</span> <small class="soluk">{{ m.geldi.ad_soyad or '' }}, {{ m.geldi.zaman | zaman }}</small>
-              {% if g.kullanici.rol == 'ekip' %}<button type="submit" name="geri_al" value="{{ m.malzeme_kodu }}" class="baglanti-dugmesi">geri al</button>{% endif %}
-              {% else %}<span class="depo-cip depo-kismen">Bekleniyor</span>{% endif %}</td>
+            <td><span class="depo-cip {% if m.durum in ('hazir', 'tamamlandi') %}depo-hazir{% elif m.durum == 'depoda' %}depo-var{% elif m.durum == 'imalattan' %}depo-imalat{% else %}depo-kismen{% endif %}">{{ YARI_MAMUL_DURUMLARI[m.durum] }}</span>
+              {% if m.rota_kodu %}<small class="soluk">Rota: {{ m.rota_kodu }}</small>{% endif %}
+              {% if m.durum == 'hazir' %}<small class="soluk">{{ m.isaret.ad_soyad or '' }}, {{ m.isaret.zaman | zaman }}</small>
+                {% if g.kullanici.rol == 'ekip' %}<button type="submit" name="geri_al" value="{{ m.malzeme_kodu }}" class="baglanti-dugmesi">geri al</button>{% endif %}
+              {% elif m.uretici %}<small class="soluk">{{ uretici_metni(m.uretici, is_emri_no) }}</small>{% endif %}
+              {% if m.durum != 'hazir' %}{% for ad_, miktar in depolar(m) %}<small class="soluk">{{ ad_ }} {{ miktar | sayi }}{% if not loop.last %} · {% endif %}</small>{% endfor %}{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -70,8 +84,8 @@
     </div>
     {% if g.kullanici.rol == 'ekip' and grup.bekleyen %}
     <div class="dugmeler">
-      <button type="submit" name="islem" value="secilen" class="dugme ikincil kucuk-dugme">Seçilenler geldi</button>
-      <button type="submit" name="islem" value="hepsi" class="dugme kucuk-dugme">Hepsi geldi</button>
+      <button type="submit" name="islem" value="secilen" class="dugme ikincil kucuk-dugme">Seçilenler hazır</button>
+      <button type="submit" name="islem" value="hepsi" class="dugme kucuk-dugme">Hepsi hazır</button>
     </div>
     {% endif %}
   </form>
@@ -80,7 +94,7 @@
 </div>
 {%- endmacro %}
 
-{# Bir iş emrinin eksik malzeme ve imalattan beklenen yarı mamul bölümleri (ürün sayfası ve iş emri sayfası) #}
+{# Bir iş emrinin eksik malzeme ve yarı mamul bölümleri (ürün sayfası ve iş emri sayfası) #}
 {% macro uyari_bolumleri(is_emri_no, o, gruplar, veri_zamani, aile, sonra, acik=None) -%}
 {% if o and o.toplam %}
 <section class="bolum" id="eksik">
@@ -95,12 +109,14 @@
   </div>
 </section>
 {% endif %}
-{% if o and (o.yari_mamul or o.gelen) %}
+{% if o and (o.yari_mamul or o.yari_hazir) %}
 <section class="bolum" id="yari-mamul">
-  <h2>İmalattan beklenen yarı mamuller</h2>
+  <h2>Yarı mamuller <span class="soluk">(çıkışı yapılmamış)</span></h2>
   <div class="kutu">
-    <p>{% if o.yari_mamul %}<strong>{{ o.yari_mamul }} yarı mamul</strong> imalat fabrikasından bekleniyor{% else %}Bütün yarı mamuller geldi{% endif %}{% if o.gelen %} · {{ o.gelen }} tanesi geldi{% endif %}.
-      <span class="soluk">ERP'de çıkışları yapılmadığı için gelenleri burada işaretleyin; ERP'de çıkışı yapılan yarı mamul listeden kendiliğinden düşer.</span></p>
+    <p>{% if o.yari_mamul %}<strong>{{ o.yari_mamul }} yarı mamul</strong> henüz hazır değil{% else %}Bütün yarı mamuller hazır{% endif %}{% if o.yari_hazir %} · {{ o.yari_hazir }} tanesi hazır{% endif %}.
+      <span class="soluk">Montajı bir kırılımda yapılanların durumu ERP'den gelir: kırılım stoğa girince "Montajı tamamlandı" olur.
+      Rotası olan parçalar imalat fabrikasında işlenir ve "İmalattan bekleniyor" görünür; rotası olmayanlar montajda yapılır.
+      ERP'nin göstermediği hazır parçaları burada işaretleyin. Çıkışı yapılan yarı mamul listeden kendiliğinden düşer.</span></p>
     {{ yari_mamul_akordiyon(is_emri_no, gruplar, sonra, acik) }}
   </div>
 </section>
@@ -151,8 +167,6 @@
     · açılış {{ ie.acilis_tarihi | tarih }}{% if ie.tahmini_bitis %} · tahmini bitiş {{ ie.tahmini_bitis | tarih }}{% endif %}
   </p>
   <p class="eksik-ozeti">{{ eksik_cumlesi(o) }}</p>
-  {% if o.yari_mamul %}<p class="soluk kucuk">Ayrıca {{ o.yari_mamul }} yarı mamul imalattan bekleniyor;
-    <a href="{{ url_for('urunler.is_emri', is_emri_no=ie.is_emri_no) }}#yari-mamul">iş emrinin sayfasında</a> "Geldi" işaretlenir.</p>{% endif %}
   {{ onceki_cevap(o) }}
   <details class="eksik-ayrinti">
     <summary>Malzemeleri göster</summary>
@@ -198,12 +212,12 @@ planlama biriminin ERP'deki ürün durumu ise hâlâ <strong>İmalatta</strong>.
 </div>
 {%- endmacro %}
 
-{# Sipariş kartında iş emrinin yanında: "12 malzeme eksik", "40 yarı mamul bekleniyor"; adres: ürünün ya da
+{# Sipariş kartında iş emrinin yanında: "12 malzeme eksik", "4 yarı mamul bekleniyor"; adres: ürünün ya da
    iş emrinin sayfası #}
 {% macro eksik_cipi(o, adres) -%}
 {% if o and o.toplam %}<a class="cip eksik-cipi {% if o.yok or o.kismen %}depo-yok{% else %}depo-var{% endif %}" href="{{ adres }}#eksik"
   title="Çıkışı yapılmamış malzeme: {{ o.var }} depoda var, {{ o.yok + o.kismen }} depoda yok ya da eksik">{{ o.toplam }} malzeme eksik
   {%- if o.cevap and not o.bekliyor %} <small>· {{ EKSIK_CEVAPLARI[o.cevap.cevap] }}</small>{% elif o.bekliyor %} <small>· soruluyor</small>{% endif %}</a>{% endif %}
 {% if o and o.yari_mamul %}<a class="cip eksik-cipi depo-kismen" href="{{ adres }}#yari-mamul"
-  title="İmalat fabrikasından beklenen, &quot;Geldi&quot; işaretlenmemiş yarı mamuller">{{ o.yari_mamul }} yarı mamul bekleniyor</a>{% endif %}
+  title="Çıkışı yapılmamış, henüz hazır olmayan yarı mamuller (montajı bekleyen alt montajlar ve parçalar)">{{ o.yari_mamul }} yarı mamul bekleniyor</a>{% endif %}
 {%- endmacro %}

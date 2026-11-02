@@ -107,8 +107,10 @@ CIKIS_SUTUNLARI = {
     "sevk_depo": "Sevk Depo Miktar",
     "is_emri_sira": "Isemri No / Sıra",
     "ana_urun_kodu": "Ana Ürün Kodu",
+    "rota_kodu": "Rota Kodu",  # malzemenin kendi rotası; 26/10/2026 raporundan beri var
 }
 ZORUNLU_CIKIS = ("malzeme_kodu", "cikis_miktar", "plan_miktar", "is_emri_sira")
+ROTASIZ = {"", "null", "-", "---"}  # ERP'nin boş rota yerine yazdıkları
 
 TARIH_ALANLARI = {
     "teslim_tarihi", "talep_tarihi", "ilk_sevk_tarihi", "son_sevk_tarihi",
@@ -290,9 +292,13 @@ def is_emri_satirlari(basliklar, satirlar):
 
 def cikis_satirlari(basliklar, satirlar):
     """Çıkış yapılamayan malzeme raporunun satırlarını kayıtlara çevirir; "900101 / 2" iş emri no ve sıra no'ya
-    ayrılır. Biçime uymayan satır atlanır."""
+    ayrılır. Biçime uymayan satır atlanır. Rota kodu: raporda rota sütunu yoksa None, malzemenin rotası yoksa
+    boş metin (montajda yapılan ya da satın alınan malzeme), varsa rota kodu (imalatta işlenen parça)."""
+    rota_var = sade(CIKIS_SUTUNLARI["rota_kodu"]) in {sade(b) for b in basliklar if b}
     kayitlar = []
     for kayit in _kayitlar(basliklar, satirlar, CIKIS_SUTUNLARI, ZORUNLU_CIKIS, ("malzeme_kodu", "is_emri_sira")):
+        if rota_var:
+            kayit["rota_kodu"] = "" if (kayit["rota_kodu"] or "").strip().lower() in ROTASIZ else kayit["rota_kodu"].strip()
         eslesme = re.fullmatch(r"\s*(\d+)\s*/\s*(\d+)\s*", kayit.pop("is_emri_sira"))
         if eslesme:
             kayit["is_emri_no"], kayit["sira_no"] = eslesme.group(1), int(eslesme.group(2))

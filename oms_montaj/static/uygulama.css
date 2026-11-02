@@ -260,7 +260,7 @@ body.koyu { background: #0e0f11; }
 .form { display: grid; gap: 1.1rem; }
 label { display: grid; gap: .3rem; font-weight: 550; }
 .ipucu { display: block; font-size: .875rem; font-weight: 400; color: var(--soluk); }
-input[type="text"], input[type="password"] {
+input[type="text"], input[type="password"], input[type="date"] {
   width: 100%;
   min-height: 44px;
   padding: .6rem .8rem;
@@ -270,7 +270,7 @@ input[type="text"], input[type="password"] {
   border: 1px solid #c9ced8;
   border-radius: 8px;
 }
-input[type="text"]:focus, input[type="password"]:focus { border-color: var(--vurgu); }
+input[type="text"]:focus, input[type="password"]:focus, input[type="date"]:focus { border-color: var(--vurgu); }
 fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
 legend { font-weight: 550; margin-bottom: .3rem; padding: 0; }
 .secenek { display: flex; align-items: flex-start; gap: .7rem; font-weight: 400; cursor: pointer; }
@@ -441,8 +441,9 @@ a.suzgec-cip:hover { border-color: var(--yazi); }
 .depo-cip { display: inline-block; padding: .05rem .5rem; font-size: .82rem; text-decoration: none; white-space: nowrap; border: 1px solid transparent; border-radius: 99px; }
 .depo-var { color: #7a5a00; background: #fff6d6; border-color: #f1d98a; }
 .depo-kismen { color: #8a4b00; background: #ffe9d1; border-color: #f3c08d; }
+.depo-imalat { color: #3b3f8f; background: #ecedfb; border-color: #c4c7ef; }
 .depo-yok { color: #a61b1b; background: #fdeceb; border-color: #f2b8b5; }
-.depo-geldi { color: #1d6b43; background: #e7f5ec; border-color: #a9d8bb; }
+.depo-hazir { color: #1d6b43; background: #e7f5ec; border-color: #a9d8bb; }
 /* Kırılımlar tıklanır; tıklayınca eksikleri altında açılır */
 .kirilim-listesi { display: grid; gap: .4rem; margin: .5rem 0; }
 details.kirilim { background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: 8px; }
@@ -456,7 +457,7 @@ details.kirilim > :not(summary) { margin: 0 .8rem .7rem; }
 details.kirilim .dugmeler { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
 .secim-sutunu { width: 2.2rem; text-align: center; }
 .secim-sutunu input { width: 1.1rem; height: 1.1rem; }
-.eksik-tablosu tr.geldi td { color: var(--soluk); }
+.eksik-tablosu tr.hazir td { color: var(--soluk); }
 .baglanti-dugmesi { padding: 0; font: inherit; font-size: .82rem; color: var(--vurgu); cursor: pointer; background: none; border: 0; text-decoration: underline; }
 /* Sipariş kartında ürünün satırı: seri no · iş emri · motor seri no aynı düzeyde */
 .urun-seri .bilgi + .bilgi::before { content: "·"; margin: 0 .45rem; color: var(--soluk); }
@@ -474,6 +475,87 @@ details.kirilim .dugmeler { display: flex; flex-wrap: wrap; gap: .5rem; margin-t
 .numara-gir { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex-basis: 100%; }
 .numara-gir input { max-width: 16rem; }
 .numara-gecmisi > summary { color: var(--soluk); cursor: pointer; font-size: .9rem; }
+/* ERP'den okunan, teyit edilmemiş numara: yanında ünlem; ürün sayfasında kutucukla teyit edilir */
+.teyit-isareti { display: inline-flex; align-items: center; justify-content: center; width: 1.2em; height: 1.2em; margin-left: .35em; font-size: .85em; font-weight: 800; line-height: 1; color: #fff; background: #b45309; border-radius: 50%; vertical-align: .08em; cursor: help; }
+.numara-teyit { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; flex-basis: 100%; max-width: 36rem; padding: .55rem .8rem; background: #fff8eb; border: 1px solid #f3d29d; border-radius: 8px; }
+.numara-teyit .secenek { align-items: center; }
+.numara-teyit .secenek input { margin: 0; }
+/* Aşama ve zaman akışı (ürün sayfası): geçilen aşamalar yeşil, bulunulan kırmızı; akışta notlar mavi zeminli */
+.asama-cizgisi { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+.asama-cizgisi li { padding: .2rem .65rem; font-size: .85rem; color: var(--soluk); background: var(--zemin); border: 1px solid var(--cizgi); border-radius: 99px; }
+.asama-cizgisi li.gecti { color: #1d6b43; background: #e7f5ec; border-color: #a9d8bb; }
+.asama-cizgisi li.simdiki { font-weight: 700; color: #fff; background: var(--vurgu); border-color: var(--vurgu); }
+/* Ürün sayfası: geniş ekranda solda ürünün kendisi, sağda notlar ve zaman akışı; dar ekranda tek sütun
+   (başlık, aşama, notlar ve zaman akışı, sonra gerisi). */
+.urun-duzeni { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 1.75rem; }
+@media (min-width: 1500px) {
+  .urun-duzeni {
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+    grid-template-areas: "ust yan" "asama yan" "govde yan";
+    grid-template-rows: auto auto 1fr;
+    align-items: start;
+  }
+  .urun-ust { grid-area: ust; }
+  .urun-asama { grid-area: asama; }
+  .urun-yan { grid-area: yan; }
+  .urun-govde { grid-area: govde; }
+}
+.urun-ust > .kutu:last-child { margin-bottom: 1.75rem; }
+.akis-kutusu h2 { margin: 0 0 .75rem; }
+.asama-formu { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); align-items: start; gap: .75rem 1rem; }
+.asama-formu .dugme { justify-self: start; }
+.asama-formu .zorunlu { color: var(--vurgu); font-weight: 600; }
+/* Çıktılar: ürün sayfasında aşama kutusunun sağ altındaki düğmeler (alınmamış gri, alınmış yeşil) ve formu
+   hazırlama ekranı */
+.asama-alt { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1.5rem; }
+.ciktilar { display: grid; justify-items: end; gap: .35rem; margin-left: auto; }
+.ciktilar-baslik { font-size: .78rem; font-weight: 650; color: var(--soluk); text-transform: uppercase; letter-spacing: .06em; }
+.cikti-dugmeleri { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; }
+.cikti { display: inline-flex; align-items: center; gap: .35rem; min-height: 40px; padding: .35rem .75rem; font-size: .9rem; font-weight: 600; color: #4b5160; background: #eef0f3; border: 1px solid #d5d9e0; border-radius: 8px; text-decoration: none; }
+a.cikti:hover { color: var(--koyu); background: #e2e5ea; }
+.cikti .simge { width: 1.05rem; height: 1.05rem; flex: none; }
+.cikti.basildi { padding: 0; gap: 0; color: #fff; background: #1f8a4c; border-color: #1f8a4c; }
+.cikti.basildi a { display: inline-flex; align-items: center; gap: .35rem; min-height: 40px; padding: .35rem .75rem; color: inherit; text-decoration: none; }
+.cikti.basildi a:hover { background: #18703d; }
+.cikti.basildi .cikti-yenile { padding: .35rem .55rem; border-left: 1px solid rgb(255 255 255 / 35%); }
+.cikti.yeni { box-shadow: 0 0 0 3px #a9d8bb; }
+.ciktilar-not { margin: 0; font-size: .8rem; color: var(--soluk); text-align: right; }
+.cikti-hazir { margin-bottom: 1rem; }
+@media (max-width: 600px) {
+  .ciktilar { justify-items: start; margin-left: 0; }
+  .cikti-dugmeleri { justify-content: flex-start; }
+  .ciktilar-not { text-align: left; }
+}
+.form-bilgileri { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .6rem 1.25rem; margin: 0 0 1rem; }
+.form-bilgileri dt { font-size: .8rem; font-weight: 600; color: var(--soluk); text-transform: uppercase; letter-spacing: .04em; }
+.form-bilgileri dd { margin: .1rem 0 0; font-weight: 650; }
+.form-izgarasi { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .9rem 1.25rem; }
+.form-hazirla .dugme, .alan-dar { justify-self: start; }
+.alan-dar input { max-width: 12rem; }
+.akis-not-formu { gap: .5rem; margin-bottom: 1.1rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--cizgi); }
+.akis-not-formu .dugme { justify-self: start; }
+.asama-formu textarea, .akis-not-formu textarea, .akis-ek textarea {
+  width: 100%; padding: .55rem .75rem; font: inherit; color: inherit; background: var(--yuzey);
+  border: 1px solid var(--cizgi); border-radius: 8px;
+}
+@media (max-width: 600px) { .asama-formu { grid-template-columns: minmax(0, 1fr); } }
+.akis { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.akis-oge { padding: .4rem .8rem; border-left: 3px solid var(--cizgi); }
+.akis-not { background: var(--bilgi-zemin); border-left-color: var(--bilgi); border-radius: 0 8px 8px 0; }
+.akis-asama { border-left-color: var(--vurgu); }
+.akis-numara { border-left-color: #b45309; }
+.akis-cevap { border-left-color: #1d6b43; }
+.akis-ust { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .6rem; }
+.akis-ust .soluk { font-size: .85rem; }
+.akis-metin { margin: .25rem 0 0; white-space: pre-line; }
+.akis-ek > summary, .akis-devami > summary { color: var(--soluk); cursor: pointer; font-size: .85rem; }
+.akis-ek form { max-width: 36rem; margin-top: .4rem; gap: .5rem; }
+.akis-devami { margin-top: .6rem; }
+.akis-devami > .akis { margin-top: .6rem; }
+/* Sipariş kartında listede görünmeyen satırlar: "Kontrol ettim, satır silinmiş" */
+.eksik-satir-formu { margin-top: .5rem; }
+.eksik-satir-kontrol { margin: 0 0 .75rem; }
+.eksik-satir-kontrol .eksik-satir-formu { display: inline-block; margin: 0 0 0 .5rem; }
 .eksik-ozeti { margin: .35rem 0; }
 .eksik-ozeti .depo-cip { margin-left: .25rem; }
 .eksik-ayrinti { margin: .5rem 0; }

@@ -15,7 +15,8 @@ kodu sipariş numarasının "OZ-"den sonraki üç karakteridir. Logo dosyası ya
 marka/musteri-KOD.png (ya da .svg) aranır. Sipariş kutularında zemin müşterinin rengine
 döner, yazılar beyazlaşır, logo arkada beyaz bir filigran olarak görünür. Dosyada
 olmayan müşterilerde OMS logosu ve OMS kırmızısı kullanılır; "*;#renk" satırı bu rengi
-değiştirir. Müşteri kodları gerçek müşteriyi tanıttığı için git'e girmez; bu dosyada durur.
+değiştirir. Satırın sonuna eklenen "vibro=VH" alanı, o müşterinin montaj formlarında SVR yerine
+VH yazdırır (formlar.py). Müşteri kodları gerçek müşteriyi tanıttığı için git'e girmez; bu dosyada durur.
 """
 
 import io
@@ -76,18 +77,23 @@ def _marka_klasoru():
     return Path(current_app.config["VERI_KLASORU"]) / "marka"
 
 
+VIBRO_ONEKI = re.compile(r"^vibro\s*=\s*([A-Za-z]{2,4})$", re.IGNORECASE)
+
+
 @lru_cache(maxsize=2)
 def _musteri_ayarlari(yol, _surum):
-    """{KOD: (renk, logo dosyasının adı ya da None)}"""
+    """{KOD: (renk, logo dosyasının adı ya da None, vibro öneki ya da None)}. Satırın sonundaki "vibro=VH"
+    alanı, o müşterinin formlarında (proje takip kartı, test formları) SVR yerine yazılacak öneki verir."""
     ayarlar = {}
     for satir in Path(yol).read_text(encoding="utf-8-sig").splitlines():
         satir = satir.strip()
         if not satir or satir.startswith("#") or ";" not in satir:
             continue
         kod, renk, *kalan = (p.strip() for p in satir.split(";"))
-        logo = kalan[0] if kalan and LOGO_ADI.match(kalan[0]) else None
+        logo = next((k for k in kalan if LOGO_ADI.match(k)), None)
+        vibro = next((e.group(1).upper() for k in kalan if (e := VIBRO_ONEKI.match(k))), None)
         if (kod == DIGERLERI or KOD.match(kod)) and RENK.match(renk):
-            ayarlar[kod.upper()] = (renk, logo)
+            ayarlar[kod.upper()] = (renk, logo, vibro)
     return ayarlar
 
 
@@ -112,6 +118,13 @@ def musteri_logo_dosyasi(kod):
         if dosya.is_file():
             return dosya
     return None
+
+
+def vibro_oneki(siparis_no):
+    """Müşterinin formlarda SVR yerine kullandığı vibro öneki ("VH") ya da None."""
+    kod = _musteri_kodu(siparis_no)
+    ayar = _musteriler().get(kod) if kod else None
+    return ayar[2] if ayar else None
 
 
 def musteri_markasi(siparis_no):

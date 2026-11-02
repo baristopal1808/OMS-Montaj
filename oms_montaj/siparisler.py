@@ -8,6 +8,7 @@ başka açık kalem varsa sayılmaz. Onay bekleyen siparişler listede teslim
 sütunlarına değil, en sağdaki ayrı sütuna dizilir.
 """
 
+import json
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
@@ -313,6 +314,7 @@ def kart(siparis_no):
     ek_suzgec = goster[3:] if goster.startswith("ek-") and goster[3:] in EKLENTI_DURUMLARI else None
 
     ozet = ozetle(siparis, kalemler, revizyonlar[0]["zaman"] if revizyonlar else None)
+    eksik = eksik_siralar(k["sira_no"] for k in kalemler)
     bolumler = {aile: [] for aile in AILE_SIRASI}
     servis, listelenen, iptal_edilenler = [], [], []
     for kalem in kalemler:
@@ -373,7 +375,8 @@ def kart(siparis_no):
         urun_is_emri_sinifi=urun_is_emri_sinifi,
         durum_ozeti=siparis_durum_ozeti(vt, siparis),
         REVIZYON_GUN=REVIZYON_GUN,
-        eksik=eksik_siralar(k["sira_no"] for k in kalemler),
+        eksik=eksik,
+        eksik_kontrol=eksik_satir_kontrolu(vt, siparis, eksik),
         # İş emirlerinin eksik malzemeleri (iş emri no → özet) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarıları
         eksikler=eksik_ozetleri(vt, [ie["is_emri_no"] for ie in is_emirleri]),
         imalatta={u["urun_id"]: u for u in imalatta_uyarilari(vt, siparis_id=siparis["id"])},
@@ -382,6 +385,39 @@ def kart(siparis_no):
         TIPLER=TIPLER,
         AILE_ADLARI=AILE_ADLARI,
     )
+
+
+def eksik_satir_kontrolu(vt, siparis, eksik):
+    """Listede görünmeyen satırların hepsi ekipçe "kontrol ettim, satır silinmiş" işaretlendiyse {"kim", "zaman"};
+    değilse (ya da sonra yeni bir satır görünmez olduysa) None."""
+    kontrol = json.loads(siparis["eksik_satir_kontrol"] or "[]")
+    if not eksik or not set(eksik) <= set(kontrol):
+        return None
+    kim = vt.execute("SELECT ad_soyad FROM kullanicilar WHERE id = ?", (siparis["eksik_satir_kontrol_eden"],)).fetchone()
+    return {"kim": kim[0] if kim else None, "zaman": siparis["eksik_satir_kontrol_zamani"]}
+
+
+@bp.route("/siparisler/eksik-satir/<path:siparis_no>", methods=["POST"])
+@ekip_gerekli
+def eksik_satir(siparis_no):
+    """Listede görünmeyen sipariş satırlarını "kontrol ettim, satır silinmiş" diye işaretler ya da işareti kaldırır."""
+    vt = baglanti()
+    siparis = vt.execute("SELECT id FROM siparisler WHERE siparis_no = ?", (siparis_no,)).fetchone()
+    if siparis is None:
+        abort(404)
+    with vt:
+        if request.form.get("islem") == "geri_al":
+            vt.execute("UPDATE siparisler SET eksik_satir_kontrol = NULL, eksik_satir_kontrol_eden = NULL,"
+                       " eksik_satir_kontrol_zamani = NULL WHERE id = ?", (siparis["id"],))
+        else:
+            eksik = eksik_siralar(r[0] for r in vt.execute("SELECT sira_no FROM siparis_kalemleri WHERE siparis_id = ?",
+                                                             (siparis["id"],)))
+            vt.execute(
+                "UPDATE siparisler SET eksik_satir_kontrol = ?, eksik_satir_kontrol_eden = ?, eksik_satir_kontrol_zamani = ?"
+                " WHERE id = ?",
+                (json.dumps(eksik), g.kullanici["id"], datetime.now().strftime("%Y-%m-%d %H:%M:%S"), siparis["id"]),
+            )
+    return redirect(url_for(".kart", siparis_no=siparis_no))
 
 
 @bp.route("/siparisler/kalem/<int:kalem_id>/montaj", methods=["POST"])

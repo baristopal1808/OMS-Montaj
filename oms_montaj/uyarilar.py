@@ -16,10 +16,11 @@ mamulü üreten kırılım (aynı iş emrinde, yoksa aynı siparişin iş emirle
 depodaki miktar ve rota. ERP'nin göstermediği durumlar için ekip parça parça ya da kırılımın tamamı için "Hazır" işaretler (kim,
 ne zaman saklanır; işaretler rapor yeniden yüklense de kalır). ERP'de çıkışı yapılan yarı mamul listeden kendiliğinden düşer.
 
-"İmalatta" uyarısı: ürünün iş emri stoğa girmeye başlamış (kısmen ya da tamamen) ama planlama biriminin
+"İmalatta" farkı: ürünün iş emri stoğa girmeye başlamış (kısmen ya da tamamen) ama planlama biriminin
 ERP'deki ürün durumu hâlâ "İmalatta" ise (imalat fabrikası başka yerleşkede; ERP geç güncellenebiliyor)
-ürünün kartında uyarı görünür; aynı üründen birden çok olsa da her ürün ve iş emri için ayrı sorulur. ERP'deki
-durum değişince uyarı kendiliğinden kalkar.
+ürünün kartında bilgi olarak görünür: "Planlama ERP'de: İmalatta · bizde: <aşama>". Ekibe artık sorulmaz
+(kullanıcı kararı, 02/11/2026); önceden verilmiş cevaplar zaman akışında kalır. ERP'deki durum değişince
+bilgi kendiliğinden kalkar.
 
 Uygunsuzluk ve DÖF uyarıları ileride buraya eklenir.
 """
@@ -37,7 +38,7 @@ EKSIK_CEVAPLARI = {
     "erp_hatasi": "ERP'de hata var",
 }
 IMALATTA = "İmalatta"
-IMALATTA_CEVAPLARI = {
+IMALATTA_CEVAPLARI = {  # 02/11/2026'ye kadar ekibe soruluyordu; eski cevaplar zaman akışında görünür
     "montajda": "Ürün montajda ya da tamamlandı; ERP güncel değil",
     "imalatta": "ERP doğru, ürün imalatta",
 }
@@ -370,16 +371,3 @@ def imalatta_uyarilari(vt, siparis_id=None, urun_id=None):
         + "".join(kosullar) + " ORDER BY s.siparis_no, k.sira_no, u.adet_sira",
         degerler,
     ).fetchall()
-
-
-def bekleyen_imalatta(vt):
-    return [u for u in imalatta_uyarilari(vt) if not u["cevap"]]
-
-
-def imalatta_cevapla(vt, urun_id, is_emri_id, cevap, kullanici_id):
-    vt.execute(
-        "INSERT INTO imalatta_cevaplari (urun_id, is_emri_id, cevap, kullanici_id, zaman) VALUES (?, ?, ?, ?, ?)"
-        " ON CONFLICT (urun_id, is_emri_id) DO UPDATE SET cevap = excluded.cevap, kullanici_id = excluded.kullanici_id,"
-        " zaman = excluded.zaman",
-        (urun_id, is_emri_id, cevap, kullanici_id, _simdi()),
-    )

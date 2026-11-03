@@ -215,10 +215,11 @@ def test_liste_acik_siparisleri_teslim_tarihiyle_gosterir(istemci, ekip, yukle):
               genel="Kapalı", durum="Kapalı", son_sevk=datetime(2029, 12, 20)),
         satir(1, "PP-536-NF", "Guc Unitesi", siparis_no="OZ-TS0003", durum="Beklemede", teslim=datetime(2020, 1, 1)),
     ]))
-    sayfa = istemci.get("/siparisler").get_data(as_text=True)
-    assert "OZ-TS0001" in sayfa and "Teslim 15/01/2030" in sayfa
+    sayfa = istemci.get("/siparisler").get_data(as_text=True)  # açık siparişler panoda
+    assert "OZ-TS0001" in sayfa and "15/01/2030" in sayfa
     assert "OZ-TS0002" not in sayfa
-    assert 'class="onay-bekliyor"' in sayfa and "gün geçti" in sayfa
+    # Onay bekleyen panonun altındaki kapalı bölümde
+    assert 'class="onay-bekliyor"' in sayfa and "gün gecikti" in sayfa and sayfa.index('id="onay"') < sayfa.index("OZ-TS0003")
     assert "OZ-TS0002" in istemci.get("/siparisler?durum=kapali").get_data(as_text=True)
 
 
@@ -233,7 +234,7 @@ def test_liste_suzgecleri_ve_arama(istemci, ekip, yukle):
 def test_siparis_karti_bolumleri_gosterir(istemci, ekip, yukle):
     yukle(excel(makine_siparisi()))
     sayfa = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
-    for beklenen in ("SVR · Vinç asılı vibro çakıcı", "OZ-TS0001-VH-01", "Renk: Standart", "Yağsız sevk",
+    for beklenen in ("SVR · Vinç asılı vibro çakıcı", "OZ-TS0001-VH-01", "Renk <strong>RAL3020</strong>", "Yağsız sevk",
                      "OZ-TS0001-HC-02", "Kiriş", "Aksesuarlar", "Hortum Seti", "İş emri 900101",
                      "Planlama birimi ürün üretim durumu", "TEST NOT", "TEST FIRMA"):
         assert beklenen in sayfa, beklenen
@@ -262,16 +263,21 @@ def onay_bekleyen_siparis():
     return [satir(1, "PP-536-NF", "Guc Unitesi", siparis_no="OZ-TS0004", durum="Beklemede", teslim=datetime(2020, 1, 1))]
 
 
-def test_acik_siparisler_teslim_sutunlarinda(istemci, ekip, yukle):
+def test_acik_siparisler_panoda(istemci, ekip, yukle):
     yukle(excel(gecikmis_ve_ileri_siparis() + onay_bekleyen_siparis()))
     sayfa = istemci.get("/siparisler").get_data(as_text=True)
-    gecikenler, planlanan, onay = (sayfa.index(ad) for ad in ("Gecikenler", "Planlananlar", "Onay bekleyen projeler"))
-    # Onay bekleyen sipariş teslimi geçmiş olsa da gecikenlerde değil, en sağdaki sütunda durur.
-    assert gecikenler < sayfa.index("OZ-TS0003") < planlanan < sayfa.index("OZ-TS0001") < onay < sayfa.index("OZ-TS0004")
-    # Tek SVR kendi sayfasını, iki adet çene siparişin çene bölümünü açar.
-    assert 'href="/urun/' in sayfa and 'href="/siparisler/OZ-TS0001#aile-Çene"' in sayfa
+    # Sütunlar Planner'daki sırayla
+    sutunlar = [sayfa.index(f'id="sutun-{s}"') for s in ("siparisler", "sevke_hazir", "son_montaj", "montaj", "malzeme")]
+    assert sutunlar == sorted(sutunlar)
+    # İş emri açılmamış makineler Siparişler sütununda sipariş başına bir kartta, teslim tarihine göre
+    siparisler = sayfa[sutunlar[0]:sutunlar[1]]
+    assert siparisler.index("OZ-TS0003") < siparisler.index("OZ-TS0001") and "gün gecikti" in siparisler
+    assert "İş emri bekleyen: <strong>SVR-50-NF-BSP / PP-536-NF</strong>" in siparisler and "KCN-90" not in siparisler
+    assert ">KCN</a>" in siparisler and ">Sipariş</a>" in siparisler  # çene ve kaynak etiketi
+    # Onay bekleyen sipariş panoda değil, altındaki kapalı bölümde
+    assert sayfa.index('id="onay"') < sayfa.index("OZ-TS0004")
     yalniz_onay = istemci.get("/siparisler?durum=onay_bekliyor").get_data(as_text=True)
-    assert "OZ-TS0004" in yalniz_onay and "Gecikenler" not in yalniz_onay and "OZ-TS0001" not in yalniz_onay
+    assert "OZ-TS0004" in yalniz_onay and 'id="sutun-siparisler"' not in yalniz_onay and "OZ-TS0001" not in yalniz_onay
 
 
 def test_onay_bekleyenler_sevk_edileceklere_girmez(istemci, ekip, yukle):
@@ -301,14 +307,14 @@ def test_teslim_suzgeci_tek_sutunu_gosterir(istemci, ekip, yukle):
     yukle(excel(gecikmis_ve_ileri_siparis()))
     sayfa = istemci.get("/siparisler?teslim=gecikti").get_data(as_text=True)
     assert "OZ-TS0003" in sayfa and "OZ-TS0001" not in sayfa
-    assert 'Yalnızca "Gecikenler" gösteriliyor' in sayfa
+    assert "Gecikenler ×" in sayfa
 
 
 def test_takvimden_gelen_tarih_araligi(istemci, ekip, yukle):
     yukle(excel(gecikmis_ve_ileri_siparis()))
     sayfa = istemci.get("/siparisler?bas=2030-01-14&bit=2030-01-20").get_data(as_text=True)
     assert "OZ-TS0001" in sayfa and "OZ-TS0003" not in sayfa
-    assert "Makine teslimi 14/01/2030–20/01/2030 arasında olan siparişler" in sayfa
+    assert "Teslim 14/01/2030–20/01/2030 ×" in sayfa
 
 
 def yedek_parca_siparisi(**degisen):
@@ -409,7 +415,7 @@ def test_ozet_satirlari_tiklanir_ve_kutucuklar_renkli(istemci, ekip, yukle):
 
 def test_siparis_kutusunda_tam_urun_kodu(istemci, ekip, yukle):
     yukle(excel(makine_siparisi()))
-    sayfa = istemci.get("/siparisler").get_data(as_text=True)
+    sayfa = istemci.get("/siparisler?durum=tumu").get_data(as_text=True)  # liste görünümü
     assert "<strong>1</strong> PP-536-NF</a>" in sayfa and "<strong>1</strong> SVR-50-NF-BSP</a>" in sayfa
     assert "<strong>2</strong> KCN-90</a>" in sayfa and "#aile-Çene" in sayfa  # iki çene: sipariş kartının bölümü
     assert "<strong>1</strong> PP</a>" not in sayfa
@@ -477,8 +483,9 @@ def test_musteriye_ozel_renk_ve_logo(istemci, uygulama, ekip, yukle):
     resim = Image.new("RGBA", (40, 20), (0, 0, 0, 255))
     resim.save(marka / "musteri-TS0.png")
     yukle(excel(makine_siparisi()))
-    liste = istemci.get("/siparisler").get_data(as_text=True)
+    liste = istemci.get("/siparisler?durum=tumu").get_data(as_text=True)
     assert "musterili" in liste and "--musteri-renk: #0e518d" in liste and "/marka/musteri/TS0?s=" in liste
+    assert "--musteri-renk: #0e518d" in istemci.get("/siparisler").get_data(as_text=True)  # panodaki sipariş kartı
     assert "musterili" in istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
     assert istemci.get("/marka/musteri/TS0").mimetype == "image/png"
     assert istemci.get("/marka/musteri/XX9").status_code == 404
@@ -492,7 +499,7 @@ def test_musteriye_ozel_renk_ve_logo(istemci, uygulama, ekip, yukle):
     # Dosyada olmayan müşteriler: OMS logosu ve OMS kırmızısı; "*" satırı rengi değiştirir.
     resim.save(marka / "oms-logo.png")
     (marka / "musteriler.txt").write_text("XX9;#0e518d\n", encoding="utf-8")
-    liste = istemci.get("/siparisler").get_data(as_text=True)
+    liste = istemci.get("/siparisler?durum=tumu").get_data(as_text=True)
     assert "--musteri-renk: #c41e24" in liste and "/marka/logo?s=" in liste
     (marka / "musteriler.txt").write_text("XX9;#0e518d\n*;#16181d\n", encoding="utf-8")
     assert "--musteri-renk: #16181d" in istemci.get("/siparisler").get_data(as_text=True)

@@ -569,7 +569,7 @@ def form_hazirla(vt, urun, tur, b, sablon, kullanici_id):
 
 def _urun(vt, urun_id, tur):
     urun = urun_kaydi(vt, urun_id)
-    if urun is None or tur not in FORM_TURLERI or urun["aile"] != "PP" or urun["tur"] != "kart":
+    if urun is None or urun["kalem_id"] is None or tur not in FORM_TURLERI or urun["aile"] != "PP" or urun["tur"] != "kart":
         abort(404)
     return urun
 

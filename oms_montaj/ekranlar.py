@@ -1,13 +1,11 @@
 """Henüz dolmamış ekranlar ve Ayarlar. Her boş ekran, planın hangi adımında dolacağını söyler."""
 
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, render_template, url_for
 
 bp = Blueprint("ekranlar", __name__)
 
 # uç: (adres, başlık, açıklama, planın hangi adımında dolacağı)
 BOS_EKRANLAR = {
-    "pano": ("/pano", "Pano", "Ürünler bulundukları aşamanın sütununda görünecek.", 4),
-    "stok": ("/stok", "Stok", "Siparişe bağlanmamış ürünler, depoları ve test durumlarıyla burada listelenecek.", 5),
     "arsiv": ("/arsiv", "Planner arşivi", "Tamamlanmış Planner kartları burada İEN, seri no ya da sipariş no ile aranacak.", 7),
 }
 
@@ -21,6 +19,12 @@ def bos_ekran(baslik, aciklama, adim):
 
 for _uc, (_adres, _baslik, _aciklama, _adim) in BOS_EKRANLAR.items():
     bp.add_url_rule(_adres, _uc, bos_ekran(_baslik, _aciklama, _adim))
+
+
+@bp.route("/pano")
+def pano():
+    """Pano artık Siparişler ekranıdır (Planner'daki gibi aşama sütunları; 02/11/2026)."""
+    return redirect(url_for("siparisler.liste"))
 
 
 @bp.route("/ayarlar")

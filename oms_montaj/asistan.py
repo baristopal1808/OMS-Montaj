@@ -135,7 +135,7 @@ def siparis_bilgisi(siparis_no: str) -> str:
                 "planlama_birimi_urun_durumu": k["erp_urun_durumu"],
                 "numaralar": {ad: numara_metni(deger, kaynak)
                               for _, ad, deger, kaynak in urun_numaralari(vt, u, k["aile"], s["id"], k["urun_kodu"])},
-                "renk": renk(k["aciklama"]),
+                "renk": renk(k["aciklama"], k["aile"]),
                 "yag": (yag(k["aciklama"]) or ("bilgi yok",))[0] if k["aile"] == "PP" else None,
             })
     alt = [{"is_emri": ie["is_emri_no"], "urun": f'{ie["urun_kodu"]} {ie["urun_adi"] or ""}'.strip(),

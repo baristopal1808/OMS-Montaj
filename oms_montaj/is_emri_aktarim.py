@@ -209,7 +209,8 @@ def _urunlere_dagit(vt, sayac):
     giren miktar kadar ürün "Montaj tamamlandı" sayılır. ERP'nin gösterdiği aşama ürünün erp_asama alanında
     saklanır; ürün yalnızca bu değişince (ERP'de yeni bir gelişme) ilerletilir, böylece ekibin geri aldığı ürün
     sonraki yüklemede yeniden ileri itilmez. Aşama değişikliği zaman akışına ERP yüklemesi olarak yazılır.
-    Montaj formları basılmamış güç ünitesi formların izin verdiği aşamada bekler (form_kurallari)."""
+    Montaj formları basılmamış güç ünitesi formların izin verdiği aşamada bekler (form_kurallari). Stoktan atanan
+    ürünün (stok.py) iş emri ve aşaması stok kartından gelir; ona dokunulmaz, satırın iş emirleri öbür adetlere dağıtılır."""
     yuvalar = defaultdict(list)  # kalem → her adet için bir iş emri
     stoga_giren = {}
     for ie in vt.execute(
@@ -225,11 +226,19 @@ def _urunlere_dagit(vt, sayac):
     kacinci = Counter()  # iş emrinin kaçıncı ürünü
     zaman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     basilan = basilan_formlar(vt)
-    for urun in vt.execute(
-        "SELECT u.id, u.kalem_id, u.adet_sira, u.asama, u.erp_asama, u.is_emri_id, u.form_muaf, k.aile, k.tur"
-        " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id ORDER BY u.kalem_id, u.adet_sira"
-    ).fetchall():
-        sira = urun["adet_sira"] - 1
+    urunler = vt.execute(
+        "SELECT u.id, u.kalem_id, u.adet_sira, u.asama, u.erp_asama, u.is_emri_id, u.form_muaf, u.stoktan_atama,"
+        " k.aile, k.tur FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id ORDER BY u.kalem_id, u.adet_sira"
+    ).fetchall()
+    for urun in urunler:
+        if urun["stoktan_atama"] and urun["is_emri_id"] in yuvalar[urun["kalem_id"]]:
+            yuvalar[urun["kalem_id"]].remove(urun["is_emri_id"])
+    siradaki = Counter()  # satırın kaçıncı (stoktan atanmamış) ürünü
+    for urun in urunler:
+        if urun["stoktan_atama"]:
+            continue
+        sira = siradaki[urun["kalem_id"]]
+        siradaki[urun["kalem_id"]] += 1
         ie_id = yuvalar[urun["kalem_id"]][sira] if sira < len(yuvalar[urun["kalem_id"]]) else None
         asama, erp = urun["asama"], urun["erp_asama"]
         if ie_id:

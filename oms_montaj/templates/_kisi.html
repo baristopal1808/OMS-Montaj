@@ -1,0 +1,7 @@
+{# Kişinin yuvarlağı: fotoğrafı varsa fotoğraf, yoksa kendi renginde baş harfleri (atama.kisi). adres verilirse
+   bağlantıdır (panoda o kişinin kartlarına süzer). #}
+{% macro kisi_baloncugu(p, adres=None, baslik=None, sinif='') -%}
+{% set icerik %}{% if p.fotograf %}<img src="{{ url_for('kullanicilar.fotograf', kullanici_id=p.id, s=p.fotograf) }}" alt="">{% else %}{{ p.harf }}{% endif %}{% endset %}
+{% if adres %}<a class="kisi-baloncugu {{ sinif }}" style="--kisi: {{ p.renk }}" href="{{ adres }}" title="{{ baslik or p.ad }}">{{ icerik }}</a>
+{%- else %}<span class="kisi-baloncugu {{ sinif }}" style="--kisi: {{ p.renk }}" title="{{ baslik or p.ad }}">{{ icerik }}</span>{% endif %}
+{%- endmacro %}

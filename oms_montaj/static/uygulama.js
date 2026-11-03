@@ -56,6 +56,29 @@ document.querySelectorAll("[data-form-hazirla]").forEach(function (form) {
   });
 });
 
+// Bilgisayarda sol menü: düğme menüyü genişletir ya da daraltır (yalnızca simgeler); seçim tarayıcıda saklanır.
+// Dar menüde simgenin üzerine gelince adı ipucu olarak görünür.
+document.querySelectorAll("[data-menu-sabitle]").forEach(function (dugme) {
+  var kok = document.documentElement;
+  var ogeler = document.querySelectorAll(".yan-menu a, .yan-alt a, .yan-alt button");
+  function goster() {
+    var sabit = kok.classList.contains("menu-sabit");
+    dugme.setAttribute("aria-expanded", sabit ? "true" : "false");
+    dugme.title = sabit ? "Menüyü daralt (yalnızca simgeler)" : "Menüyü genişlet";
+    ogeler.forEach(function (oge) {
+      var ad = oge.querySelector("span");
+      if (sabit) oge.removeAttribute("title");
+      else if (ad) oge.title = ad.textContent.trim();
+    });
+  }
+  dugme.addEventListener("click", function () {
+    var sabit = kok.classList.toggle("menu-sabit");
+    try { localStorage.setItem("omsMenuSabit", sabit ? "1" : "0"); } catch (e) {}
+    goster();
+  });
+  goster();
+});
+
 // Telefonda yan menüyü açıp kapatır. Bilgisayarda menü hep açıktır; bu düğme orada görünmez.
 (function () {
   var dugme = document.querySelector(".menu-dugme");
@@ -217,3 +240,9 @@ document.querySelectorAll("form[data-yerinde]").forEach(function (form) {
     });
   });
 })();
+
+// Geri alınması zor işlemlerde (stok makinesini siparişe atamak gibi) gönderilmeden önce onay sorulur.
+document.addEventListener("submit", function (olay) {
+  var form = olay.target;
+  if (form.dataset && form.dataset.onay && !window.confirm(form.dataset.onay)) olay.preventDefault();
+});

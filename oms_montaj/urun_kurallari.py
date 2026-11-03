@@ -16,6 +16,7 @@ AILELER = {
     "PP": "PP",
     "SCN": "Çene",
     "KCN": "Çene",
+    "ACN": "Çene",  # henüz siparişlerde yok; ilk geldiğinde çene sayılsın (kullanıcı, 02/11/2026)
     "CB": "Kiriş",
 }
 # Sipariş kartındaki bölümlerin sırası ve başlıkları
@@ -110,9 +111,18 @@ def model(urun_kodu):
     return onek(urun_kodu)
 
 
-def renk(aciklama):
+STANDART_RENK = "RAL3020"  # şirketin standart rengi (trafik kırmızısı)
+STANDART_RENKLI_AILELER = ("PP", "SVR")  # yalnızca bunlarda "Standart" RAL3020 yazılır (kullanıcı, 02/11/2026)
+
+
+def renk(aciklama, aile=None):
+    """Satırın açıklamasındaki renk ("Renk: …"). Güç ünitesinde ve SVR'de "Standart" geçen renk RAL3020 olarak
+    yazılır (sipariş talebinde "Standart" ya da şirket adıyla yazılıyor)."""
     eslesme = re.search(r"renk\s*:\s*([^\r\n]+)", aciklama or "", re.IGNORECASE)
-    return eslesme.group(1).strip() if eslesme else None
+    if not eslesme:
+        return None
+    deger = eslesme.group(1).strip()
+    return STANDART_RENK if aile in STANDART_RENKLI_AILELER and "standart" in sade(deger) else deger
 
 
 def yag(aciklama):

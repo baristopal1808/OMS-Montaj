@@ -31,6 +31,8 @@ YOLLAR = {
               '<rect x="6" y="14" width="12" height="8"/>',
     "onay": '<path d="M20 6 9 17l-5-5"/>',
     "yenile": '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+    "menu_genislet": '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M14 9l3 3-3 3"/>',
+    "menu_daralt": '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M16 15l-3-3 3-3"/>',
 }
 
 

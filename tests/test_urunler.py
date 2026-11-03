@@ -97,11 +97,12 @@ def test_urun_sayfasi(istemci, uygulama, ekip, yukle):  # noqa: F811
     yuklenmis(yukle)
     pp = urun_id(uygulama, "PP-536-NF")
     sayfa = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    for beklenen in ("PP-536-NF", "OZ-TS0001-PP-01", "Malzeme hazırlık", "900101", "Açık", "Yağsız sevk",
+    for beklenen in ("PP-536-NF", "OZ-TS0001-PP-01", "Malzeme hazırlık", "900101", "Açık",
                      "<strong>1</strong> kırılımdan", "CP0001", "PP Yag Tanki Montaji", "Motor seri no",
                      "ERP iş emri açıklamasından", "0000 111 101"):
         assert beklenen in sayfa, beklenen
     assert "SVR-50-NF-BSP" not in sayfa  # yalnızca bu ürün
+    assert "Yağsız sevk" not in sayfa and "Siparişin durumu" not in sayfa  # sipariş kartının başlığında
     # Sipariş kartında her makine kendi sayfasına gider; motor seri no görünür.
     kart = istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True)
     assert f'href="/urun/{pp}"' in kart and "0000 111 101" in kart

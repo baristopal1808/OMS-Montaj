@@ -12,10 +12,12 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 
 from .erp_aktarim import listede_olmayanlari_isaretle, siparis_ozeti, siparisleri_isle
 from .erp_okuyucu import (
-    RAPORLAR, OkumaHatasi, cikis_satirlari, is_emri_satirlari, numara_satirlari, rapor_turu, siparis_satirlari, tablo_oku,
+    RAPORLAR, OkumaHatasi, cikis_satirlari, is_emri_satirlari, numara_satirlari, rapor_turu, siparis_satirlari,
+    stok_satirlari, tablo_oku,
 )
 from .is_emri_aktarim import baglanti_ozeti, is_emirlerini_bagla, is_emirlerini_isle, is_emri_ozeti
 from .numaralar import numara_ozeti, numaralari_isle
+from .stok import depo_bul, depo_raporunu_isle, esleme_ozeti, stok_ozeti, stoklari_esle
 from .uyarilar import eksik_ozeti, eksikleri_isle
 from .veritabani import baglanti
 
@@ -45,7 +47,7 @@ def _kopyasini_kaydet(dosya, uzanti):
 
 
 # Birlikte yüklenen dosyalar bu sırayla işlenir: eksik malzemeler iş emirlerine, iş emirleri siparişlere bakar.
-ISLEME_SIRASI = ("siparis_talepleri", "is_emirleri", "cikis_yapilamayan", "makine_numaralari")
+ISLEME_SIRASI = ("siparis_talepleri", "is_emirleri", "cikis_yapilamayan", "makine_numaralari", "stok")
 
 
 def dosya_oku(dosya):
@@ -88,12 +90,16 @@ def dosya_isle(okunan):
             elif tur == "cikis_yapilamayan":
                 ozet = "Çıkış yapılamayan malzeme: " + eksik_ozeti(
                     eksikleri_isle(vt, cikis_satirlari(basliklar, satirlar), yukleme_id))
-            elif tur:
-                rapor = RAPORLAR[tur]
-                ozet = f"{rapor['ad']} raporu tanındı; bu rapor planın {rapor['adim']}. adımında işlenecek."
+            elif tur == "stok":
+                # Depo dosyada yazmaz; dosyanın adından anlaşılır (sevk depo, montaj üretim depo, montaj depo)
+                if depo := depo_bul(ad):
+                    ozet = stok_ozeti(depo, *depo_raporunu_isle(vt, depo, stok_satirlari(basliklar, satirlar), yukleme_id))
+                else:
+                    raise OkumaHatasi("depo stok raporunun hangi depoya ait olduğu anlaşılamadı. Dosyanın adında"
+                                      " \"sevk depo\", \"montaj üretim depo\" ya da \"montaj depo\" geçmeli.")
             else:
-                ozet = ("Rapor türü tanınamadı. Şimdilik sipariş talepleri, iş emirleri ve çıkış yapılamayan malzeme"
-                        " listeleri işlenebiliyor.")
+                ozet = ("Rapor türü tanınamadı. Sipariş talepleri, iş emirleri, çıkış yapılamayan malzeme, depo stok"
+                        " raporları ve makine numaraları şablonu işlenebiliyor.")
             vt.execute("UPDATE erp_yuklemeler SET ozet = ? WHERE id = ?", (ozet, yukleme_id))
     except OkumaHatasi as hata:
         ozet = f"İşlenemedi: {hata}"
@@ -135,6 +141,11 @@ def yukleme():
             # Sipariş ya da iş emri listesi değişince iş emirlerinin bağlantısı yeniden kurulur.
             with vt:
                 flash(baglanti_ozeti(is_emirlerini_bagla(vt)))
+        if turler & {"siparis_talepleri", "is_emirleri", "stok"}:
+            # Stok kartları depo raporlarıyla, siparişlerle ve stok iş emirleriyle yeniden eşlenir (stok.py)
+            with vt:
+                if ozet := esleme_ozeti(stoklari_esle(vt)):
+                    flash(ozet)
         return redirect(url_for(".yukleme"))
 
     yuklemeler = baglanti().execute(

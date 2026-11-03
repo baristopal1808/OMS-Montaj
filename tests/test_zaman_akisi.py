@@ -30,8 +30,9 @@ def test_asama_ileri_ve_geri_alinir(istemci, uygulama, gonder, ekip, yukle):  # 
     yuklenmis(yukle)
     pp = urun_id(uygulama, "SVR-50-NF-BSP")
     assert asama(uygulama, pp) == "malzeme_hazirlik"
-    gonder(f"/urun/{pp}/asama", asama="test")  # ileri alırken not isteğe bağlı
+    yanit = gonder(f"/urun/{pp}/asama", asama="test")  # ileri alırken not isteğe bağlı
     assert asama(uygulama, pp) == "test"
+    assert yanit.headers["Location"].endswith(f"/urun/{pp}#akis")  # ürün sayfasına döner (Özet'e değil)
     # Geri alırken sebep zorunlu
     gonder(f"/urun/{pp}/asama", asama="montaj", **{"not": "   "})
     assert asama(uygulama, pp) == "test"

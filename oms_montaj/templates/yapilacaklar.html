@@ -1,7 +1,7 @@
 {% extends "taban.html" %}
 {% block baslik %}Yapılacaklar{% endblock %}
 {% block icerik %}
-{% from "_uyarilar.html" import eksik_karti, imalatta_karti with context %}
+{% from "_uyarilar.html" import eksik_karti with context %}
 <h1>Yapılacaklar</h1>
 <p class="soluk">Uygulamanın sizden cevap beklediği konular. Test soruları ve sevk onayları sonraki adımlarda buraya gelecek.</p>
 
@@ -32,19 +32,6 @@
   {% for ie, o in ogeler %}{{ eksik_karti(ie, o, eksik_ayrintilari[ie.is_emri_no], is_emri_ailesi(ie), secili_aile, secili_konu) }}{% endfor %}
   {% else %}
   <div class="kutu bos"><p>Sorulacak eksik malzeme yok.</p></div>
-  {% endfor %}
-</section>
-{% endif %}
-
-{% if secili_konu in ('', 'imalatta') %}
-<section class="bolum" id="imalatta">
-  <h2>İş emri stoğa girmiş ama ERP'de "İmalatta" <span class="soluk">(<span data-sayi-konu="imalatta">{{ konu_sayilari.imalatta }}</span>)</span></h2>
-  <p class="soluk kucuk">Planlama biriminin ERP'deki ürün durumu geç güncellenebiliyor. Aynı üründen birden çok olsa da her ürün ve iş emri için ayrı sorulur; ERP'deki durum değişince uyarı kendiliğinden kalkar.</p>
-  {% for baslik, ogeler in imalatta_gruplari %}
-  {% if baslik %}<h3 class="yapilacak-grubu">{{ baslik }} <span class="soluk">({{ ogeler | length }})</span></h3>{% endif %}
-  {% for u in ogeler %}{{ imalatta_karti(u, secili_aile, secili_konu) }}{% else %}<div class="kutu bos"><p>Sorulacak ürün yok.</p></div>{% endfor %}
-  {% else %}
-  <div class="kutu bos"><p>Sorulacak ürün yok.</p></div>
   {% endfor %}
 </section>
 {% endif %}

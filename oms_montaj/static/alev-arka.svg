@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" preserveAspectRatio="none">
+  <!-- Sıcak sipariş kartının arka alev katmanı; yan yana tekrarlanır (başı ve sonu tabanda birleşir) -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffa94d"/>
+      <stop offset=".5" stop-color="#fd7e14"/>
+      <stop offset="1" stop-color="#e03131" stop-opacity=".15"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#g)" d="M0 40C3 30 4 24 8 18 10 14 11 9 12 4c3 8 7 14 8 22 1 5 1 10 2 14zM18 40c2-8 5-13 8-17 2-3 3-6 4-9 2 6 6 11 7 17 1 4 2 7 3 9zM36 40c3-9 6-15 9-21 2-4 3-9 4-13 2 7 6 13 8 20 1 5 2 10 3 14z"/>
+</svg>

@@ -1,0 +1,141 @@
+{% extends "taban.html" %}
+{% block baslik %}Siparişler{% endblock %}
+{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik %}
+{# Siparişler panosu (pano.py): Planner'daki gibi aşama sütunları. Etikete ya da kişiye tıklayınca pano ona
+   süzülür; birden çok etiket birlikte seçilebilir. Kartın menüsünden aşama değişir. Tamamlanan ve iptal
+   siparişler süzgeçten liste olarak. #}
+{% from "_siparis_suzgeci.html" import siparis_suzgeci with context %}
+{% from "_siparis_kutusu.html" import siparis_kutusu with context %}
+{% from "_kisi.html" import kisi_baloncugu with context %}
+{% set ortak = {'ara': secim.ara, 'tip': secim.tip, 'aile': secim.aile, 'teslim': secim.teslim, 'bas': secim.bas, 'bit': secim.bit} %}
+{% set ekip = g.kullanici.rol == 'ekip' %}
+
+{% macro etiket_baglantisi(e) -%}
+{% set secili = e.ad in etiketler %}
+<a class="pano-etiket e-{{ e.sinif }}{% if secili %} secili{% endif %}" style="--renk: {{ AILE_RENKLERI.get(e.aile, '#98a2b3') }}"
+  href="{{ pano_adresi(etiketler | reject('equalto', e.ad) | list if secili else etiketler + [e.ad], kisi, **ortak) }}"
+  title="{{ 'Süzgeçten çıkar' if secili else 'Yalnızca ' ~ e.ad ~ ' olanları göster' }}">
+  {%- if e.sinif == 'sicak' %}<svg class="alev-simgesi" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd43b" d="M12 2c.6 3.2 2.6 5 4.3 7 1.6 1.9 2.7 3.9 2.7 6.2a7 7 0 0 1-14 0c0-2.6 1.3-4.6 2.9-6.1.2 1.7.9 3 2.1 3.6-.4-3.4.3-7.4 2-10.7z"/><path fill="#fff3bf" d="M12 12.5c.3 1.6 1.4 2.5 2.1 3.6.5.8.8 1.5.8 2.3a2.9 2.9 0 0 1-5.8 0c0-1.2.6-2.2 1.4-3 .1.7.4 1.2.9 1.5-.1-1.6.2-3.1.6-4.4z"/></svg>{% endif -%}
+  {{ e.ad }}</a>
+{%- endmacro %}
+
+{% macro kart_alti(k) -%}
+<div class="kart-alt">
+  {% if k.tur == 'stok' %}<span class="kart-tarih stok-tarih">Stokta · siparişe atanmadı</span>
+  {% else %}<span class="kart-tarih{% if k.kalan %} {{ k.kalan[1] }}{% endif %}">{% if k.teslim %}{{ k.teslim | tarih }}{% if k.kalan and k.kalan[1] %} · {{ k.kalan[0] }}{% endif %}{% else %}Teslim tarihi yok{% endif %}</span>{% endif %}
+  {% if k.eksik %}<a class="kart-eksik" href="{{ url_for('urunler.sayfa', urun_id=k.id) }}#eksik" title="Çıkışı yapılmamış malzeme">{{ k.eksik }} eksik</a>{% endif %}
+  <span class="kart-kisiler">{% for p in k.atananlar %}{{ kisi_baloncugu(p, pano_adresi(etiketler, None if kisi == p.id else p.id, **ortak), p.ad ~ ' · yalnızca onun kartları') }}{% endfor %}</span>
+</div>
+{%- endmacro %}
+
+{# Kartın menüsü: aşamayı değiştir (geri alırken sebep zorunlu; çıktı kuralı geçerli) #}
+{% macro asama_menusu(k) -%}
+<details class="kart-menusu">
+  <summary title="Aşamayı değiştir" aria-label="{{ k.baslik }}: aşamayı değiştir">⋯</summary>
+  <form method="post" action="{{ url_for('urunler.asama', urun_id=k.id) }}" class="form" autocomplete="off" data-asama-formu>
+    <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+    <input type="hidden" name="sonra" value="{{ request.full_path }}">
+    <label class="alan"><span>Aşama</span>
+      <select name="asama" data-simdiki="{{ asama_sirasi[k.asama] if k.asama != 'stokta' else -1 }}">
+        {%- for anahtar, ad in asama_secenekleri.items() %}<option value="{{ anahtar }}" data-sira="{{ asama_sirasi[anahtar] }}"{% if anahtar == k.asama %} selected{% endif %}>{{ ad }}</option>{% endfor -%}
+      </select></label>
+    <label class="alan"><span>Not <small class="soluk" data-not-ipucu>(isteğe bağlı)</small></span>
+      <textarea name="not" rows="2"></textarea></label>
+    <button type="submit" class="dugme kucuk-dugme">Kaydet</button>
+  </form>
+</details>
+{%- endmacro %}
+
+{% macro urun_karti(k) -%}
+<article class="is-karti{% if k.sicak %} sicak{% endif %}">
+  <div class="kart-etiketleri">{% for e in k.etiketler %}{{ etiket_baglantisi(e) }}{% endfor %}</div>
+  {% if k.tur == 'stok' %}{% if ekip %}<a class="kart-menusu kart-ata" href="{{ url_for('urunler.sayfa', urun_id=k.id) }}#ata" title="Siparişe ata" aria-label="{{ k.baslik }}: siparişe ata">⋯</a>{% endif %}
+  {% elif ekip %}{{ asama_menusu(k) }}{% endif %}
+  <a class="kart-baslik-baglanti" href="{{ url_for('urunler.sayfa', urun_id=k.id) }}"><strong>{{ k.baslik }}</strong>{% if k.motor %} <span class="kart-motor">· {{ k.motor }}</span>{% endif %}</a>
+  {% if k.tur == 'stok' %}
+  <span class="kart-numaralar"><strong>Stok</strong>{% if k.is_emri %} · İE <strong>{{ k.is_emri }}</strong>{% else %} · <span class="soluk">İş emri bilinmiyor</span>{% endif %}</span>
+  {% else %}
+  <span class="kart-numaralar"><strong>{{ k.siparis_no }}</strong>{% if k.is_emri %} · İE <strong>{{ k.is_emri }}</strong>{% else %} · <span class="soluk">İş emri açılmadı</span>{% endif %}</span>
+  {% endif %}
+  {% if k.bilgiler %}
+  <ul class="kart-bilgileri">
+    {% for ad, deger, sinif in k.bilgiler %}<li class="{{ sinif }}{% if not ad %} cumle{% endif %}" title="{% if ad %}{{ ad }}: {% endif %}{{ deger }}">{% if ad %}<span class="b-ad">{{ ad }}</span> {% endif %}<span class="b-deger">{{ deger }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if k.bagli %}<p class="kart-bagli">{% for metin, hazir in k.bagli %}<span{% if hazir %} class="hazir" title="Hazır"{% endif %}>{{ metin }}</span>{% endfor %}</p>{% endif %}
+  {{ kart_alti(k) }}
+</article>
+{%- endmacro %}
+
+{% macro siparis_karti(k) -%}
+{% set marka = musteri_markasi(k.siparis_no) %}
+<article class="is-karti siparis-mini{% if k.sicak %} sicak{% endif %}" style="--musteri-renk: {{ marka.renk }};">
+  {% if k.etiketler %}<div class="kart-etiketleri">{% for e in k.etiketler %}{{ etiket_baglantisi(e) }}{% endfor %}</div>{% endif %}
+  <a class="kart-baslik-baglanti" href="{{ url_for('siparisler.kart', siparis_no=k.siparis_no) }}"><strong>{{ k.siparis_no }}</strong></a>
+  {% if k.kodlar %}<span class="kart-numaralar tek-satir" title="İş emri bekleyen: {{ k.kodlar | join(' / ') }}">İş emri bekleyen: <strong>{{ k.kodlar | join(' / ') }}</strong></span>{% endif %}
+  {% for kod, adet in k.stokta %}<span class="kart-stokta tek-satir">Stokta var: <strong>{{ kod }}</strong>{% if adet > 1 %} ({{ adet }} adet){% endif %}</span>{% endfor %}
+  {% if k.revizyon or k.diger_kalem %}<p class="kart-bagli">
+    {% if k.revizyon %}<span class="etiket revize" title="Sipariş talebi {{ k.revizyon | tarih }} tarihinde revize edildi">Revize</span>{% endif %}
+    {% if k.diger_kalem %}<span>{{ k.diger_kalem }} kalem (aksesuar)</span>{% endif %}</p>{% endif %}
+  {{ kart_alti(k) }}
+</article>
+{%- endmacro %}
+
+<header class="sayfa-basligi">
+  <div class="sayfa-basligi-ic">
+    {% if logo_adresi() %}<img class="sayfa-basligi-logo" src="{{ logo_adresi() }}" alt="OMS">{% endif %}
+    <h1>Siparişler</h1>
+    <p class="sayfa-basligi-alt">Montaj fabrikası iş panosu</p>
+  </div>
+  {% if toplam %}
+  <dl class="sayfa-sayilari">
+    {% for sutun in veri.sutunlar %}<div><dt>{{ sutun.ad }}</dt><dd>{{ sutun.kartlar | length }}</dd></div>{% endfor %}
+  </dl>
+  {% endif %}
+  {% if son_yukleme %}<p class="soluk kucuk sayfa-basligi-veri">ERP verisi: {{ son_yukleme | zaman }}</p>{% endif %}
+</header>
+
+{% if not toplam %}
+<div class="kutu bos">
+  <p>Henüz sipariş yok.</p>
+  <p class="soluk">ERP'den aldığınız "Sipariş talepleri" Excel'ini <a href="{{ url_for('erp.yukleme') }}">ERP yükleme</a> ekranından yükleyin.</p>
+</div>
+{% else %}
+{{ siparis_suzgeci(secim) }}
+<div class="pano-suzgecleri">
+  <a class="suzgec-cip{% if kisi == ben %} secili{% endif %}" href="{{ pano_adresi(etiketler, None if kisi == ben else ben, **ortak) }}">Bana atananlar</a>
+  {% for e in etiketler %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler | reject('equalto', e) | list, kisi, **ortak) }}" title="Süzgeçten çıkar">{{ e }} ×</a>{% endfor %}
+  {% if kisi and kisi != ben %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, None, **ortak) }}" title="Süzgeçten çıkar">{{ kisi_adi or 'Kişi' }} ×</a>{% endif %}
+  {% if teslim_suzgeci %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, kisi, **dict(ortak, teslim=None)) }}" title="Süzgeçten çıkar">{{ teslim_suzgeci }} ×</a>{% endif %}
+  {% if tarih_araligi %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, kisi, **dict(ortak, bas=None, bit=None)) }}" title="Süzgeçten çıkar">Teslim {{ tarih_araligi[0] | tarih }}{% if tarih_araligi[1] != '9999-12-31' %}–{{ tarih_araligi[1] | tarih }}{% else %} ve sonrası{% endif %} ×</a>{% endif %}
+  <span class="soluk kucuk">Etikete ya da kişiye tıklayınca pano ona süzülür.{% if ekip %} Kartın ⋯ düğmesiyle aşama değişir.{% endif %}</span>
+</div>
+
+<div class="pano">
+  {% for sutun in veri.sutunlar %}
+  <section class="pano-sutunu" aria-labelledby="sutun-{{ sutun.anahtar }}">
+    <h2 id="sutun-{{ sutun.anahtar }}">{{ sutun.ad }} <span class="pano-sayi">{{ sutun.kartlar | length }}</span></h2>
+    {% if sutun.kartlar %}
+    <ul class="pano-kartlari">
+      {% for k in sutun.kartlar %}<li>{% if k.tur == 'siparis' %}{{ siparis_karti(k) }}{% else %}{{ urun_karti(k) }}{% endif %}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="soluk kucuk bos-sutun">Bu sütunda kart yok.</p>{% endif %}
+    {% if sutun.anahtar == 'sevke_hazir' and veri.sevk_edilenler %}
+    <details class="sevk-edilenler">
+      <summary>Son 30 günde sevk edilenler <span class="pano-sayi">{{ veri.sevk_edilenler | length }}</span></summary>
+      <ul>{% for u in veri.sevk_edilenler %}<li><a href="{{ url_for('urunler.sayfa', urun_id=u.id) }}"><strong>{{ u.urun_kodu }}</strong></a> · {{ u.siparis_no }}{% if u.son_sevk_tarihi %} · {{ u.son_sevk_tarihi | tarih }}{% endif %}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+
+{% if onay %}
+<details class="onay-bolumu" id="onay">
+  <summary>Onay bekleyen projeler <span class="pano-sayi">{{ onay | length }}</span></summary>
+  <ul class="siparis-kutulari">{% for o in onay %}<li class="onay-bekliyor">{{ siparis_kutusu(o) }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -84,8 +84,18 @@ def akis(vt, urun, numara_adlari):
         oge["onceki"] = onceki[o["id"]]
         ogeler.append(oge)
 
+    # Stok kartı (stok.py): açılışı, test cevabı, siparişe atanmadan önceki hâli
+    if urun["stok_kaynagi"] == "depo" and urun["kalem_id"] is None:
+        ogeler.append(_oge(urun["olusturma"], "erp", "Stok kartı açıldı (depo stok raporundan)"))
+    if urun["test_degisme"]:
+        kim = vt.execute("SELECT ad_soyad FROM kullanicilar WHERE id = ?", (urun["test_degistiren_id"],)).fetchone()
+        ogeler.append(_oge(urun["test_degisme"], "cevap",
+                           "Stok makinesi: " + ("test edildi" if urun["test_durumu"] == "edildi" else "test bekliyor"),
+                           kim[0] if kim else ""))
+
     # Sipariş talebi ve revizyonları (satırın ve siparişin kendisinin), ERP'deki sevk
-    talep = vt.execute("SELECT talep_tarihi FROM siparisler WHERE id = ?", (urun["siparis_id"],)).fetchone()[0]
+    talep = vt.execute("SELECT talep_tarihi FROM siparisler WHERE id = ?", (urun["siparis_id"],)).fetchone()
+    talep = talep[0] if talep else None
     if talep:
         ogeler.append(_oge(talep, "erp", "Sipariş talebi onaylandı"))
     for r in vt.execute(

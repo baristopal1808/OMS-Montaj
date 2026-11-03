@@ -11,7 +11,6 @@ from oms_montaj.veritabani import GOCLER, ac
         ("/siparisler", "Siparişler"),
         ("/sevkiyat", "Sevkiyat"),
         ("/yedek-parca", "Yedek parça"),
-        ("/pano", "Pano"),
         ("/stok", "Stok"),
         ("/yapilacaklar", "Yapılacaklar"),
         ("/erp-yukleme", "ERP yükleme"),
@@ -31,10 +30,11 @@ def test_ekranlar_acilir(istemci, ekle, giris, adres, baslik):
 def test_yan_menu_giristen_sonra_gorunur(istemci, ekle, giris):
     ekle()
     giris()
-    sayfa = istemci.get("/pano").get_data(as_text=True)
+    sayfa = istemci.get("/stok").get_data(as_text=True)
     assert 'class="yan"' in sayfa
-    assert 'href="/pano" class="etkin" aria-current="page"' in sayfa
-    assert 'href="/arsiv"' in sayfa
+    assert 'href="/stok" class="etkin" aria-current="page"' in sayfa
+    assert 'href="/arsiv"' in sayfa and 'href="/pano"' not in sayfa  # pano artık Siparişler ekranı
+    assert istemci.get("/pano").headers["Location"].endswith("/siparisler")
 
 
 def test_gecici_sifreyle_menu_gosterilmez(istemci, ekle, giris):

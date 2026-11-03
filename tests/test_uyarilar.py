@@ -186,34 +186,22 @@ def test_takip_edilmeyen_is_emri_sorulmaz(istemci, uygulama, ekip, yukle):  # no
     assert 'id="eksik-900106"' not in istemci.get("/yapilacaklar").get_data(as_text=True)
 
 
-def test_imalatta_uyarisi(istemci, uygulama, ekip, yukle):  # noqa: F811
-    # PP'nin iş emri stoğa girmiş (900101), sipariş satırında ERP ürün durumu "İmalatta"
+def test_imalatta_farki_bilgi_olarak_gorunur(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    # PP'nin iş emri stoğa girmiş (900101), sipariş satırında ERP ürün durumu "İmalatta". Ekibe sorulmaz
+    # (kullanıcı kararı, 02/11/2026); kartta fark bilgi olarak görünür, gerçek durum uygulamanın aşamasından.
     yuklenmis(yukle, **{"Gerçek Mkt.": 1})
     pp = urun_id(uygulama, "PP-536-NF")
-    sayfa = unescape(istemci.get("/yapilacaklar?konu=imalatta").get_data(as_text=True))
-    # Güç ünitesi ve iki çenenin her biri (iki adet aynı iş emrini paylaşıyor) ayrı sorulur
-    assert 'data-sayi-konu="imalatta">3<' in sayfa
-    assert f'id="imalatta-{pp}-' in sayfa and "hâlâ <strong>İmalatta</strong>. Emin misiniz?" in sayfa
-    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
-    assert 'İş emri stoğa girmiş, ERP\'de hâlâ "İmalatta"' in kart
+    bilgi = "Planlama ERP'de: <strong>İmalatta</strong> · bizde: <strong>Montaj</strong>"
+    assert bilgi in unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
     urun = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert 'ERP\'de "İmalatta" görünüyor' in urun and "Ürün nerede?" in urun
-
+    assert bilgi in urun and "Ürün nerede?" not in urun and "Emin misiniz?" not in urun
+    assert 'data-sayi-konu="imalatta"' not in istemci.get("/yapilacaklar").get_data(as_text=True)
     with uygulama.app_context():
-        from oms_montaj.veritabani import baglanti
-
         ie = baglanti().execute("SELECT is_emri_id FROM urunler WHERE id = ?", (pp,)).fetchone()[0]
-    cevap = json_gonder(istemci, f"/yapilacaklar/imalatta/{pp}/{ie}/cevap", cevap="montajda")
-    assert cevap["tamam"] is True
-    assert 'data-sayi-konu="imalatta">2<' in istemci.get("/yapilacaklar").get_data(as_text=True)
-    urun = unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
-    assert "Ekibin cevabı: <strong>Ürün montajda ya da tamamlandı; ERP güncel değil</strong>" in urun
-    kart = unescape(istemci.get("/siparisler/OZ-TS0001").get_data(as_text=True))
-    assert 'ERP "İmalatta" diyor · ekip: Ürün montajda' in kart
-
-    # ERP'deki durum değişince uyarı kalkar
+    assert gonder(f"/yapilacaklar/imalatta/{pp}/{ie}/cevap", cevap="montajda").status_code == 404
+    # ERP'deki durum değişince bilgi kalkar
     yukle(excel(makine_siparisi(s2={"Ürün Durumu": "Montajda"})))
-    assert 'ERP\'de "İmalatta" görünüyor' not in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
+    assert "Planlama ERP'de" not in unescape(istemci.get(f"/urun/{pp}").get_data(as_text=True))
 
 
 def test_izleyici_cevaplayamaz(istemci, uygulama, ekle, giris, gonder, ekip, yukle):  # noqa: F811

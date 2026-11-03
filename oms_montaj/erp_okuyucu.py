@@ -26,7 +26,7 @@ RAPORLAR = {
     "is_emirleri": {"ad": "İş emirleri", "imza": ("* İş Emri No", "* Sıra No")},
     "makine_numaralari": {"ad": "Makine numaraları", "imza": ("Kart No", "Şasi No", "Motor Seri No")},
     "cikis_yapilamayan": {"ad": "Çıkış yapılamayan malzeme", "imza": ("Isemri No / Sıra", "Gerceklesen Cikis Miktar")},
-    "stok": {"ad": "Stok raporu", "imza": ("MalzemeKodu", "EldekiMiktar"), "adim": 5},
+    "stok": {"ad": "Depo stok raporu", "imza": ("MalzemeKodu", "EldekiMiktar")},
 }
 
 # Sipariş talepleri raporu: kayıttaki alan → ERP'deki sütun başlığı
@@ -110,6 +110,10 @@ CIKIS_SUTUNLARI = {
     "rota_kodu": "Rota Kodu",  # malzemenin kendi rotası; 26/10/2026 raporundan beri var
 }
 ZORUNLU_CIKIS = ("malzeme_kodu", "cikis_miktar", "plan_miktar", "is_emri_sira")
+
+# Depo stok raporu (her depo ayrı dosya; depo kodu dosyada boş, depo dosyanın adından anlaşılır: stok.py)
+STOK_SUTUNLARI = {"urun_kodu": "MalzemeKodu", "urun_adi": "MalzemeAdı", "miktar": "EldekiMiktar"}
+ZORUNLU_STOK = ("urun_kodu", "miktar")
 ROTASIZ = {"", "null", "-", "---"}  # ERP'nin boş rota yerine yazdıkları
 
 TARIH_ALANLARI = {
@@ -309,3 +313,10 @@ def cikis_satirlari(basliklar, satirlar):
 def numara_satirlari(basliklar, satirlar):
     """"Makine numaraları" şablonunun satırlarını kayıtlara çevirir; kart no'su olmayan satır atlanır."""
     return _kayitlar(basliklar, satirlar, NUMARA_SUTUNLARI, ZORUNLU_NUMARA, ("kart_no",))
+
+
+def stok_satirlari(basliklar, satirlar):
+    """Depo stok raporunun miktarı olan satırları: [{"urun_kodu", "urun_adi", "miktar"}]. Rapor bütün malzemeleri
+    listeler, çoğunun miktarı 0'dır; onlar atlanır."""
+    kayitlar = _kayitlar(basliklar, satirlar, STOK_SUTUNLARI, ZORUNLU_STOK, ("urun_kodu", "miktar"))
+    return [k for k in kayitlar if k["miktar"] > 0]

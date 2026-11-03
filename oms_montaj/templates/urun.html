@@ -1,19 +1,23 @@
 {% extends "taban.html" %}
-{% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
+{% block baslik %}{{ urun.urun_kodu }} · {{ urun.siparis_no or 'Stok' }}{% endblock %}
 {% block icerik_sinifi %}genis{% endblock %}
 {% block icerik %}
-{% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
-{% from "_uyarilar.html" import uyari_bolumleri, imalatta_metni, imalatta_formu with context %}
+{% from "_durumlar.html" import eklenti_durumu with context %}
+{% from "_uyarilar.html" import uyari_bolumleri, imalatta_bilgisi with context %}
 {% from "_is_emri.html" import is_emri_kutusu, kirilim_bolumu with context %}
 {% from "_numaralar.html" import numara_degeri with context %}
+{% if stokta %}
+<p class="geri"><a href="{{ url_for('stok.liste') }}">← Stoktaki bütün makineler</a></p>
+{% else %}
 {% set siparis_adresi = url_for('siparisler.kart', siparis_no=urun.siparis_no) %}
 <p class="geri"><a href="{{ siparis_adresi }}">← {{ urun.siparis_no }} siparişinin bütün kalemleri</a></p>
+{% endif %}
 
 {# Geniş ekranda iki sütun: solda ürünün kendisi (başlık, aşama, numaralar, iş emri…), sağda notlar ve zaman
    akışı. Dar ekranda (telefon) tek sütun: başlık, aşama, notlar ve zaman akışı, sonra gerisi. #}
 <div class="urun-duzeni">
-<div class="urun-ust">
-{% set marka = musteri_markasi(urun.siparis_no) %}
+<div class="urun-bas">
+{% set marka = musteri_markasi(urun.siparis_no) if urun.siparis_no else None %}
 <div class="kutu kart-baslik{% if marka %} musterili{% endif %}"
   {%- if marka %} style="--musteri-renk: {{ marka.renk }};{% if marka.logo %} --musteri-logo: url('{{ marka.logo }}');{% endif %}"{% endif %}>
   <div class="baslik-satiri">
@@ -21,49 +25,153 @@
     <span class="rozetler">
       {% if revize %}<a class="etiket revize" href="{{ siparis_adresi }}#revizyonlar">Revize edildi · {{ revize | tarih }}</a>{% endif %}
       {% if urun.erp_durum == 'Beklemede' %}<span class="etiket durum-onay_bekliyor">Onay bekliyor</span>{% endif %}
-      <span class="etiket asama">{{ ASAMALAR[urun.asama] }}</span>
+      {% if urun.depoda_yok %}<span class="etiket durum-iptal" title="{{ urun.depoda_yok | tarih }} tarihinden beri">Depo raporunda görünmüyor</span>{% endif %}
+      {% if urun.stoktan_atama %}<span class="etiket stok-etiketi" title="{{ urun.stoktan_atama | zaman }}">Stoktan atandı</span>{% endif %}
+      <span class="etiket asama{% if stokta %} stok-etiketi{% endif %}">{{ ASAMALAR[urun.asama] }}</span>
     </span>
   </div>
   <p class="musteri">{{ urun.urun_adi or '' }} · {{ AILE_ADLARI.get(urun.aile, urun.aile) }}</p>
   <dl class="bilgiler">
+    {% if stokta %}
+    {% set test = stok_test_durumu(urun) %}
+    <div><dt>Depo</dt><dd>{{ DEPOLAR.get(urun.depo, 'Yazılmadı') }}</dd></div>
+    <div><dt>Test</dt><dd>{{ TEST_DURUMLARI[test] if test else 'Sorulacak' }}</dd></div>
+    {% else %}
     <div><dt>Sipariş</dt><dd><a class="duz-baglanti" href="{{ siparis_adresi }}">{{ urun.siparis_no }}</a></dd></div>
+    {% endif %}
     {% if urun.musteri %}<div><dt>Müşteri</dt><dd>{{ urun.musteri }}</dd></div>{% endif %}
     {# Makinenin numaraları: seri no (kirişte yok), iş emri, motor seri no / şasi no #}
     {% if urun.seri_no %}<div><dt>Seri no</dt><dd>{{ urun.seri_no }}</dd></div>{% endif %}
-    <div><dt>İş emri</dt><dd>{{ ie.is_emri_no if ie else 'Açılmadı' }}</dd></div>
+    <div><dt>İş emri</dt><dd>{{ ie.is_emri_no if ie else ('Bilinmiyor' if stokta else 'Açılmadı') }}</dd></div>
     {% for alan, ad, deger, kaynak in numaralar %}<div><dt>{{ ad }}</dt><dd><a class="duz-baglanti" href="#numaralar">{{ numara_degeri(deger, kaynak, 'Girilmedi', kalin=False) }}</a></dd></div>{% endfor %}
     {% if urun.miktar > 1 %}<div><dt>Adet</dt><dd>{{ urun.adet_sira }} / {{ urun.miktar | sayi }}</dd></div>{% endif %}
+    {% if not stokta %}
     <div><dt>Teslim tarihi</dt><dd>{{ (urun.teslim_tarihi | tarih) or '—' }}
       {% if kalan %}<span class="etiket {{ kalan[1] }}">{{ kalan[0] }}</span>{% endif %}</dd></div>
+    {% endif %}
     {% if urun.son_sevk_tarihi %}<div><dt>Sevk</dt><dd>{{ urun.son_sevk_tarihi | tarih }}</dd></div>{% endif %}
   </dl>
+  {# Yağ bilgisi burada yazmaz; sipariş kartının başlığında ve proje takip kartında (kullanıcı kararı, 02/11/2026) #}
   <span class="cipler">
     {% if renk %}<span class="cip">Renk: {{ renk }}</span>{% endif %}
-    {% if urun.aile == 'PP' %}
-      {% if yag %}<span class="cip">{% if yag[0] == 'yagsiz' %}Yağsız sevk{% else %}Yağlı sevk: {{ yag[1] }}{% endif %}</span>
-      {% else %}<span class="cip uyari">Yağ bilgisi yok; netleştirilmeli</span>{% endif %}
-    {% endif %}
+    {% for u in imalatta %}{{ imalatta_bilgisi(u, urun.asama) }}{% else %}
     {% if urun.erp_urun_durumu and not dis_tedarik %}<span class="cip">Planlama birimi ürün üretim durumu: <strong>{{ urun.erp_urun_durumu }}</strong>
       <small>ERP verisi {{ urun.veri_zamani | tarih }}</small></span>{% endif %}
+    {% endfor %}
   </span>
-  {{ durum_ozeti_kutusu(durum_ozeti, urun.siparis_no) }}
 </div>
-
-{# İş emri stoğa girmiş ama ERP "İmalatta" diyor #}
-{% for u in imalatta %}
-<div class="kutu uyari-kutusu{% if u.cevap %} cevaplandi{% endif %}" id="imalatta" data-yapilacak data-aile="{{ urun.aile }}" data-konu="imalatta">
-  <p class="uyari-baslik">ERP'de "İmalatta" görünüyor</p>
-  <p>{{ imalatta_metni(u) }}</p>
-  {% if u.cevap %}<p class="soluk kucuk">Ekibin cevabı: <strong>{{ IMALATTA_CEVAPLARI[u.cevap] }}</strong> ({{ u.cevaplayan or '' }}, {{ u.cevap_zamani | zaman }}). ERP'deki durum değişince bu uyarı kalkar.</p>
-  {% elif g.kullanici.rol == 'ekip' %}{{ imalatta_formu(u, sonra=request.path) }}{% endif %}
-</div>
-{% endfor %}
 </div>
 
 {# Aşama (zaman_akisi.py): ekip aşamayı ileri ya da geri alır; geri alırken sebep yazmak zorunludur.
    Çıktılar (formlar.py, form_kurallari.py): güç ünitesinde proje takip kartı, test öncesi kontrol, test ve kurulum
    formu; aşama kutusunun sağ altında. Çıktısı alınmamış düğme gri, alınmış yeşil (kullanıcı istedi, 02/11/2026).
    Çıktı alınmadan ürün sonraki aşamaya geçmez. #}
+{# Stok kartı (stok.py): test sorusu, iş emri, siparişe atama ve stoktan çıkarma. Aşaması değişmez; siparişe
+   atanınca o siparişin ürün kartı olur ve test edildiyse Temizlik, edilmediyse Teste hazır aşamasından devam eder. #}
+{% macro stok_bolumu() -%}
+{% set test = stok_test_durumu(urun) %}
+{% set ekip = g.kullanici.rol == 'ekip' %}
+<section class="bolum urun-asama" id="stok">
+  <h2>Stok</h2>
+  <div class="kutu stok-kutusu">
+    {% if urun.stok_cikis %}
+    <p class="uyari-metni">Bu kart {{ urun.stok_cikis | zaman }} tarihinde stoktan çıkarıldı: {{ urun.stok_cikis_sebep }}.</p>
+    {% else %}
+    {% if urun.depoda_yok %}<p class="uyari-metni">Bu makine {{ urun.depoda_yok | tarih }} tarihinden beri depo raporunda görünmüyor. Bir siparişe gittiyse atayın; gitmediyse stoktan çıkarın.</p>{% endif %}
+    <div class="stok-satiri">
+      <span class="stok-ad">Testi yapıldı mı?</span>
+      {% if test %}<strong>{{ TEST_DURUMLARI[test] }}</strong>{% if not urun.test_durumu %} <small class="soluk">(sevk deposundaki makine test edilmiş sayılır)</small>{% endif %}
+      {% else %}<span class="uyari-metni">Sorulacak: montaj üretim deposundaki makine test edilmemiş olabilir.</span>{% endif %}
+      {% if ekip %}
+      <form method="post" action="{{ url_for('stok.test', urun_id=urun.id) }}" class="stok-secim">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <button type="submit" name="test" value="edildi" class="dugme ikincil kucuk-dugme"{% if urun.test_durumu == 'edildi' %} disabled{% endif %}>Test edildi</button>
+        <button type="submit" name="test" value="bekliyor" class="dugme ikincil kucuk-dugme"{% if urun.test_durumu == 'bekliyor' %} disabled{% endif %}>Test edilmedi</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="stok-satiri">
+      <span class="stok-ad">İş emri</span>
+      <strong>{{ ie.is_emri_no if ie else 'Bilinmiyor' }}</strong>
+      {% if ie and not urun.is_emri_elle %}<small class="soluk">ERP'de stok için açılmış aynı ürünün iş emrinden eşleştirildi; yanlışsa değiştirin.</small>{% endif %}
+      {% if ekip %}
+      <form method="post" action="{{ url_for('stok.is_emri', urun_id=urun.id) }}" class="stok-secim">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <input type="text" name="is_emri_no" inputmode="numeric" autocomplete="off" aria-label="İş emri no" placeholder="İş emri no" value="{{ ie.is_emri_no if ie else '' }}">
+        <button type="submit" class="dugme ikincil kucuk-dugme">{{ 'Değiştir' if ie else 'Kaydet' }}</button>
+        <small class="soluk">Boş bırakıp kaydederseniz iş emri kaldırılır.</small>
+      </form>
+      {% endif %}
+    </div>
+    <div class="stok-ata" id="ata">
+      <h3>Siparişe ata</h3>
+      {% if atanabilecek %}
+      <p class="soluk">Aynı ürünü bekleyen, iş emri açılmamış siparişler (teslim tarihi yakın olan önce). Atanınca stok kartı o siparişin kartı olur; {{ 'Temizlik' if test == 'edildi' else 'Teste hazır' }} aşamasından devam eder.</p>
+      <ul class="satirlar">
+        {% for a in atanabilecek %}
+        <li>
+          <div class="satir-ana">
+            <span class="satir-baslik"><a class="duz-baglanti" href="{{ url_for('urunler.sayfa', urun_id=a.id) }}">{{ a.siparis_no }}</a>{% if a.miktar > 1 %} · {{ a.adet_sira }}/{{ a.miktar | sayi }}{% endif %}</span>
+            <span class="soluk">{{ a.musteri or '' }}{% if a.seri_no %} · {{ a.seri_no }}{% endif %} · teslim {{ (a.teslim_tarihi | tarih) or '—' }}{% if a.erp_durum == 'Beklemede' %} · onay bekliyor{% endif %}</span>
+          </div>
+          {% if ekip %}
+          <form method="post" action="{{ url_for('stok.ata', urun_id=urun.id) }}" data-onay="{{ urun.urun_kodu }} stoktan {{ a.siparis_no }} siparişine atansın mı?">
+            <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="hedef" value="{{ a.id }}">
+            <button type="submit" class="dugme kucuk-dugme">Bu siparişe ata</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="soluk">Şu an bu ürünü ({{ urun.urun_kodu }}) bekleyen, iş emri açılmamış bir sipariş yok.</p>
+      {% endif %}
+    </div>
+    {% if ekip %}
+    <details class="stok-cikar">
+      <summary>Stoktan çıkar</summary>
+      <form method="post" action="{{ url_for('stok.cikar', urun_id=urun.id) }}" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <p class="soluk">Kart silinmez; Stok ekranında "stoktan çıkarılanlar" arasında görünür. Siparişe gittiyse çıkarmak yerine atayın.</p>
+        <label class="alan"><span>Sebep</span>
+          <select name="sebep" required><option value="">Seçin</option>{% for anahtar, ad in CIKIS_SEBEPLERI.items() %}<option value="{{ anahtar }}">{{ ad }}</option>{% endfor %}</select></label>
+        <label class="alan"><span>Açıklama <small class="soluk">(isteğe bağlı)</small></span><input type="text" name="aciklama" autocomplete="off"></label>
+        <button type="submit" class="dugme ikincil">Stoktan çıkar</button>
+      </form>
+    </details>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+{%- endmacro %}
+
+{# İş emri açılmamış sipariş ürünü: stokta aynı üründen makine varsa buradan atanır ("depoda stok mevcut") #}
+{% macro stoktakiler_bolumu() -%}
+<section class="bolum" id="stok">
+  <h2>Stokta aynı üründen var ({{ stoktakiler | length }})</h2>
+  <div class="kutu">
+    <p class="soluk">{{ urun.urun_kodu }} stokta bekliyor. Bu siparişe stoktan makine verilecekse buradan atayın; makinenin numaraları, iş emri ve notları bu karta geçer.</p>
+    <ul class="satirlar">
+      {% for s in stoktakiler %}
+      {% set test = stok_test_durumu(s) %}
+      <li>
+        <div class="satir-ana">
+          <span class="satir-baslik"><a class="duz-baglanti" href="{{ url_for('urunler.sayfa', urun_id=s.id) }}">{{ s.urun_kodu }}</a> · {{ DEPOLAR.get(s.depo, 'depo yazılmadı') }}</span>
+          <span class="soluk">{{ TEST_DURUMLARI[test] if test else 'Testi sorulacak' }}{% if s.is_emri_no %} · İE {{ s.is_emri_no }}{% endif %}{% if s.motor_seri_no %} · motor {{ s.motor_seri_no }}{% endif %}{% if s.sasi_no %} · şasi {{ s.sasi_no }}{% endif %}</span>
+        </div>
+        {% if g.kullanici.rol == 'ekip' %}
+        <form method="post" action="{{ url_for('stok.ata', urun_id=s.id) }}" data-onay="{{ s.urun_kodu }} stoktan {{ urun.siparis_no }} siparişine atansın mı?">
+          <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="hedef" value="{{ urun.id }}">
+          <button type="submit" class="dugme kucuk-dugme">Bu makineyi ata</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{%- endmacro %}
+
 {% macro ciktilar() -%}
 {% set durumlar, bekleyen = formlar %}
 <div class="ciktilar" id="formlar">
@@ -86,6 +194,7 @@
   <p class="ciktilar-not">{% if forma_tabi %}Çıktı alınmadan ürün sonraki aşamaya geçmez.{% else %}Bu üründe çıktılar isteğe bağlı (kural başlamadan ilerlemişti).{% endif %}</p>
 </div>
 {%- endmacro %}
+{% if stokta %}{{ stok_bolumu() }}{% else %}
 <section class="bolum urun-asama" id="asama">
   <h2>Aşama</h2>
   <div class="kutu">
@@ -119,6 +228,8 @@
     {% elif formlar %}{{ ciktilar() }}{% endif %}
   </div>
 </section>
+{% if stoktakiler %}{{ stoktakiler_bolumu() }}{% endif %}
+{% endif %}
 
 {# Notlar ve zaman akışı (zaman_akisi.py): ekip not yazar; notu yazan düzeltebilir, önceki hâli saklanır.
    Akışın son 6 kaydı açık, eskileri katlanır. #}
@@ -248,6 +359,36 @@
 </section>
 {% endif %}
 
+{# Bu makineyle gelenler (pano.bagli_kalemler): çene, kiriş ve aksesuarlar; panodaki kartta kısa satır olarak da
+   görünürler (kullanıcı kararı, 02/11/2026) #}
+{% if bagli %}
+<section class="bolum" id="gelenler">
+  <h2>Bu makineyle gelenler</h2>
+  <ul class="urun-listesi">
+    {% for u in bagli.cene + bagli.kiris %}
+    <li class="urun tiklanir-urun">
+      <div class="urun-ust">
+        <a class="urun-ad urun-baglanti" href="{{ url_for('urunler.sayfa', urun_id=u.id) }}"><strong>{{ u.urun_kodu }}</strong> · {{ u.urun_adi or '' }}</a>
+        <span class="etiket asama">{{ ASAMALAR[u.asama] }}</span>
+      </div>
+      <div class="urun-seri">
+        {% if u.seri_no %}<span class="bilgi">Seri no <strong>{{ u.seri_no }}</strong></span>{% endif %}
+        <span class="bilgi">{% if u.is_emri_no %}İş emri <strong>{{ u.is_emri_no }}</strong>{% else %}<span class="soluk">İş emri açılmadı</span>{% endif %}</span>
+      </div>
+    </li>
+    {% endfor %}
+    {% for k in bagli.aksesuar %}
+    <li class="urun">
+      <div class="urun-ust">
+        <span class="urun-ad"><strong>{{ k.urun_kodu }}</strong> · {{ k.urun_adi or '' }}</span>
+        <span class="soluk">{{ k.miktar | sayi }} {{ k.birim or '' }}</span>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <section class="bolum">
   <h2>İş emri</h2>
   {% if ie %}
@@ -255,10 +396,11 @@
   {% else %}
   <div class="kutu is-emri-kutusu ie-kutu-yok">
     <div class="baslik-satiri">
-      <span class="ie-no">İş emri açılmadı</span>
-      <span class="etiket ud-yok">İş emri açılacak</span>
+      {% if stokta %}<span class="ie-no">İş emri bilinmiyor</span>
+      {% else %}<span class="ie-no">İş emri açılmadı</span>
+      <span class="etiket ud-yok">İş emri açılacak</span>{% endif %}
     </div>
-    <p>Bu ürüne bağlı bir iş emri yok.{% if urun.bagli_is_emri_no %} Sipariş satırında iş emri {{ urun.bagli_is_emri_no }} yazıyor ama iş emri listelerinde yok.{% endif %}</p>
+    <p>{% if stokta %}Bu stok makinesinin iş emri bilinmiyor; biliyorsanız yukarıdaki Stok bölümünden girin.{% else %}Bu ürüne bağlı bir iş emri yok.{% if urun.bagli_is_emri_no %} Sipariş satırında iş emri {{ urun.bagli_is_emri_no }} yazıyor ama iş emri listelerinde yok.{% endif %}{% endif %}</p>
   </div>
   {% endif %}
 </section>

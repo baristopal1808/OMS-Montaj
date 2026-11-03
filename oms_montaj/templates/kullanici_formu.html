@@ -12,6 +12,16 @@
     <label>Ad soyad
       <input type="text" name="ad_soyad" value="{{ form.ad_soyad or (kullanici.ad_soyad if kullanici else '') }}" required>
     </label>
+    <label>Görevi
+      <span class="ipucu">Menüde adının altında yazar. Örnek: Mekanik montaj takım lideri</span>
+      <input type="text" name="unvan" value="{{ form.unvan or (kullanici.unvan if kullanici and kullanici.unvan else '') }}" required>
+    </label>
+    {% if not yeni %}
+    <label>Kartlardaki rengi
+      <span class="ipucu">Fotoğrafı yoksa baş harfleri bu renkte görünür.</span>
+      <input type="color" name="renk" value="{{ form.renk or renk }}">
+    </label>
+    {% endif %}
     {% if yeni %}
     <label>Kullanıcı adı
       <span class="ipucu">Girişte kullanılacak ad; boşluksuz. Örnek: ad.soyad</span>
@@ -60,4 +70,29 @@
     </div>
   </form>
 </div>
+
+{# Fotoğraf: kare kırpılıp küçültülerek saklanır; kartlarda baş harflerin yerine görünür #}
+{% if not yeni %}
+{% from "_kisi.html" import kisi_baloncugu with context %}
+<section class="bolum" id="fotograf">
+  <h2>Fotoğraf</h2>
+  <div class="kutu dar fotograf-kutusu">
+    {{ kisi_baloncugu(kisi_, sinif='buyuk') }}
+    <form method="post" action="{{ url_for('kullanicilar.fotograf', kullanici_id=kullanici.id) }}" enctype="multipart/form-data" class="form">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      <label>Fotoğraf seçin <span class="ipucu">JPG ya da PNG; kare olarak kırpılır.</span>
+        <input type="file" name="fotograf" accept="image/*" required></label>
+      <div class="dugmeler">
+        <button type="submit" class="dugme ikincil">Fotoğrafı kaydet</button>
+      </div>
+    </form>
+    {% if kullanici.fotograf %}
+    <form method="post" action="{{ url_for('kullanicilar.fotograf', kullanici_id=kullanici.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="kaldir">
+      <button type="submit" class="baglanti-dugmesi">Fotoğrafı kaldır</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

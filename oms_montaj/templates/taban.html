@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#16181d">
   <title>{% block baslik %}{% endblock %} · OMS Montaj</title>
   <link rel="icon" href="{{ url_for('static', filename='simge.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', filename='uygulama.css') }}">
+  <link rel="stylesheet" href="{{ statik('uygulama.css') }}">
+  {# Sol menü sabitlendiyse sayfa açılırken hemen açık gelsin (seçim tarayıcıda saklanır) #}
+  <script>try { if (localStorage.getItem("omsMenuSabit") === "1") document.documentElement.classList.add("menu-sabit"); } catch (e) {}</script>
 </head>
 <body class="{% block govde_sinifi %}{% endblock %}">
 {% macro bildirimler() -%}
@@ -20,8 +22,7 @@
     ('ozet.ana', 'ozet', 'Özet'),
     ('siparisler.liste', 'siparisler', 'Siparişler'),
     ('yedek_parca.liste', 'yedek_parca', 'Yedek parça'),
-    ('ekranlar.pano', 'pano', 'Pano'),
-    ('ekranlar.stok', 'stok', 'Stok'),
+    ('stok.liste', 'stok', 'Stok'),
     ('yapilacaklar.liste', 'yapilacaklar', 'Yapılacaklar'),
     ('sevkiyat.liste', 'sevkiyat', 'Sevkiyat'),
     ('erp.yukleme', 'erp_yukleme', 'ERP yükleme'),
@@ -29,8 +30,15 @@
     ('ekranlar.ayarlar', 'ayarlar', 'Ayarlar'),
   ] %}
   <div class="duzen">
+    {# Sol menü: bilgisayarda dar (yalnızca simgeler) ya da geniş; logonun yanındaki düğmeyle değişir, seçim
+       tarayıcıda hatırlanır. Üzerine gelince açılmaz: açılan menü sayfanın yazılarını örtüyordu (kullanıcı,
+       03/11/2026). Telefonda ☰ düğmesiyle açılan çekmece. #}
     <aside class="yan" id="yan-menu">
-      <a class="yan-marka" href="{{ url_for('ozet.ana') }}" aria-label="Özet">{{ logo_blok("beyaz kucuk") }}</a>
+      <div class="yan-ust">
+        <a class="yan-marka" href="{{ url_for('ozet.ana') }}" aria-label="Özet">{{ logo_blok("beyaz kucuk") }}</a>
+        <button type="button" class="menu-sabitle" data-menu-sabitle aria-controls="yan-menu" aria-expanded="false" title="Menüyü genişlet">
+          <span class="ac">{{ simge('menu_genislet') }}</span><span class="kapat">{{ simge('menu_daralt') }}</span><span class="gizli">Menüyü genişlet ya da daralt</span></button>
+      </div>
       <nav class="yan-menu" aria-label="Ana menü">
         {% for uc, simge_adi, ad in menu %}
         {% set etkin = request.endpoint == uc or (uc == 'ekranlar.ayarlar' and request.blueprint == 'kullanicilar')
@@ -41,9 +49,13 @@
         {% endfor %}
       </nav>
       <div class="yan-alt">
+        {% from "_kisi.html" import kisi_baloncugu with context %}
         <div class="yan-kullanici">
-          <span class="yan-ad">{{ g.kullanici.ad_soyad }}</span>
-          <span class="yan-rol">{{ ROLLER[g.kullanici.rol] }}</span>
+          {{ kisi_baloncugu(kisi_bilgisi(g.kullanici)) }}
+          <span class="yan-kullanici-yazi">
+            <span class="yan-ad">{{ g.kullanici.ad_soyad }}</span>
+            <span class="yan-rol">{{ g.kullanici.unvan or ROLLER[g.kullanici.rol] }}</span>
+          </span>
         </div>
         <a href="{{ url_for('kimlik.sifre') }}"{% if request.endpoint == 'kimlik.sifre' %} class="etkin" aria-current="page"{% endif %}>{{ simge('anahtar') }}<span>Şifre değiştir</span></a>
         <form method="post" action="{{ url_for('kimlik.cikis') }}">
@@ -68,7 +80,7 @@
   {% from "_asistan_kutusu.html" import asistan_kutusu with context %}
   {{ asistan_kutusu() }}
   {% endif %}
-  <script src="{{ url_for('static', filename='uygulama.js') }}" defer></script>
+  <script src="{{ statik('uygulama.js') }}" defer></script>
 {% else %}
   {% if g.kullanici %}
   <header class="ust-sade">

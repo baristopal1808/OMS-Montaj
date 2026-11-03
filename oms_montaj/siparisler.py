@@ -1,11 +1,14 @@
-"""Siparişler: ana ekrandaki liste ve sipariş kartı.
+"""Siparişler: pano, liste ve sipariş kartı.
+
+Açık siparişler Planner'daki gibi aşama sütunlu panoda görünür (pano.py; kullanıcı kararı, 02/11/2026).
+Tamamlanan, iptal edilen, ERP listesinde olmayan ve onay bekleyen siparişler süzgeçten seçilince liste
+olarak görünür; onay bekleyenler panonun altında kapalı bir bölümde de durur.
 
 Siparişin durumu ve teslim tarihi kalemlerinden hesaplanır: iptal edilmemiş
 kalemlerin hepsi ERP'de kapandıysa sipariş "ERP'de kapandı", açık kalemlerin
 hepsi onay bekliyorsa "Onay bekliyor" sayılır. Teslim tarihi açık kalemlerin
 en yakın uzlaşılan sevk tarihidir; onay bekleyen kalemler kesin olmadığından
-başka açık kalem varsa sayılmaz. Onay bekleyen siparişler listede teslim
-sütunlarına değil, en sağdaki ayrı sütuna dizilir.
+başka açık kalem varsa sayılmaz.
 """
 
 import json
@@ -14,13 +17,15 @@ from datetime import date, datetime, timedelta
 
 from flask import Blueprint, abort, g, redirect, render_template, request, url_for
 
+from .asamalar import ASAMALAR, SIRA
 from .erp_aktarim import BEKLEMEDE, IPTAL, REVIZYON_ADLARI, eksik_siralar, kapali_mi
 from .is_emri_aktarim import is_emri_durumu
 from .kimlik import ekip_gerekli, guvenli_adres
 from .numaralar import urun_numaralari
+from .stok import stok_sayilari
 from .urun_kurallari import (
     AILE_ADLARI, AILE_SIRASI, ANA_URUNLER, EKLENTI_DURUMLARI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER,
-    dis_tedarik_mi, pp_eklentisi_mi, renk, yag,
+    dis_tedarik_mi, pp_eklentisi_mi, renk, yag, yag_metni,
 )
 from .uyarilar import eksik_ozetleri, imalatta_uyarilari
 from .veritabani import baglanti
@@ -39,9 +44,8 @@ TIPLER = {"makine": "Makine", "yedek_parca": "Yedek parça", "servis": "Servis"}
 AILE_SUZGECLERI = {"vibrohammer": "Vibrohammer (SVR + OVR)", **{aile: aile for aile in AILE_SIRASI}}
 YAKLASAN_GUN = 14  # teslimine bu kadar gün kalan sipariş turuncu görünür
 REVIZYON_GUN = 30  # bu kadar gün içindeki revizyon kutuda ve satırda "Revize" etiketiyle görünür
-# Açık siparişler bu üç sütunda, her sütunda teslim tarihine göre yukarıdan aşağı dizilir.
-TESLIM_SUTUNLARI = (("gecikti", "Gecikenler"), ("yaklasan", f"{YAKLASAN_GUN} gün içinde"), ("", "Planlananlar"))
-ONAY_SUTUNU = ("onay", "Onay bekleyen projeler")
+# Özet'ten gelen teslim süzgeci (?teslim=gecikti / yaklasan)
+TESLIM_SUZGECLERI = {"gecikti": "Gecikenler", "yaklasan": f"{YAKLASAN_GUN} gün içinde teslim"}
 # Sipariş kartının ve ürün sayfasının başındaki "Siparişin durumu": ürünlerin iş emri durumu
 URUN_DURUMLARI = {
     "kapali": "İş emri tamamlandı",
@@ -104,7 +108,7 @@ def teslim_bilgisi(teslim, bugun=None):
         return None
     gun = (date.fromisoformat(teslim) - (bugun or date.today())).days
     if gun < 0:
-        return f"{-gun} gün geçti", "gecikti"
+        return f"{-gun} gün gecikti", "gecikti"
     if gun == 0:
         return "Bugün", "yaklasan"
     return f"{gun} gün kaldı", "yaklasan" if gun <= YAKLASAN_GUN else ""
@@ -216,7 +220,7 @@ def _arama(vt, metin):
 def liste():
     secim = {alan: request.args.get(alan, "").strip() for alan in ("ara", "durum", "tip", "aile", "teslim", "bas", "bit")}
     secim["durum"] = secim["durum"] if secim["durum"] in DURUM_SUZGECLERI else "acik"
-    teslim_sutunu = dict(TESLIM_SUTUNLARI).get(secim["teslim"]) if secim["teslim"] else None
+    teslim_suzgeci = TESLIM_SUZGECLERI.get(secim["teslim"])
     vt = baglanti()
     ozetler = tum_ozetler(vt)
     toplam = len(ozetler)
@@ -225,17 +229,23 @@ def liste():
     if secim["tip"] != "yedek_parca":
         ozetler = [o for o in ozetler if o["siparis"]["tip"] != "yedek_parca"]
     tarih_araligi = _tarih_araligi(secim["bas"], secim["bit"])
-    if tarih_araligi:
-        bas, bit = tarih_araligi
-        ozetler = [o for o in ozetler if any(bas <= t <= bit for t in o["makine_teslimleri"])]
-    if secim["ara"]:
-        bulunan = _arama(vt, secim["ara"])
-        ozetler = [o for o in ozetler if o["siparis"]["id"] in bulunan]
+    bulunan = _arama(vt, secim["ara"]) if secim["ara"] else None
     if secim["tip"]:
         ozetler = [o for o in ozetler if o["siparis"]["tip"] == secim["tip"]]
     if secim["aile"]:
         aileler = VIBROHAMMER if secim["aile"] == "vibrohammer" else {secim["aile"]}
         ozetler = [o for o in ozetler if o["aileler"] & aileler]
+
+    if secim["durum"] == "acik" and secim["tip"] != "yedek_parca":
+        return _pano(vt, ozetler, secim, bulunan, tarih_araligi, teslim_suzgeci, toplam)
+
+    if tarih_araligi:
+        bas, bit = tarih_araligi
+        ozetler = [o for o in ozetler if any(bas <= t <= bit for t in o["makine_teslimleri"])]
+    if bulunan is not None:
+        ozetler = [o for o in ozetler if o["siparis"]["id"] in bulunan]
+    if teslim_suzgeci:
+        ozetler = [o for o in ozetler if o["kalan"] and o["kalan"][1] == secim["teslim"]]
 
     durumlar = Counter(o["durum"] for o in ozetler)
     sayilar = {**durumlar, "acik": durumlar["acik"] + durumlar["onay_bekliyor"], "tumu": len(ozetler)}
@@ -245,21 +255,10 @@ def liste():
         ozetler = [o for o in ozetler if o["durum"] == secim["durum"]]
 
     ozetler.sort(key=sira_anahtari)
-    sutunlar = None
-    if secim["durum"] in ("acik", "onay_bekliyor"):
-        kesin = [o for o in ozetler if o["durum"] == "acik"]
-        sutunlar = [
-            (sinif, ad, [o for o in kesin if (o["kalan"][1] if o["kalan"] else "") == sinif])
-            for sinif, ad in TESLIM_SUTUNLARI
-            if secim["durum"] == "acik" and (teslim_sutunu is None or sinif == secim["teslim"])
-        ]
-        if teslim_sutunu is None:
-            sutunlar.append((*ONAY_SUTUNU, [o for o in ozetler if o["durum"] == "onay_bekliyor"]))
     return render_template(
         "siparisler.html",
         ozetler=ozetler,
-        sutunlar=sutunlar,
-        teslim_sutunu=teslim_sutunu,
+        teslim_suzgeci=teslim_suzgeci,
         tarih_araligi=tarih_araligi,
         toplam=toplam,
         sayilar=sayilar,
@@ -270,6 +269,39 @@ def liste():
         TIPLER=TIPLER,
         AILE_SUZGECLERI=AILE_SUZGECLERI,
     )
+
+
+def _pano(vt, ozetler, secim, bulunan, tarih_araligi, teslim_suzgeci, toplam):
+    """Açık siparişlerin panosu (pano.py). Etiket ve kişi süzgeçleri adreste: ?etiket=PP&etiket=Test&kisi=3."""
+    from .pano import pano_verisi
+
+    etiketler = [e for e in dict.fromkeys(request.args.getlist("etiket")) if e]
+    kisi = request.args.get("kisi", type=int)
+    veri = pano_verisi(vt, ozetler, {"etiketler": etiketler, "kisi": kisi, "siparis_idleri": bulunan,
+                                     "teslim": secim["teslim"] if teslim_suzgeci else None,
+                                     "tarih_araligi": tarih_araligi})
+    onay = sorted((o for o in ozetler if o["durum"] == "onay_bekliyor" and o["siparis"]["tip"] != "yedek_parca"
+                   and (bulunan is None or o["siparis"]["id"] in bulunan)), key=sira_anahtari)
+    kisi_adi = vt.execute("SELECT ad_soyad FROM kullanicilar WHERE id = ?", (kisi,)).fetchone() if kisi else None
+    return render_template(
+        "pano.html", veri=veri, onay=onay, secim=secim, etiketler=etiketler, kisi=kisi,
+        kisi_adi=kisi_adi[0] if kisi_adi else None, ben=g.kullanici["id"], asama_sirasi=SIRA,
+        asama_secenekleri={k: ad for k, ad in ASAMALAR.items() if k != "stokta"},
+        teslim_suzgeci=teslim_suzgeci, tarih_araligi=tarih_araligi, toplam=toplam,
+        son_yukleme=son_siparis_yuklemesi(vt), DURUM_SUZGECLERI=DURUM_SUZGECLERI, TIPLER=TIPLER,
+        AILE_SUZGECLERI=AILE_SUZGECLERI, sayilar=None,
+    )
+
+
+def pano_adresi(etiketler=(), kisi=None, **digerleri):
+    """Pano adresi; boş değerler adrese yazılmaz."""
+    return url_for("siparisler.liste", etiket=list(etiketler) or None, kisi=kisi,
+                   **{k: v for k, v in digerleri.items() if v})
+
+
+@bp.app_context_processor
+def pano_degiskenleri():
+    return {"pano_adresi": pano_adresi}
 
 
 @bp.route("/siparisler/<path:siparis_no>")
@@ -332,7 +364,7 @@ def kart(siparis_no):
         satir = {
             "kalem": kalem,
             "urunler": gorunen,
-            "renk": renk(kalem["aciklama"]),
+            "renk": renk(kalem["aciklama"], kalem["aile"]),
             "pp": kalem["aile"] == "PP",
             "yag": yag(kalem["aciklama"]) if kalem["aile"] == "PP" else None,
             "kapali": kapali_mi(kalem),
@@ -357,9 +389,21 @@ def kart(siparis_no):
         else:
             listelenen.append(satir)
 
+    # Kırmızı başlıkta makine başına bir satır: model, iş emri, güç ünitesinde yağ, vibroda renk (02/11/2026)
+    makineler = [
+        {"urun": u, "kod": satir["kalem"]["urun_kodu"], "aile": aile,
+         "is_emri": is_emri_haritasi[u["is_emri_id"]]["is_emri_no"] if u["is_emri_id"] in is_emri_haritasi else None,
+         "yag": (yag_metni(satir["kalem"]["aciklama"]) or None) if aile == "PP" else None,
+         "yagsiz": aile == "PP" and (yag(satir["kalem"]["aciklama"]) or ("",))[0] == "yagsiz",
+         "renk": satir["renk"] if aile in VIBROHAMMER else None}
+        for aile, satirlar in bolumler.items() if aile in ANA_URUNLER
+        for satir in satirlar for u in satir["urunler"]
+    ] if not ud_suzgec and not ek_suzgec else []
+
     return render_template(
         "siparis_karti.html",
         ozet=ozet,
+        makineler=makineler,
         bolumler=[(aile, satirlar) for aile, satirlar in bolumler.items() if satirlar],
         servis=servis,
         listelenen=listelenen,
@@ -381,6 +425,7 @@ def kart(siparis_no):
         eksikler=eksik_ozetleri(vt, [ie["is_emri_no"] for ie in is_emirleri]),
         imalatta={u["urun_id"]: u for u in imalatta_uyarilari(vt, siparis_id=siparis["id"])},
         son_veri=max((k["veri_zamani"] for k in kalemler if k["veri_zamani"]), default=None),
+        stokta=stok_sayilari(vt),  # ürün koduna göre stoktaki makine sayısı ("Stokta var")
         DURUMLAR=DURUMLAR,
         TIPLER=TIPLER,
         AILE_ADLARI=AILE_ADLARI,

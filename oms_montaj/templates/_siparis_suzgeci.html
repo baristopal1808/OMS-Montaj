@@ -1,0 +1,25 @@
+{# Siparişler ekranının süzgeç çubuğu (pano ve liste): arama, durum, sipariş tipi, ürün ailesi. Durum "Açık"
+   iken pano, başka bir durum seçilince liste görünür. sayilar: durum → sipariş sayısı (panoda yok). #}
+{% macro siparis_suzgeci(secim, sayilar=None) -%}
+<form class="suzgec" method="get" role="search">
+  <input type="search" name="ara" value="{{ secim.ara }}" placeholder="Sipariş no, müşteri, ürün, seri no, iş emri no" aria-label="Ara">
+  <select name="durum" aria-label="Durum">
+    {% for anahtar, ad in DURUM_SUZGECLERI.items() %}
+    <option value="{{ anahtar }}"{% if secim.durum == anahtar %} selected{% endif %}>{{ ad }}{% if sayilar %} ({{ sayilar[anahtar] or 0 }}){% endif %}</option>
+    {% endfor %}
+  </select>
+  <select name="tip" aria-label="Sipariş tipi">
+    <option value="">Bütün tipler</option>
+    {% for anahtar, ad in TIPLER.items() %}
+    <option value="{{ anahtar }}"{% if secim.tip == anahtar %} selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <select name="aile" aria-label="Ürün ailesi">
+    <option value="">Bütün ürünler</option>
+    {% for anahtar, ad in AILE_SUZGECLERI.items() %}
+    <option value="{{ anahtar }}"{% if secim.aile == anahtar %} selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="dugme ikincil">Uygula</button>
+</form>
+{%- endmacro %}

@@ -328,6 +328,54 @@ GOCLER = [
 
     ALTER TABLE eksik_malzemeler ADD COLUMN rota_kodu TEXT;  -- boş: rotası yok; NULL: raporda rota sütunu yok
     """,
+    # 16: varsayılan atama (atama.py): hangi iş grubunun kartları kime atanır
+    """
+    CREATE TABLE varsayilan_atamalar (
+        grup TEXT NOT NULL,           -- pp: güç ünitesi ve yarı mamulleri; diger: vibro, çene, kiriş, OVF, WD, servis, yedek parça
+        kullanici_id INTEGER NOT NULL REFERENCES kullanicilar(id),
+        PRIMARY KEY (grup, kullanici_id)
+    );
+    """,
+    # 17: kullanıcının görevi (menüde "Ekip" yerine yazar), kartlardaki rengi ve fotoğrafı (veri klasöründeki dosyanın adı)
+    """
+    ALTER TABLE kullanicilar ADD COLUMN unvan TEXT;
+    ALTER TABLE kullanicilar ADD COLUMN renk TEXT;
+    ALTER TABLE kullanicilar ADD COLUMN fotograf TEXT;
+    """,
+    # 18: stoktaki makineler (stok.py): depo stok raporları ve sipariş satırı olmayan "Stok" kartları (urunler,
+    #     kalem_id boş, adet_sira 0); stok kartı siparişe atanınca bilgileri o siparişin ürün kartına geçer
+    """
+    CREATE TABLE depo_stoklari (      -- her depo raporu o deponun satırlarını baştan yazar; yalnızca miktarı olanlar
+        depo TEXT NOT NULL,           -- sevk, montaj_uretim, montaj
+        urun_kodu TEXT NOT NULL,
+        urun_adi TEXT,
+        miktar REAL NOT NULL,
+        yukleme_id INTEGER REFERENCES erp_yuklemeler(id),
+        PRIMARY KEY (depo, urun_kodu)
+    );
+    CREATE TABLE depo_raporlari (     -- her deponun en son yüklenen raporu
+        depo TEXT PRIMARY KEY,
+        yukleme_id INTEGER NOT NULL REFERENCES erp_yuklemeler(id),
+        zaman TEXT NOT NULL
+    );
+
+    ALTER TABLE urunler ADD COLUMN stok_kodu TEXT;        -- stok kartının ürün kodu, adı ve ailesi (sipariş satırı yok)
+    ALTER TABLE urunler ADD COLUMN stok_adi TEXT;
+    ALTER TABLE urunler ADD COLUMN stok_aile TEXT;
+    ALTER TABLE urunler ADD COLUMN stok_kaynagi TEXT;     -- depo (depo raporundan), elle; siparişten gelen üründe boş
+    ALTER TABLE urunler ADD COLUMN depo TEXT;             -- sevk, montaj_uretim; elle eklenende boş olabilir
+    ALTER TABLE urunler ADD COLUMN test_durumu TEXT;      -- edildi, bekliyor; boş: sorulacak (sevk deposundaki test edilmiş sayılır)
+    ALTER TABLE urunler ADD COLUMN test_degisme TEXT;
+    ALTER TABLE urunler ADD COLUMN test_degistiren_id INTEGER REFERENCES kullanicilar(id);
+    ALTER TABLE urunler ADD COLUMN is_emri_elle INTEGER NOT NULL DEFAULT 0;  -- iş emrini ekip girdi ya da kaldırdı
+    ALTER TABLE urunler ADD COLUMN stoktan_atama TEXT;    -- stok kartı bu ürüne atandı (zaman)
+    ALTER TABLE urunler ADD COLUMN stoktan_atayan_id INTEGER REFERENCES kullanicilar(id);
+    ALTER TABLE urunler ADD COLUMN depoda_yok TEXT;       -- depo raporunda bu kart için adet kalmadı (fark edildiği gün)
+    ALTER TABLE urunler ADD COLUMN stok_cikis TEXT;       -- ekip stoktan çıkardı (zaman); kart listelerde görünmez
+    ALTER TABLE urunler ADD COLUMN stok_cikis_sebep TEXT;
+    ALTER TABLE urunler ADD COLUMN stok_cikaran_id INTEGER REFERENCES kullanicilar(id);
+    CREATE INDEX urunler_stok ON urunler (stok_kodu) WHERE kalem_id IS NULL;
+    """,
 ]
 
 

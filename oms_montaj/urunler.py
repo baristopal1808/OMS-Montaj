@@ -26,8 +26,10 @@ from .numaralar import (
     KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, numara_alanlari, numara_degistir, numara_gecmisi, numara_yaz, sablon,
     urun_numaralari,
 )
-from .siparisler import TIPLER, siparis_durum_ozeti, teslim_bilgisi, yakin_revizyon
-from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk, yag
+from .pano import siparis_bagli_kalemleri
+from .siparisler import TIPLER, teslim_bilgisi, yakin_revizyon
+from .stok import CIKIS_SEBEPLERI, atanabilecekler, stok_kartlari
+from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk
 from .uyarilar import (
     HAZIR_DURUMLAR, eksik_ozetleri, imalatta_uyarilari, is_emri_eksikleri, yari_mamul_geri_al, yari_mamul_isaretle,
 )
@@ -47,11 +49,16 @@ def sablon_degiskenleri():
 
 
 def urun_kaydi(vt, urun_id):
+    """Ürün, sipariş satırının ve siparişin bilgileriyle. Stok kartında (stok.py) sipariş satırı yoktur: ürün kodu,
+    adı ve ailesi kartın kendisinden gelir, sipariş alanları boştur."""
     return vt.execute(
-        "SELECT u.*, k.siparis_id, k.sira_no, k.urun_kodu, k.urun_adi, k.aile, k.miktar, k.aciklama, k.teslim_tarihi,"
-        " k.erp_urun_durumu, k.erp_durum, k.erp_genel_durum, k.bagli_is_emri_no, k.son_sevk_tarihi, k.tur,"
+        "SELECT u.*, k.siparis_id, k.sira_no, COALESCE(k.urun_kodu, u.stok_kodu) AS urun_kodu,"
+        " COALESCE(k.urun_adi, u.stok_adi) AS urun_adi, COALESCE(k.aile, u.stok_aile) AS aile,"
+        " COALESCE(k.miktar, 1) AS miktar, k.aciklama, k.teslim_tarihi, k.erp_urun_durumu, k.erp_durum,"
+        " k.erp_genel_durum, k.bagli_is_emri_no, k.son_sevk_tarihi,"
+        " CASE WHEN u.kalem_id IS NULL THEN 'kart' ELSE k.tur END AS tur,"
         " y.zaman AS veri_zamani, s.siparis_no, s.musteri, s.tip"
-        " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id JOIN siparisler s ON s.id = k.siparis_id"
+        " FROM urunler u LEFT JOIN siparis_kalemleri k ON k.id = u.kalem_id LEFT JOIN siparisler s ON s.id = k.siparis_id"
         " LEFT JOIN erp_yuklemeler y ON y.id = k.son_yukleme_id WHERE u.id = ?",
         (urun_id,),
     ).fetchone()
@@ -63,6 +70,7 @@ def sayfa(urun_id):
     urun = urun_kaydi(vt, urun_id)
     if urun is None:
         abort(404)
+    stokta = urun["kalem_id"] is None  # stok kartı: sipariş satırı yok (stok.py)
     ie = vt.execute("SELECT * FROM is_emirleri WHERE id = ?", (urun["is_emri_id"],)).fetchone() if urun["is_emri_id"] else None
     kirilimlar = []
     if ie:
@@ -75,8 +83,7 @@ def sayfa(urun_id):
         " WHERE r.siparis_id = ? AND r.sira_no = ?",
         (urun["siparis_id"], urun["sira_no"]),
     ).fetchone()[0]
-    acik = urun["erp_durum"] != IPTAL and not kapali_mi(urun) and urun["asama"] != "sevk_edildi"
-    siparis = {"id": urun["siparis_id"], "tip": urun["tip"]}
+    acik = not stokta and urun["erp_durum"] != IPTAL and not kapali_mi(urun) and urun["asama"] != "sevk_edildi"
     numaralar = urun_numaralari(vt, urun, urun["aile"], urun["siparis_id"], urun["urun_kodu"])
     numara_adlari = {alan: ad for alan, ad, _, _ in numaralar}
     gecmis = numara_gecmisi(vt, urun_id)
@@ -113,17 +120,24 @@ def sayfa(urun_id):
         TEYIT=TEYIT,
         kalan=teslim_bilgisi(urun["teslim_tarihi"]) if acik else None,
         revize=revizyon if yakin_revizyon(revizyon) else None,
-        renk=renk(urun["aciklama"]),
-        yag=yag(urun["aciklama"]) if urun["aile"] == "PP" else None,
+        renk=renk(urun["aciklama"], urun["aile"]),
         dis_tedarik=dis_tedarik_mi(urun["urun_kodu"]),
-        durum_ozeti=siparis_durum_ozeti(vt, siparis),
         eklentiler=eklentiler,
         eksik=eksik,
         eksik_ozet=eksik_ozetleri(vt, [ie["is_emri_no"]]).get(ie["is_emri_no"]) if eksik else None,
         eksik_sirasi={grup["sira"]: grup for grup in eksik},
         eksik_zamani=eksik_zamani[0] if eksik_zamani else None,
         imalatta=imalatta_uyarilari(vt, urun_id=urun_id),
-        formlar=form_durumlari(vt, urun) if urun["aile"] == "PP" and urun["tur"] == "kart" else None,
+        # Bu makineyle gelenler: çene, kiriş, aksesuarlar (vibroda; vibrosuz siparişte makinede)
+        bagli=None if stokta else siparis_bagli_kalemleri(vt, urun["siparis_id"]).get(urun_id),
+        formlar=form_durumlari(vt, urun) if not stokta and urun["aile"] == "PP" and urun["tur"] == "kart" else None,
+        # Stok kartı: atanabileceği siparişler; iş emri açılmamış sipariş ürünü: stoktaki aynı kodlu makineler
+        stokta=stokta,
+        atanabilecek=atanabilecekler(vt, urun["urun_kodu"]) if stokta else [],
+        stoktakiler=stok_kartlari(vt, urun["urun_kodu"]) if (
+            not stokta and acik and urun["asama"] == "siparis" and not urun["is_emri_id"] and not urun["stoktan_atama"]
+        ) else [],
+        CIKIS_SEBEPLERI=CIKIS_SEBEPLERI,
         forma_tabi=forma_tabi_mi(urun),
         motor_eksik=[ad for alan, ad, deger, kaynak in numaralar if alan in MOTOR_ALANLARI and (not deger or kaynak in TEYITSIZ)],
         yeni_form=request.args.get("form", type=int),
@@ -148,7 +162,7 @@ def asama(urun_id):
     if urun is None:
         abort(404)
     yeni = request.form.get("asama")
-    if yeni not in SECILEBILIR_ASAMALAR:
+    if yeni not in SECILEBILIR_ASAMALAR or urun["kalem_id"] is None:  # stok kartının aşaması değişmez; siparişe atanır
         abort(400)
     metin = _metin(request.form.get("not"))
     if yeni == urun["asama"]:
@@ -163,8 +177,11 @@ def asama(urun_id):
     else:
         with vt:
             asama_degistir(vt, urun_id, urun["asama"], yeni, metin, g.kullanici["id"])
-        flash(f"Aşama değişti: {ASAMALAR[urun['asama']]} → {ASAMALAR[yeni]}.")
-    return redirect(url_for(".sayfa", urun_id=urun_id) + "#akis")
+        flash(f"{urun['urun_kodu']} ({urun['siparis_no']}): aşama değişti: "
+              f"{ASAMALAR[urun['asama']]} → {ASAMALAR[yeni]}.")
+    # Panodaki kartın menüsünden gelindiyse panoya, ürün sayfasından gelindiyse ürün sayfasına döner
+    sonra = request.form.get("sonra")
+    return redirect(guvenli_adres(sonra) if sonra else url_for(".sayfa", urun_id=urun_id) + "#akis")
 
 
 @bp.route("/urun/<int:urun_id>/not", methods=["POST"])

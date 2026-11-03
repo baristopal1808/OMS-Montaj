@@ -13,7 +13,7 @@
   <li{% if not k.aktif %} class="pasif"{% endif %}>
     <div class="satir-ana">
       <span class="satir-baslik">{{ k.ad_soyad }}</span>
-      <span class="soluk">{{ k.kullanici_adi }}</span>
+      <span class="soluk">{{ k.unvan or '' }}{% if k.unvan %} · {% endif %}{{ k.kullanici_adi }}</span>
     </div>
     <span class="etiket{% if k.rol == 'izleyici' %} vurgulu{% endif %}">{{ ROLLER[k.rol] }}</span>
     {% if not k.aktif %}<span class="etiket">Pasif</span>
@@ -24,4 +24,31 @@
   </li>
   {% endfor %}
 </ul>
+
+{# Varsayılan atama (atama.py): hangi iş grubunun kartları kime atanır; kartlarda baş harfleri görünür #}
+<section class="bolum" id="atama">
+  <h2>Varsayılan atama</h2>
+  <div class="kutu">
+    <p class="soluk kucuk">Panodaki kartlarda atanan kişi olarak görünür. Kart kart değiştirmek sonraki adımda gelecek.</p>
+    {% set ekip = kullanicilar | selectattr('rol', 'equalto', 'ekip') | selectattr('aktif') | list %}
+    {% if g.kullanici.rol == 'ekip' %}
+    <form method="post" action="{{ url_for('kullanicilar.atama') }}" class="form">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+      {% for grup, ad in ATAMA_GRUPLARI.items() %}
+      <fieldset>
+        <legend>{{ ad }}</legend>
+        {% for k in ekip %}
+        <label class="secenek"><input type="checkbox" name="{{ grup }}" value="{{ k.id }}"{% if k.id in atananlar[grup] %} checked{% endif %}><span>{{ k.ad_soyad }}</span></label>
+        {% endfor %}
+      </fieldset>
+      {% endfor %}
+      <button type="submit" class="dugme">Kaydet</button>
+    </form>
+    {% else %}
+    {% for grup, ad in ATAMA_GRUPLARI.items() %}
+    <p><strong>{{ ad }}:</strong> {% for k in kullanicilar if k.id in atananlar[grup] %}{{ k.ad_soyad }}{% if not loop.last %}, {% endif %}{% else %}<span class="soluk">seçilmedi</span>{% endfor %}</p>
+    {% endfor %}
+    {% endif %}
+  </div>
+</section>
 {% endblock %}

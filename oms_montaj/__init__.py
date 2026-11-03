@@ -11,11 +11,11 @@ import secrets
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, render_template, url_for
 
 from . import (
-    asistan, ekranlar, erp, formlar, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, urunler,
-    veritabani, yapilacaklar, yedek_parca,
+    asistan, ekranlar, erp, formlar, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, stok,
+    urunler, veritabani, yapilacaklar, yedek_parca,
 )
 from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
@@ -41,6 +41,15 @@ def gizli_anahtar(klasor):
     if not dosya.exists():
         dosya.write_text(secrets.token_hex(32), encoding="utf-8")
     return dosya.read_text(encoding="utf-8").strip()
+
+
+def statik(dosya):
+    """Statik dosyanın adresi; dosya değişince adres de değişir, tarayıcı güncellemeden sonra eski biçim
+    dosyasını (CSS) ve betiği önbellekten göstermez."""
+    yol = Path(__file__).parent / "static" / dosya
+    if not yol.is_file():
+        return url_for("static", filename=dosya)
+    return url_for("static", filename=dosya, s=int(yol.stat().st_mtime))
 
 
 def hata_sayfasi(hata):
@@ -77,6 +86,7 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(yedek_parca.bp)
     uygulama.register_blueprint(makineler.bp)
     uygulama.register_blueprint(urunler.bp)
+    uygulama.register_blueprint(stok.bp)
     uygulama.register_blueprint(formlar.bp)
     uygulama.register_blueprint(asistan.bp)
     uygulama.register_blueprint(yapilacaklar.bp)
@@ -90,4 +100,5 @@ def uygulama_olustur(ayarlar=None):
         simge=simge, SURUM=SURUM, ASAMALAR=ASAMALAR, AILE_RENKLERI=AILE_RENKLERI, EKLENTI_DURUMLARI=EKLENTI_DURUMLARI,
     )
     uygulama.context_processor(lambda: {"YIL": date.today().year})
+    uygulama.jinja_env.globals["statik"] = statik
     return uygulama

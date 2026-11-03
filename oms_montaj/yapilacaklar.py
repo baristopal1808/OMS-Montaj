@@ -1,9 +1,7 @@
-"""Yapılacaklar: uygulamanın ekipten cevap beklediği her şey tek listede. Üç konu var:
+"""Yapılacaklar: uygulamanın ekipten cevap beklediği her şey tek listede. İki konu var:
 
 - Eksik malzeme: açık iş emrinde çıkışı yapılmamış malzeme varsa iş emri başına bir kez "bilginiz var mı?"
   diye sorulur (uyarilar.py).
-- ERP'de "İmalatta": iş emri stoğa girmiş ama planlama biriminin ürün durumu hâlâ "İmalatta"; her ürün ve
-  iş emri için ayrı sorulur (uyarilar.py).
 - Bağlanamayan iş emirleri: ERP'de hangi siparişe ait olduğu bulunamayan (sipariş satırında bağlı değil,
   açıklamasında proje kodu ya da "stok" geçmiyor) iş emrinin neye ait olduğunu ekip seçer: aynı ürünü
   bekleyen bir sipariş satırı, başka bir sipariş (ürün siparişte yoksa alt montajı olarak), stok ya da takip
@@ -14,6 +12,9 @@ Liste konuya ve ürün ailesine göre süzülür (SVR, OVR, PP, Çene, Kiriş…
 bölümlere ayrılır: makinenin kendisi, alt montaj ve yarı mamuller (adlarına göre: motor-pompa hattı,
 dişli kutusu montajı…) ve bakım-onarım. Cevaplar sayfa yenilenmeden kaydedilir (uygulama.js); liste
 yerinde kalır. Sonraki adımlarda test soruları ve sevk onayları da buraya gelir.
+
+ERP'de "İmalatta" sorusu kaldırıldı (kullanıcı kararı, 02/11/2026): iş emri stoğa girmiş ama planlama biriminin
+ürün durumu hâlâ "İmalatta" ise ürünün kartında yalnızca bilgi olarak görünür, ekibe sorulmaz.
 """
 
 import re
@@ -27,9 +28,8 @@ from .is_emri_aktarim import BAGLANTILAR, KULLANICI_BAGLANTILARI, is_emirlerini_
 from .kimlik import ekip_gerekli, guvenli_adres
 from .urun_kurallari import AILE_SIRASI, AILELER, onek, sade, satir_turu
 from .uyarilar import (
-    DEPO_DURUMLARI, EKSIK_CEVAPLARI, HAZIR_DURUMLAR, IMALATTA_CEVAPLARI, YARI_MAMUL_DURUMLARI, bekleyen_eksikler,
-    bekleyen_imalatta, depo_durumu, depolar, eksik_cevapla, eksik_miktari, imalatta_cevapla, imalatta_uyarilari,
-    is_emri_eksikleri,
+    DEPO_DURUMLARI, EKSIK_CEVAPLARI, HAZIR_DURUMLAR, YARI_MAMUL_DURUMLARI, bekleyen_eksikler, depo_durumu, depolar,
+    eksik_cevapla, eksik_miktari, is_emri_eksikleri,
 )
 from .veritabani import baglanti
 
@@ -40,7 +40,6 @@ DIGER = "Diğer"
 AILE_SECENEKLERI = [*AILE_SIRASI, DIGER]
 KONULAR = {
     "eksik": "Eksik malzeme",
-    "imalatta": "ERP'de İmalatta",
     "baglanamayan": "Bağlanamayan iş emri",
 }
 # Alt montaj ve yarı mamullerin kodu aileyi göstermiyor (CP1150, P7…); aile ürün adında yazıyor:
@@ -95,7 +94,7 @@ def baglanamayanlar(vt):
 
 
 def yapilacak_sayisi(vt):
-    return len(baglanamayanlar(vt)) + len(bekleyen_eksikler(vt)) + len(bekleyen_imalatta(vt))
+    return len(baglanamayanlar(vt)) + len(bekleyen_eksikler(vt))
 
 
 def gruplar(ogeler, secili_aile, aile_al, ie_al=lambda o: o):
@@ -135,7 +134,7 @@ def sablon_degiskenleri():
 
     return {
         "yapilacak_sayisi": sayi, "eksik_miktari": eksik_miktari, "depo_durumu": depo_durumu, "depolar": depolar,
-        "DEPO_DURUMLARI": DEPO_DURUMLARI, "EKSIK_CEVAPLARI": EKSIK_CEVAPLARI, "IMALATTA_CEVAPLARI": IMALATTA_CEVAPLARI,
+        "DEPO_DURUMLARI": DEPO_DURUMLARI, "EKSIK_CEVAPLARI": EKSIK_CEVAPLARI,
         "YARI_MAMUL_DURUMLARI": YARI_MAMUL_DURUMLARI, "HAZIR_DURUMLAR": HAZIR_DURUMLAR,
     }
 
@@ -155,7 +154,6 @@ def liste():
     # Her konunun öğeleri ve aileleri; sayılar öbür süzgece göre sayılır.
     ogeler = {
         "eksik": [(o, _ie_ailesi(o[0])) for o in bekleyen_eksikler(vt)],
-        "imalatta": [(u, u["aile"]) for u in bekleyen_imalatta(vt)],
         "baglanamayan": [(ie, _ie_ailesi(ie)) for ie in baglanamayanlar(vt)],
     }
     aile_sayilari = Counter(a for konu, liste_ in ogeler.items() if secili_konu in ("", konu) for _, a in liste_)
@@ -163,7 +161,6 @@ def liste():
     secilen = {konu: [o for o, a in liste_ if secili_aile in ("", a)] for konu, liste_ in ogeler.items()}
 
     eksik_gruplari = gruplar(secilen["eksik"], secili_aile, lambda o: _ie_ailesi(o[0]), lambda o: o[0])
-    imalatta_gruplari = gruplar(secilen["imalatta"], "", lambda u: u["aile"]) if not secili_aile else [("", secilen["imalatta"])]
     baglanamayan_gruplari = gruplar(secilen["baglanamayan"], secili_aile, _ie_ailesi)
     sirali = [ie["id"] for _, isler in baglanamayan_gruplari for ie in isler]
     elle = vt.execute(
@@ -182,7 +179,6 @@ def liste():
         is_emri_ailesi=_ie_ailesi,
         eksik_gruplari=eksik_gruplari,
         eksik_ayrintilari={o[0]["is_emri_no"]: is_emri_eksikleri(vt, o[0]["is_emri_no"]) for o in secilen["eksik"]},
-        imalatta_gruplari=imalatta_gruplari,
         baglanamayan_gruplari=baglanamayan_gruplari,
         # Sayfa yenilenmeden kaydedilemezse (betik kapalı) sayfa bir sonraki iş emrinin yerine döner.
         sonraki=dict(zip(sirali, sirali[1:])),
@@ -297,19 +293,3 @@ def eksik_cevap(is_emri_no):
         eksik_cevapla(vt, is_emri_no, cevap, g.kullanici["id"])
     return _yanit(True, f'İş emri {is_emri_no}: "{EKSIK_CEVAPLARI[cevap]}" kaydedildi. Yeni bir malzeme eksik'
                         " görünürse ya da eksik miktarı artarsa yeniden sorulur.")
-
-
-@bp.route("/yapilacaklar/imalatta/<int:urun_id>/<int:ie_id>/cevap", methods=["POST"])
-@ekip_gerekli
-def imalatta_cevap(urun_id, ie_id):
-    vt = baglanti()
-    uyari = next((u for u in imalatta_uyarilari(vt, urun_id=urun_id) if u["is_emri_id"] == ie_id), None)
-    if uyari is None:
-        abort(404)
-    cevap = request.form.get("cevap", "")
-    if cevap not in IMALATTA_CEVAPLARI:
-        return _yanit(False, f"{uyari['urun_kodu']} için bir cevap işaretleyin.", f"imalatta-{urun_id}-{ie_id}")
-    with vt:
-        imalatta_cevapla(vt, urun_id, ie_id, cevap, g.kullanici["id"])
-    return _yanit(True, f'{uyari["urun_kodu"]} (iş emri {uyari["is_emri_no"]}): "{IMALATTA_CEVAPLARI[cevap]}"'
-                        " kaydedildi. ERP'deki ürün durumu değişince uyarı kendiliğinden kalkar.")

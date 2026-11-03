@@ -31,14 +31,14 @@ def kullanici_sayisi():
     return baglanti().execute("SELECT COUNT(*) FROM kullanicilar").fetchone()[0]
 
 
-def kullanici_ekle(kullanici_adi, ad_soyad, rol, sifre, sifre_degismeli=True):
-    """Yeni hesabın kimliğini döndürür; kullanıcı adı alınmışsa None."""
+def kullanici_ekle(kullanici_adi, ad_soyad, rol, sifre, sifre_degismeli=True, unvan=None):
+    """Yeni hesabın kimliğini döndürür; kullanıcı adı alınmışsa None. unvan: kişinin görevi (menüde yazar)."""
     try:
         with baglanti() as vt:
             imlec = vt.execute(
-                "INSERT INTO kullanicilar (kullanici_adi, ad_soyad, rol, sifre_ozeti, sifre_degismeli)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (kullanici_adi, ad_soyad, rol, generate_password_hash(sifre), int(sifre_degismeli)),
+                "INSERT INTO kullanicilar (kullanici_adi, ad_soyad, rol, sifre_ozeti, sifre_degismeli, unvan)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (kullanici_adi, ad_soyad, rol, generate_password_hash(sifre), int(sifre_degismeli), unvan),
             )
     except sqlite3.IntegrityError:
         return None

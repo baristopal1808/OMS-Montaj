@@ -27,6 +27,14 @@ PLANLAMA_RENKLERI = {
     "Sevke Hazır": "#0d366b",
 }
 DIGER_RENK = "#c3c2b7"  # belirtilmemiş ya da tanınmayan değerler: nötr gri
+# Karanlık temada planlama rampası koyudan açığa döner (ilerleyen durum koyu zeminde daha parlak görünür; aynı
+# mavi rampanın basamakları), nötr gri koyulaşır. Aile renkleri iki temada da aynıdır.
+KOYU_TEMA_RENKLERI = {
+    "#86b6ef": "#1c5cab",
+    "#1c5cab": "#86b6ef",
+    "#0d366b": "#c6ddf8",
+    DIGER_RENK: "#5f5e57",
+}
 
 YARICAP = 52
 BOSLUK = 2  # dilimler arasında zemin renginde boşluk (piksel)
@@ -45,6 +53,7 @@ def halka(dilimler):
             "sayi": sayi,
             "yuzde": round(100 * sayi / toplam),
             "renk": renk,
+            "renk_koyu": KOYU_TEMA_RENKLERI.get(renk, renk),
             "adres": adres,
             "uzunluk": round(uzunluk - (BOSLUK if len(dilimler) > 1 else 0), 2),
             "kayma": round(kayma, 2),

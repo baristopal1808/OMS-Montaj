@@ -291,7 +291,7 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
 
 
 def _stok_karti(vt, u, motorlar, atananlar):
-    """Stoktaki makinenin kartı: etiketleri (model, Stok, test durumu), numaraları, deposu ve bekleyen siparişler."""
+    """Stoktaki makinenin kartı: etiketleri (model, Stok, test durumu), numaraları, deposu ve atanabilir siparişler."""
     aile = u["aile"]
     etiketler = [_etiket(model(u["urun_kodu"]), "aile", aile), _etiket(STOK, "stok")]
     test = test_durumu(u)
@@ -305,10 +305,11 @@ def _stok_karti(vt, u, motorlar, atananlar):
         bilgiler.append(("Depo", "raporda görünmüyor", "uyari"))
     else:
         bilgiler.append(("Depo", DEPOLAR.get(u["depo"], "yazılmadı"), "" if u["depo"] else "soluk"))
-    bekleyen = atanabilecekler(vt, u["urun_kodu"])
-    if bekleyen:
-        nolar = list(dict.fromkeys(b["siparis_no"] for b in bekleyen))
-        bilgiler.append(("Bekleyen", ", ".join(nolar[:2]) + (f" +{len(nolar) - 2}" if len(nolar) > 2 else ""), "hazir"))
+    # Atanabilir siparişler: aynı ürünü bekleyen, iş emri açılmamış; makine atanmadıkça o siparişe ait değil
+    atanabilir = atanabilecekler(vt, u["urun_kodu"])
+    if atanabilir:
+        nolar = list(dict.fromkeys(b["siparis_no"] for b in atanabilir))
+        bilgiler.append(("Atanabilir", ", ".join(nolar[:2]) + (f" +{len(nolar) - 2}" if len(nolar) > 2 else ""), ""))
     motor = motorlar.get(u["urun_kodu"]) if aile == "PP" else None
     return {
         "tur": "stok",
@@ -354,8 +355,9 @@ def _siparis_karti(ozet, urunler, bekleyenler, atananlar, stokta=None):
         "siparis_no": s["siparis_no"],
         "baslik": s["siparis_no"],
         "kodlar": list(dict.fromkeys(u["urun_kodu"] for u in bekleyenler)),
-        # İş emri bekleyen makinelerden stokta olanlar: [(kod, stoktaki adet)]
-        "stokta": [(kod, stokta[kod.upper()]) for kod in dict.fromkeys(u["urun_kodu"] for u in bekleyenler)
+        # İş emri bekleyen makinelerden stokta olanlar: [(kod, stoktaki adet)]; "stoktan karşılanmayacak" işaretli değil
+        "stokta": [(kod, stokta[kod.upper()]) for kod in dict.fromkeys(
+                       u["urun_kodu"] for u in bekleyenler if not u["stoktan_karsilanmaz"])
                    if stokta and stokta[kod.upper()]],
         "etiketler": etiketler,
         "sicak": any(e["sinif"] == "sicak" for e in etiketler),

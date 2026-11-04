@@ -28,7 +28,7 @@ from .numaralar import (
 )
 from .pano import siparis_bagli_kalemleri
 from .siparisler import TIPLER, teslim_bilgisi, yakin_revizyon
-from .stok import CIKIS_SEBEPLERI, atanabilecekler, stok_kartlari
+from .stok import CIKIS_SEBEPLERI, atanabilecekler, karsilanmaz_kaydi, stok_kartlari
 from .urun_kurallari import AILE_ADLARI, dis_tedarik_mi, pp_eklentisi_mi, renk
 from .uyarilar import (
     HAZIR_DURUMLAR, eksik_ozetleri, imalatta_uyarilari, is_emri_eksikleri, yari_mamul_geri_al, yari_mamul_isaretle,
@@ -137,6 +137,7 @@ def sayfa(urun_id):
         stoktakiler=stok_kartlari(vt, urun["urun_kodu"]) if (
             not stokta and acik and urun["asama"] == "siparis" and not urun["is_emri_id"] and not urun["stoktan_atama"]
         ) else [],
+        karsilanmaz=karsilanmaz_kaydi(vt, urun_id) if not stokta else None,  # "stoktan karşılanmayacak" işareti
         CIKIS_SEBEPLERI=CIKIS_SEBEPLERI,
         forma_tabi=forma_tabi_mi(urun),
         motor_eksik=[ad for alan, ad, deger, kaynak in numaralar if alan in MOTOR_ALANLARI and (not deger or kaynak in TEYITSIZ)],

@@ -56,6 +56,12 @@ document.querySelectorAll("[data-form-hazirla]").forEach(function (form) {
   });
 });
 
+// Adres bir açılır bölümü gösteriyorsa (#ekle gibi) bölüm açık gelir
+(function () {
+  var hedef = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (hedef && hedef.tagName === "DETAILS") hedef.open = true;
+})();
+
 // Bilgisayarda sol menü: düğme menüyü genişletir ya da daraltır (yalnızca simgeler); seçim tarayıcıda saklanır.
 // Dar menüde simgenin üzerine gelince adı ipucu olarak görünür.
 document.querySelectorAll("[data-menu-sabitle]").forEach(function (dugme) {
@@ -78,6 +84,36 @@ document.querySelectorAll("[data-menu-sabitle]").forEach(function (dugme) {
   });
   goster();
 });
+
+// Aydınlık / karanlık tema: sağ üstteki düğme değiştirir, seçim tarayıcıda saklanır. Seçim yapılmamışsa
+// bilgisayarın ya da telefonun ayarı izlenir (ilk seçim taban.html'de, sayfa çizilmeden yapılır).
+(function () {
+  var kok = document.documentElement;
+  var dugmeler = document.querySelectorAll("[data-tema-dugmesi]");
+  var sistem = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
+  function goster() {
+    var koyu = kok.dataset.tema === "koyu";
+    dugmeler.forEach(function (dugme) {
+      dugme.setAttribute("aria-checked", koyu ? "true" : "false");
+      dugme.title = koyu ? "Aydınlık temaya geç" : "Karanlık temaya geç";
+    });
+  }
+  dugmeler.forEach(function (dugme) {
+    dugme.addEventListener("click", function () {
+      kok.dataset.tema = kok.dataset.tema === "koyu" ? "acik" : "koyu";
+      try { localStorage.setItem("omsTema", kok.dataset.tema); } catch (e) {}
+      goster();
+    });
+  });
+  if (sistem && sistem.addEventListener) {
+    sistem.addEventListener("change", function () {
+      var secim = null;
+      try { secim = localStorage.getItem("omsTema"); } catch (e) {}
+      if (secim !== "koyu" && secim !== "acik") { kok.dataset.tema = sistem.matches ? "koyu" : "acik"; goster(); }
+    });
+  }
+  goster();
+})();
 
 // Telefonda yan menüyü açıp kapatır. Bilgisayarda menü hep açıktır; bu düğme orada görünmez.
 (function () {

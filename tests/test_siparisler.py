@@ -299,6 +299,7 @@ def test_ozet_sayilari_ve_grafikleri(istemci, ekip, yukle):
     assert 'href="/siparisler?teslim=gecikti"' in sayfa and 'href="/makineler?bas=' in sayfa
     assert 'href="/makineler?planlama=' in sayfa and 'href="/makineler?teslim=gecikti"' in sayfa
     assert "İmalatta" in sayfa and "Haftalık teslim takvimi" in sayfa
+    assert 'stroke="#86b6ef" style="--r-koyu: #1c5cab"' in sayfa  # karanlık temada planlama rampası tersine döner
     tablo = sayfa[sayfa.index('<table class="tablo">'):]
     assert "OZ-TS0003" in tablo and "OZ-TS0001" not in tablo
 

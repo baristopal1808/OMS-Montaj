@@ -75,7 +75,7 @@
         {% if numaralar | length == 1 %}{% for alan, ad, deger, kaynak in numaralar %}<span class="bilgi">{% if deger %}{{ ad }} {{ numara_degeri(deger, kaynak) }}{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}</span>{% endfor %}{% endif %}
         {% if k.miktar > 1 %}<span class="bilgi soluk">{{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
         {% if u.stoktan_atama %}<span class="bilgi stokta-bilgi" title="{{ u.stoktan_atama | zaman }}">Stoktan atandı</span>
-        {% elif u.asama == 'siparis' and not u.is_emri_id and stokta[k.urun_kodu | upper] %}<a class="bilgi stokta-bilgi" href="{{ url_for('urunler.sayfa', urun_id=u.id) }}#stok">Stokta var ({{ stokta[k.urun_kodu | upper] }})</a>{% endif %}
+        {% elif u.asama == 'siparis' and not u.is_emri_id and not u.stoktan_karsilanmaz and stokta[k.urun_kodu | upper] %}<a class="bilgi stokta-bilgi" href="{{ url_for('urunler.sayfa', urun_id=u.id) }}#stok">Stokta var ({{ stokta[k.urun_kodu | upper] }})</a>{% endif %}
         {{ kalem_rozetleri(satir) }}
       </div>
       {% if numaralar | length > 1 %}

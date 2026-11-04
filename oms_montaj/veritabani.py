@@ -376,6 +376,11 @@ GOCLER = [
     ALTER TABLE urunler ADD COLUMN stok_cikaran_id INTEGER REFERENCES kullanicilar(id);
     CREATE INDEX urunler_stok ON urunler (stok_kodu) WHERE kalem_id IS NULL;
     """,
+    # 19: sipariş ürünü stoktan karşılanmayacak (farklı makine istiyor): stok makinelerine önerilmez (04/11/2026)
+    """
+    ALTER TABLE urunler ADD COLUMN stoktan_karsilanmaz TEXT;  -- işaretlendiği zaman; boşsa stoktan karşılanabilir
+    ALTER TABLE urunler ADD COLUMN stoktan_karsilanmaz_id INTEGER REFERENCES kullanicilar(id);
+    """,
 ]
 
 

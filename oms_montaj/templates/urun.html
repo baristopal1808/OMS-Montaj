@@ -67,7 +67,11 @@
    formu; aşama kutusunun sağ altında. Çıktısı alınmamış düğme gri, alınmış yeşil (kullanıcı istedi, 02/11/2026).
    Çıktı alınmadan ürün sonraki aşamaya geçmez. #}
 {# Stok kartı (stok.py): test sorusu, iş emri, siparişe atama ve stoktan çıkarma. Aşaması değişmez; siparişe
-   atanınca o siparişin ürün kartı olur ve test edildiyse Temizlik, edilmediyse Teste hazır aşamasından devam eder. #}
+   atanınca o siparişin ürün kartı olur. Atarken "Tekrar test edilecek" hazır seçili gelir (Teste hazır'dan devam);
+   test gerekmiyorsa Temizlik'ten devam eder (kullanıcı, 04/11/2026). #}
+{% macro test_secimi() -%}
+<select name="test" aria-label="Test">{% for anahtar, ad in TEST_SECIMLERI.items() %}<option value="{{ anahtar }}">{{ ad }}</option>{% endfor %}</select>
+{%- endmacro %}
 {% macro stok_bolumu() -%}
 {% set test = stok_test_durumu(urun) %}
 {% set ekip = g.kullanici.rol == 'ekip' %}
@@ -106,17 +110,19 @@
     <div class="stok-ata" id="ata">
       <h3>Siparişe ata</h3>
       {% if atanabilecek %}
-      <p class="soluk">Aynı ürünü bekleyen, iş emri açılmamış siparişler (teslim tarihi yakın olan önce). Atanınca stok kartı o siparişin kartı olur; {{ 'Temizlik' if test == 'edildi' else 'Teste hazır' }} aşamasından devam eder.</p>
+      <p class="soluk">Atanabilir siparişler: aynı ürünü bekleyen, iş emri açılmamış siparişler (teslim tarihi yakın olan önce). Makine siz atayana kadar bu siparişlere ait değildir.
+        Atanınca stok kartı o siparişin kartı olur. Uzun süre bekleyen ya da iptal edilip stoğa alınan makine genellikle tekrar test edilir; test gerekmiyorsa "Test gerekmiyor"u seçin.</p>
       <ul class="satirlar">
         {% for a in atanabilecek %}
         <li>
           <div class="satir-ana">
-            <span class="satir-baslik"><a class="duz-baglanti" href="{{ url_for('urunler.sayfa', urun_id=a.id) }}">{{ a.siparis_no }}</a>{% if a.miktar > 1 %} · {{ a.adet_sira }}/{{ a.miktar | sayi }}{% endif %}</span>
+            <span class="satir-baslik"><a class="duz-baglanti" href="{{ url_for('urunler.sayfa', urun_id=a.id) }}">{{ a.siparis_no }}</a>{% if a.miktar > 1 %} · {{ a.adet_sira }}/{{ a.miktar | sayi }}{% endif %} <small class="soluk">atanmadı</small></span>
             <span class="soluk">{{ a.musteri or '' }}{% if a.seri_no %} · {{ a.seri_no }}{% endif %} · teslim {{ (a.teslim_tarihi | tarih) or '—' }}{% if a.erp_durum == 'Beklemede' %} · onay bekliyor{% endif %}</span>
           </div>
           {% if ekip %}
-          <form method="post" action="{{ url_for('stok.ata', urun_id=urun.id) }}" data-onay="{{ urun.urun_kodu }} stoktan {{ a.siparis_no }} siparişine atansın mı?">
+          <form method="post" action="{{ url_for('stok.ata', urun_id=urun.id) }}" class="stok-secim" data-onay="{{ urun.urun_kodu }} stoktan {{ a.siparis_no }} siparişine atansın mı?">
             <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="hedef" value="{{ a.id }}">
+            {{ test_secimi() }}
             <button type="submit" class="dugme kucuk-dugme">Bu siparişe ata</button>
           </form>
           {% endif %}
@@ -145,12 +151,27 @@
 </section>
 {%- endmacro %}
 
-{# İş emri açılmamış sipariş ürünü: stokta aynı üründen makine varsa buradan atanır ("depoda stok mevcut") #}
+{# İş emri açılmamış sipariş ürünü: stokta aynı üründen makine varsa buradan atanır ("depoda stok mevcut").
+   Farklı bir makine isteyen ürün "stoktan karşılanmayacak" işaretlenir; stok makinelerine önerilmez (04/11/2026). #}
 {% macro stoktakiler_bolumu() -%}
+{% set ekip = g.kullanici.rol == 'ekip' %}
 <section class="bolum" id="stok">
+  {% if karsilanmaz %}
+  <h2>Stokta aynı üründen var ({{ stoktakiler | length }})</h2>
+  <div class="kutu stok-karsilanmaz">
+    <p>Bu ürün <strong>stoktan karşılanmayacak</strong>: {{ karsilanmaz.ad_soyad or '' }}, {{ karsilanmaz.zaman | zaman }}. Stoktaki {{ urun.urun_kodu }} bu siparişe önerilmiyor.</p>
+    {% if ekip %}
+    <form method="post" action="{{ url_for('stok.karsilanmayacak', urun_id=urun.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="deger" value="0">
+      <button type="submit" class="dugme ikincil kucuk-dugme">İşareti kaldır</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
   <h2>Stokta aynı üründen var ({{ stoktakiler | length }})</h2>
   <div class="kutu">
-    <p class="soluk">{{ urun.urun_kodu }} stokta bekliyor. Bu siparişe stoktan makine verilecekse buradan atayın; makinenin numaraları, iş emri ve notları bu karta geçer.</p>
+    <p class="soluk">{{ urun.urun_kodu }} stokta bekliyor; bu siparişe atanmadı. Bu siparişe stoktan makine verilecekse buradan atayın; makinenin numaraları, iş emri ve notları bu karta geçer.
+      Uzun süre bekleyen ya da iptal edilip stoğa alınan makine genellikle tekrar test edilir.</p>
     <ul class="satirlar">
       {% for s in stoktakiler %}
       {% set test = stok_test_durumu(s) %}
@@ -159,16 +180,26 @@
           <span class="satir-baslik"><a class="duz-baglanti" href="{{ url_for('urunler.sayfa', urun_id=s.id) }}">{{ s.urun_kodu }}</a> · {{ DEPOLAR.get(s.depo, 'depo yazılmadı') }}</span>
           <span class="soluk">{{ TEST_DURUMLARI[test] if test else 'Testi sorulacak' }}{% if s.is_emri_no %} · İE {{ s.is_emri_no }}{% endif %}{% if s.motor_seri_no %} · motor {{ s.motor_seri_no }}{% endif %}{% if s.sasi_no %} · şasi {{ s.sasi_no }}{% endif %}</span>
         </div>
-        {% if g.kullanici.rol == 'ekip' %}
-        <form method="post" action="{{ url_for('stok.ata', urun_id=s.id) }}" data-onay="{{ s.urun_kodu }} stoktan {{ urun.siparis_no }} siparişine atansın mı?">
+        {% if ekip %}
+        <form method="post" action="{{ url_for('stok.ata', urun_id=s.id) }}" class="stok-secim" data-onay="{{ s.urun_kodu }} stoktan {{ urun.siparis_no }} siparişine atansın mı?">
           <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="hedef" value="{{ urun.id }}">
+          {{ test_secimi() }}
           <button type="submit" class="dugme kucuk-dugme">Bu makineyi ata</button>
         </form>
         {% endif %}
       </li>
       {% endfor %}
     </ul>
+    {% if ekip %}
+    <form method="post" action="{{ url_for('stok.karsilanmayacak', urun_id=urun.id) }}" class="stok-karsilanmaz-formu"
+      data-onay="Bu ürün stoktan karşılanmayacak olarak işaretlensin mi? Stoktaki {{ urun.urun_kodu }} bu siparişe önerilmez.">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="deger" value="1">
+      <button type="submit" class="dugme ikincil kucuk-dugme">Bu ürün stoktan karşılanmayacak</button>
+      <small class="soluk">Sipariş farklı bir makine istiyorsa (özel kabin gibi) işaretleyin.</small>
+    </form>
+    {% endif %}
   </div>
+  {% endif %}
 </section>
 {%- endmacro %}
 

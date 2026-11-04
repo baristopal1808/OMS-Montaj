@@ -11,9 +11,15 @@ no, şasi no) ekip girer; ERP'de "stok için" açılıp stoğa girmiş aynı kod
 bağlanır (motor seri no açıklamasından okunur, teyit bekler). ERP'de bulunamayan makine elle eklenir.
 
 Sevk deposundaki makine test edilmiş sayılır; montaj üretim deposundakinde "Testi yapıldı mı?" sorulur. Stok
-kartı siparişe atanınca bilgileri (numaralar, iş emri, notlar, zaman akışı) o siparişin ürün kartına geçer; ürün
-test edildiyse Temizlik, edilmediyse Teste hazır aşamasından devam eder (docs/ihtiyaclar.md 3.1). ERP'de stok iş
-emri bir siparişe bağlanırsa atama kendiliğinden yapılır.
+kartı siparişe atanınca bilgileri (numaralar, iş emri, notlar, zaman akışı) o siparişin ürün kartına geçer. Uzun
+süre bekleyen ya da iptal edilip stoğa alınan makine genellikle tekrar test edilir: atarken "Tekrar test edilecek"
+hazır seçili gelir (Teste hazır'dan devam), gerekmiyorsa "Test gerekmiyor" seçilir (Temizlik'ten devam; kullanıcı,
+04/11/2026). ERP'de stok iş emri bir siparişe bağlanırsa atama kendiliğinden yapılır (tekrar test edilecek).
+
+Elle eklenen kart, depo raporunda aynı kodun yazılan deposunda, orada yer yoksa öbür stok deposunda yer bulursa
+o adedi tutar (depo rapordaki gibi düzelir); böylece aynı makine için ikinci kart açılmaz. Aynı ürünü bekleyen,
+iş emri açılmamış siparişler "atanabilir sipariş"tir; makine atanmadıkça o siparişe ait değildir. Farklı makine
+isteyen sipariş ürünü "stoktan karşılanmayacak" diye işaretlenir ve stok makinelerine önerilmez.
 
 Depoda adet azalınca (makine sevk edildi ya da başka yere gitti) ekibin bilgi girmediği kartlar kendiliğinden
 kalkar; bilgi girilmiş kart kalır ve "depo raporunda görünmüyor" diye işaretlenir, ekip siparişe atar ya da stoktan
@@ -29,9 +35,11 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from .asamalar import ASAMALAR, ileri
 from .erp_aktarim import IPTAL, KAPALI, kapali_mi
+from .is_emri_aktarim import kirilim_durumu
 from .kimlik import ekip_gerekli
 from .numaralar import urun_numaralari
 from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, AILELER, ANA_URUNLER, SERI_NOSUZ_PARCA, onek, sade
+from .uyarilar import eksik_ozetleri
 from .veritabani import baglanti
 
 bp = Blueprint("stok", __name__)
@@ -40,6 +48,8 @@ DEPOLAR = {"sevk": "Sevk deposu", "montaj_uretim": "Montaj üretim deposu", "mon
 STOK_DEPOLARI = ("sevk", "montaj_uretim")  # stok sayılan depolar (kullanıcı, 03/11/2026)
 STOK_AILELERI = ("SVR", "OVR", "PP", "OVF", "WD", "Çene", "Kiriş")
 TEST_DURUMLARI = {"edildi": "Test edildi", "bekliyor": "Test bekliyor"}
+# Stoktan atarken: uzun bekleyen ya da iptal edilip stoğa alınan makine genellikle tekrar test edilir (04/11/2026)
+TEST_SECIMLERI = {"tekrar": "Tekrar test edilecek (Teste hazır'dan devam)", "gerekmiyor": "Test gerekmiyor (Temizlik'ten devam)"}
 CIKIS_SEBEPLERI = {
     "sevk": "Sevk edildi ya da başka bir yere gitti",
     "yanlis": "Yanlış kart (böyle bir makine yok)",
@@ -220,14 +230,18 @@ def _depoyla_esle(vt, sayac, rapor_zamani):
         liste = kartlar.get(kod, [])
         elle = [k for k in liste if k["stok_kaynagi"] == "elle"]
         oto = [k for k in liste if k["stok_kaynagi"] != "elle"]
-        # Elle eklenen kart, yazılan deposunun adedinden düşer; depoda adet kalmadıysa işaretlenir
+        # Elle eklenen kart, yazılan deposunun adedinden, orada yer yoksa öbür stok deposundan düşer (depo
+        # rapordaki gibi düzelir); hiçbir depoda adet kalmadıysa işaretlenir. Depo yazılmadıysa (bilinmiyor) adet
+        # kalmaması olağandır, işaretlenmez.
         for k in elle:
-            if k["depo"] in yer:
-                if yer[k["depo"]] > 0:
-                    yer[k["depo"]] -= 1
-                    _depoda_yok(vt, k, None)
-                else:
-                    sayac["depoda_yok"] += _depoda_yok(vt, k, bugun)
+            d = next((d for d in (k["depo"], *STOK_DEPOLARI) if d in yer and yer[d] > 0), None)
+            if d:
+                yer[d] -= 1
+                _depoda_yok(vt, k, None)
+                if d != k["depo"]:
+                    vt.execute("UPDATE urunler SET depo = ? WHERE id = ?", (d, k["id"]))
+            elif k["depo"] in yer:
+                sayac["depoda_yok"] += _depoda_yok(vt, k, bugun)
         # Kalan otomatik kartlar: önce bilgi girilmiş, sonra test edilmiş, sonra eski olanlar
         bilgili = {k["id"]: bilgi_var_mi(vt, k) for k in oto}
         oto.sort(key=lambda k: (not bilgili[k["id"]], test_durumu(k) != "edildi", k["id"]))
@@ -328,12 +342,12 @@ def esleme_ozeti(sayac):
 
 # Siparişe atama
 
-def stoktan_ata(vt, stok, hedef, kullanici_id):
+def stoktan_ata(vt, stok, hedef, kullanici_id, tekrar_test=True):
     """Stok kartını siparişin ürün kartına atar: numaralar, iş emri, test durumu, notlar ve zaman akışı hedefe
-    geçer, stok kartı silinir. Ürün test edildiyse Temizlik, edilmediyse Teste hazır aşamasından devam eder.
-    kullanici_id boşsa atamayı ERP yaptı (stok iş emri siparişe bağlandı)."""
+    geçer, stok kartı silinir. Tekrar test edilecekse Teste hazır, test gerekmiyorsa Temizlik aşamasından devam
+    eder. kullanici_id boşsa atamayı ERP yaptı (stok iş emri siparişe bağlandı)."""
     test = test_durumu(stok)
-    yeni = ileri(hedef["asama"], "temizlik" if test == "edildi" else "teste_hazir")
+    yeni = ileri(hedef["asama"], "teste_hazir" if tekrar_test else "temizlik")
     for tablo in ("urun_olaylari", "numara_degisiklikleri", "urun_formlari"):
         vt.execute(f"UPDATE {tablo} SET urun_id = ? WHERE urun_id = ?", (hedef["id"], stok["id"]))
     vt.execute("UPDATE OR IGNORE imalatta_cevaplari SET urun_id = ? WHERE urun_id = ?", (hedef["id"], stok["id"]))
@@ -352,8 +366,9 @@ def stoktan_ata(vt, stok, hedef, kullanici_id):
          kullanici_id, yeni, hedef["id"]),
     )
     nereden = ", ".join(p for p in (DEPOLAR.get(stok["depo"]), TEST_DURUMLARI.get(test, "testi bilinmiyor").lower()) if p)
-    metin = (f"Stoktan bu siparişe atandı ({nereden})." if kullanici_id else
-             f"ERP'de stok iş emri bu siparişe bağlandı; stok kartı bu karta taşındı ({nereden}).")
+    sonra = "tekrar test edilecek" if tekrar_test and test == "edildi" else "test edilecek" if tekrar_test else "test gerekmiyor"
+    metin = (f"Stoktan bu siparişe atandı ({nereden}); {sonra}." if kullanici_id else
+             f"ERP'de stok iş emri bu siparişe bağlandı; stok kartı bu karta taşındı ({nereden}); {sonra}.")
     vt.execute(
         "INSERT INTO urun_olaylari (urun_id, tur, zaman, kullanici_id, eski_asama, yeni_asama, metin)"
         " VALUES (?, 'asama', ?, ?, 'stokta', ?, ?)",
@@ -364,12 +379,13 @@ def stoktan_ata(vt, stok, hedef, kullanici_id):
 
 
 def atanabilecekler(vt, kod):
-    """Stok kartının atanabileceği sipariş ürünleri: aynı ürün kodlu, açık siparişte, iş emri açılmamış ve
-    stoktan atanmamış ürünler (teslim tarihi yakın olan önce)."""
+    """Stok kartının atanabileceği sipariş ürünleri: aynı ürün kodlu, açık siparişte, iş emri açılmamış, stoktan
+    atanmamış ve "stoktan karşılanmayacak" işaretlenmemiş ürünler (teslim tarihi yakın olan önce)."""
     return vt.execute(
         "SELECT u.id, u.seri_no, u.adet_sira, k.miktar, k.teslim_tarihi, k.erp_durum, s.siparis_no, s.musteri"
         " FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id JOIN siparisler s ON s.id = k.siparis_id"
         " WHERE UPPER(k.urun_kodu) = ? AND u.is_emri_id IS NULL AND u.stoktan_atama IS NULL AND u.asama = 'siparis'"
+        " AND u.stoktan_karsilanmaz IS NULL"
         " AND COALESCE(k.erp_durum, '') NOT IN (?, ?) AND COALESCE(k.erp_genel_durum, '') != ? AND s.erp_listede = 1"
         " ORDER BY k.teslim_tarihi IS NULL, k.teslim_tarihi, s.siparis_no, u.adet_sira",
         ((kod or "").upper(), IPTAL, KAPALI, KAPALI),
@@ -393,27 +409,67 @@ def stok_sayilari(vt):
         "SELECT stok_kodu FROM urunler WHERE kalem_id IS NULL AND stok_cikis IS NULL"))
 
 
+def montajdaki_stoklar(vt):
+    """Montaj fabrikasında stok için montajı devam eden makineler, çeneler ve kirişler: ERP'de stok için açılmış,
+    açık, son ürün iş emirleri (kullanıcı, 04/11/2026). Montaj bitip ürün depoya girince depo raporuyla stok kartı
+    olur. Her biri: iş emri, ailesi, kalan adet, kırılımların kaçı tamamlandı, eksik malzeme sayısı."""
+    kart_kodlari, yari = kod_turleri(vt)
+    liste = []
+    for ie in vt.execute(
+        "SELECT * FROM is_emirleri WHERE baglanti IN ('stok', 'kullanici_stok') AND envanter_tipi = 'Son Ürün'"
+        " AND COALESCE(durum, '') NOT IN (?, ?) ORDER BY urun_kodu, acilis_tarihi, is_emri_no",
+        (KAPALI, IPTAL),
+    ):
+        aile = stok_ailesi(ie["urun_kodu"], kart_kodlari, yari)
+        kalan = (ie["plan_miktar"] or 0) - (ie["gercek_miktar"] or 0)
+        if not aile or kalan <= 0:
+            continue
+        kirilimlar = [kirilim_durumu(s)[1] for s in vt.execute(
+            "SELECT * FROM is_emri_satirlari WHERE is_emri_id = ?", (ie["id"],))]
+        liste.append({"ie": ie, "aile": aile, "kalan": kalan, "kirilim": len(kirilimlar),
+                      "tamamlanan": kirilimlar.count("kapali")})
+    eksikler = eksik_ozetleri(vt, [m["ie"]["is_emri_no"] for m in liste]) if liste else {}
+    for m in liste:
+        ozet = eksikler.get(m["ie"]["is_emri_no"])
+        m["eksik"] = ozet["toplam"] if ozet else 0
+    sira = {aile: i for i, aile in enumerate(AILE_SIRASI)}
+    return sorted(liste, key=lambda m: (sira.get(m["aile"], 99), m["ie"]["urun_kodu"], m["ie"]["acilis_tarihi"] or ""))
+
+
+def karsilanmaz_kaydi(vt, urun_id):
+    """Sipariş ürünü "stoktan karşılanmayacak" işaretliyse kim ve ne zaman: {"zaman", "ad_soyad"}; değilse None."""
+    return vt.execute(
+        "SELECT u.stoktan_karsilanmaz AS zaman, k.ad_soyad FROM urunler u"
+        " LEFT JOIN kullanicilar k ON k.id = u.stoktan_karsilanmaz_id WHERE u.id = ? AND u.stoktan_karsilanmaz IS NOT NULL",
+        (urun_id,),
+    ).fetchone()
+
+
 # Ekranlar
 
 @bp.app_context_processor
 def sablon_degiskenleri():
-    return {"DEPOLAR": DEPOLAR, "TEST_DURUMLARI": TEST_DURUMLARI, "stok_test_durumu": test_durumu}
+    return {"DEPOLAR": DEPOLAR, "TEST_DURUMLARI": TEST_DURUMLARI, "TEST_SECIMLERI": TEST_SECIMLERI,
+            "stok_test_durumu": test_durumu}
 
 
 @bp.route("/stok")
 def liste():
     vt = baglanti()
     kartlar = stok_kartlari(vt)
-    bekleyen = {}
+    atanabilir = {}
     for kod in {k["urun_kodu"].upper() for k in kartlar}:
-        bekleyen[kod] = atanabilecekler(vt, kod)
+        atanabilir[kod] = atanabilecekler(vt, kod)
     gruplar = defaultdict(list)
     for k in kartlar:
         gruplar[k["aile"]].append(k)
     raporlar = {r["depo"]: r for r in vt.execute(
         "SELECT r.depo, r.zaman, y.dosya_adi FROM depo_raporlari r JOIN erp_yuklemeler y ON y.id = r.yukleme_id")}
+    # Elle eklerken önerilen kodlar: siparişlerde, iş emirlerinde, depo raporlarında ve stok kartlarında görülenler
     kart_kodlari, yari = kod_turleri(vt)
-    kodlar = sorted({k for k in kart_kodlari if stok_ailesi(k, kart_kodlari, yari)})
+    gorulen = set(kart_kodlari) | {r[0].upper() for r in vt.execute(
+        "SELECT urun_kodu FROM depo_stoklari UNION SELECT stok_kodu FROM urunler WHERE kalem_id IS NULL")}
+    kodlar = sorted({k for k in gorulen if stok_ailesi(k, kart_kodlari, yari)})
     cikanlar = vt.execute(
         "SELECT u.*, k.ad_soyad FROM urunler u LEFT JOIN kullanicilar k ON k.id = u.stok_cikaran_id"
         " WHERE u.kalem_id IS NULL AND u.stok_cikis IS NOT NULL ORDER BY u.stok_cikis DESC LIMIT 20"
@@ -423,7 +479,8 @@ def liste():
         makineler=[(aile, gruplar[aile]) for aile in AILE_SIRASI if aile in ANA_URUNLER and gruplar.get(aile)],
         yardimcilar=[(aile, gruplar[aile]) for aile in AILE_SIRASI if aile not in ANA_URUNLER and gruplar.get(aile)],
         toplam=len(kartlar),
-        bekleyen=bekleyen,
+        atanabilir=atanabilir,
+        montajda=montajdaki_stoklar(vt),
         numaralar={k["id"]: [(ad, deger, kaynak) for _, ad, deger, kaynak in urun_numaralari(vt, k, k["aile"], None, k["urun_kodu"])]
                    for k in kartlar},
         raporlar=raporlar,
@@ -536,15 +593,45 @@ def ata(urun_id):
         flash("Bu stok makinesi seçilen ürüne atanamaz (iş emri açılmış, başka bir stok makinesi atanmış ya da"
               " ürün kodu farklı).")
         return redirect(request.referrer or url_for(".liste"))
+    test_secimi = request.form.get("test", "tekrar")
+    if test_secimi not in TEST_SECIMLERI:
+        abort(400)
     hedef = vt.execute("SELECT * FROM urunler WHERE id = ?", (hedef_id,)).fetchone()
     siparis = vt.execute(
         "SELECT s.siparis_no FROM siparis_kalemleri k JOIN siparisler s ON s.id = k.siparis_id WHERE k.id = ?",
         (hedef["kalem_id"],),
     ).fetchone()[0]
     with vt:
-        asama = stoktan_ata(vt, kart, hedef, g.kullanici["id"])
+        asama = stoktan_ata(vt, kart, hedef, g.kullanici["id"], tekrar_test=test_secimi == "tekrar")
     flash(f"{kart['stok_kodu']} stoktan {siparis} siparişine atandı; \"{ASAMALAR[asama]}\" aşamasından devam ediyor.")
     return _geri(hedef_id, "#asama")
+
+
+@bp.route("/stok/karsilanmayacak/<int:urun_id>", methods=["POST"])
+@ekip_gerekli
+def karsilanmayacak(urun_id):
+    """Sipariş ürününü "stoktan karşılanmayacak" işaretler (farklı bir makine istiyor; stoktaki aynı kodlu makine
+    bu siparişe önerilmez) ya da işareti kaldırır. Zaman akışına yazılır."""
+    vt = baglanti()
+    urun = vt.execute("SELECT * FROM urunler WHERE id = ? AND kalem_id IS NOT NULL", (urun_id,)).fetchone()
+    if urun is None:
+        abort(404)
+    isaretle = request.form.get("deger") == "1"
+    if isaretle == bool(urun["stoktan_karsilanmaz"]):
+        return _geri(urun_id, "#stok")
+    zaman = _simdi()
+    with vt:
+        vt.execute("UPDATE urunler SET stoktan_karsilanmaz = ?, stoktan_karsilanmaz_id = ? WHERE id = ?",
+                   (zaman if isaretle else None, g.kullanici["id"] if isaretle else None, urun_id))
+        vt.execute(
+            "INSERT INTO urun_olaylari (urun_id, tur, zaman, kullanici_id, metin) VALUES (?, 'not', ?, ?, ?)",
+            (urun_id, zaman, g.kullanici["id"],
+             "Stoktan karşılanmayacak olarak işaretlendi; stoktaki aynı ürün bu siparişe önerilmez." if isaretle
+             else "\"Stoktan karşılanmayacak\" işareti kaldırıldı; stoktaki aynı ürün yeniden önerilir."),
+        )
+    flash("Bu ürün stoktan karşılanmayacak olarak işaretlendi; stok makinelerine önerilmeyecek." if isaretle
+          else "İşaret kaldırıldı; stoktaki aynı ürün bu siparişe yeniden önerilecek.")
+    return _geri(urun_id, "#stok")
 
 
 @bp.route("/stok/<int:urun_id>/cikar", methods=["POST"])

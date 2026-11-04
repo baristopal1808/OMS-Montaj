@@ -4,12 +4,35 @@
 {% block icerik %}
 {# Stoktaki makineler (stok.py): siparişe bağlanmadan depoda bekleyenler. Kartlar depo stok raporlarından adet
    kadar açılır; numaralarını ekip girer, siparişe ürün sayfasından atanır. Makineler panoda da görünür; çeneler
-   ve kirişler yalnızca burada (kullanıcı kararları, 03/11/2026). #}
+   ve kirişler yalnızca burada (kullanıcı kararları, 03/11/2026). Altta montaj fabrikasında stok için montajı devam
+   edenler; elle ekleme sağ üstteki kutuda (ilk stok girişinden sonra az gerekir; 04/11/2026). #}
 {% set ekip = g.kullanici.rol == 'ekip' %}
-<h1>Stok</h1>
+<div class="baslik-satiri stok-basligi">
+  <h1>Stok</h1>
+  {% if ekip %}
+  <details class="stok-ekle" id="ekle">
+    <summary class="dugme ikincil kucuk-dugme">+ Stok makinesi ekle</summary>
+    <div class="stok-ekle-paneli">
+      <p class="soluk">Depo raporunda görünmeyen ya da ERP'de bulunamayan bir makineyi elle ekleyin. Depo raporunda aynı ürün varsa kart onunla eşleşir, ikinci kart açılmaz.</p>
+      <form method="post" action="{{ url_for('stok.ekle') }}" class="form" autocomplete="off">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <label class="alan"><span>Ürün kodu</span>
+          <input type="text" name="urun_kodu" list="stok-kodlari" required placeholder="Örneğin PP-536-NF"></label>
+        <datalist id="stok-kodlari">{% for kod in kodlar %}<option value="{{ kod }}">{% endfor %}</datalist>
+        <label class="alan"><span>Depo</span>
+          <select name="depo"><option value="">Bilinmiyor / başka yerde</option>{% for d in STOK_DEPOLARI %}<option value="{{ d }}">{{ DEPOLAR[d] }}</option>{% endfor %}</select></label>
+        <label class="alan"><span>Testi yapıldı mı?</span>
+          <select name="test"><option value="">Bilinmiyor</option>{% for anahtar, ad in TEST_DURUMLARI.items() %}<option value="{{ anahtar }}">{{ ad }}</option>{% endfor %}</select></label>
+        <button type="submit" class="dugme">Stok kartı ekle</button>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+</div>
 <p class="sayfa-aciklamasi">Siparişe bağlanmadan depoda bekleyen makineler, çeneler ve kirişler. Depo stok raporundaki adetten açık siparişlerin
-  stoğa girmiş makineleri düşülür, kalan kadar kart açılır. Numaraları ve test durumunu kartın sayfasından girin; bir sipariş aynı ürünü
-  beklediğinde makineyi oradan atayın.</p>
+  stoğa girmiş makineleri düşülür, kalan kadar kart açılır. Numaraları ve test durumunu kartın sayfasından girin.
+  <strong>Atanabilir sipariş</strong>, aynı ürünü bekleyen ve iş emri açılmamış siparişlerdir: makine siz atayana kadar o siparişe ait değildir.
+  Farklı bir makine isteyen siparişi, sipariş ürününün sayfasından "stoktan karşılanmayacak" diye işaretleyin.</p>
 
 <div class="stok-raporlari">
   {% for d in STOK_DEPOLARI %}
@@ -28,19 +51,19 @@
   <h3>{{ AILE_ADLARI.get(aile, aile) }} <span class="sayi-rozeti">{{ liste | length }}</span></h3>
   <div class="kaydirilabilir">
     <table class="tablo stok-tablosu">
-      <thead><tr><th>Ürün kodu</th><th>Depo</th><th>Test</th><th>İş emri</th><th>Numara</th><th>Bekleyen sipariş</th></tr></thead>
+      <thead><tr><th>Ürün kodu</th><th>Depo</th><th>Test</th><th>İş emri</th><th>Numara</th><th>Atanabilir sipariş</th></tr></thead>
       <tbody>
         {% for k in liste %}
         {% set adres = url_for('urunler.sayfa', urun_id=k.id) %}
         {% set test = stok_test_durumu(k) %}
-        {% set bekleyen = bekleyen[k.urun_kodu | upper] %}
+        {% set siparisler = atanabilir[k.urun_kodu | upper] %}
         <tr class="tiklanir" data-adres="{{ adres }}">
           <td><a class="tablo-baglanti" href="{{ adres }}"><strong>{{ k.urun_kodu }}</strong></a>{% if k.stok_kaynagi == 'elle' %} <small class="soluk">elle eklendi</small>{% endif %}</td>
           <td>{% if k.depoda_yok %}<span class="etiket durum-iptal">Raporda görünmüyor</span>{% else %}{{ DEPOLAR.get(k.depo, '—') }}{% endif %}</td>
           <td>{% if test == 'edildi' %}Test edildi{% elif test %}<span class="etiket ud-acik">Test bekliyor</span>{% else %}<span class="etiket ud-acik">Sorulacak</span>{% endif %}</td>
           <td class="sayisal">{{ k.is_emri_no or '—' }}</td>
           <td>{% for ad, deger, kaynak in numaralar[k.id] %}{% if not loop.first %}<br>{% endif %}<small class="soluk">{{ ad }}</small> {% if deger %}{{ deger }}{% if kaynak in TEYITSIZ %} <span title="ERP'den okundu, teyit edilmedi">!</span>{% endif %}{% else %}<span class="soluk">girilmedi</span>{% endif %}{% else %}—{% endfor %}</td>
-          <td>{% if bekleyen %}<strong>{{ bekleyen[0].siparis_no }}</strong>{% if bekleyen | length > 1 %} +{{ bekleyen | length - 1 }}{% endif %}{% else %}<span class="soluk">—</span>{% endif %}</td>
+          <td>{% if siparisler %}{{ siparisler[0].siparis_no }}{% if siparisler | length > 1 %} +{{ siparisler | length - 1 }}{% endif %} <small class="soluk">atanmadı</small>{% else %}<span class="soluk">—</span>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -60,25 +83,34 @@
   {% if yardimcilar %}{{ stok_tablosu(yardimcilar) }}{% else %}<p class="soluk">Stokta çene ya da kiriş yok.</p>{% endif %}
 </section>
 
-{% if ekip %}
-<section class="bolum" id="ekle">
-  <h2>Stok makinesi ekle</h2>
-  <div class="kutu dar">
-    <p class="soluk">Depo raporunda görünmeyen ya da ERP'de bulunamayan bir makineyi elle ekleyin. Kart açılınca numaralarını ve biliniyorsa iş emrini kartın sayfasından girin.</p>
-    <form method="post" action="{{ url_for('stok.ekle') }}" class="form" autocomplete="off">
-      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
-      <label class="alan"><span>Ürün kodu</span>
-        <input type="text" name="urun_kodu" list="stok-kodlari" required placeholder="Örneğin PP-536-NF"></label>
-      <datalist id="stok-kodlari">{% for kod in kodlar %}<option value="{{ kod }}">{% endfor %}</datalist>
-      <label class="alan"><span>Depo</span>
-        <select name="depo"><option value="">Bilinmiyor / başka yerde</option>{% for d in STOK_DEPOLARI %}<option value="{{ d }}">{{ DEPOLAR[d] }}</option>{% endfor %}</select></label>
-      <label class="alan"><span>Testi yapıldı mı?</span>
-        <select name="test"><option value="">Bilinmiyor</option>{% for anahtar, ad in TEST_DURUMLARI.items() %}<option value="{{ anahtar }}">{{ ad }}</option>{% endfor %}</select></label>
-      <button type="submit" class="dugme">Stok kartı ekle</button>
-    </form>
+{# Montaj fabrikasında stok için montajı devam edenler (stok.montajdaki_stoklar) #}
+<section class="bolum" id="montajda">
+  <h2>Stok için montajı devam edenler {% if montajda %}<span class="sayi-rozeti">{{ montajda | length }}</span>{% endif %}</h2>
+  <p class="sayfa-aciklamasi">ERP'de stok için (siparişe bağlanmadan) açılmış ve montaj fabrikasında montajı devam eden iş emirleri. Henüz depoda değiller;
+    montaj bitip ürün sevk ya da montaj üretim deposuna girince depo raporuyla stok kartı olurlar. Bir siparişe verilecekse planlama iş emrini ERP'de siparişe bağlar
+    ya da Yapılacaklar'dan bağlanır.</p>
+  {% if montajda %}
+  <div class="kaydirilabilir">
+    <table class="tablo stok-tablosu">
+      <thead><tr><th>Ürün kodu</th><th>İş emri</th><th>Adet</th><th>Açılış</th><th>Tahmini bitiş</th><th>Kırılımlar</th><th>Eksik malzeme</th></tr></thead>
+      <tbody>
+        {% for m in montajda %}
+        {% set adres = url_for('urunler.is_emri', is_emri_no=m.ie.is_emri_no) %}
+        <tr class="tiklanir" data-adres="{{ adres }}">
+          <td><a class="tablo-baglanti" href="{{ adres }}"><strong>{{ m.ie.urun_kodu }}</strong></a>{% if m.ie.urun_adi %}<br><small class="soluk">{{ m.ie.urun_adi }}</small>{% endif %}</td>
+          <td class="sayisal">{{ m.ie.is_emri_no }}</td>
+          <td class="sayisal">{{ m.kalan | sayi }}{% if m.ie.gercek_miktar %} <small class="soluk">({{ m.ie.gercek_miktar | sayi }} stoğa girdi)</small>{% endif %}</td>
+          <td>{{ (m.ie.acilis_tarihi | tarih) or '—' }}</td>
+          <td>{{ (m.ie.tahmini_bitis | tarih) or '—' }}</td>
+          <td>{% if m.kirilim %}{{ m.tamamlanan }}/{{ m.kirilim }} tamamlandı{% else %}<span class="soluk">kırılım yok</span>{% endif %}</td>
+          <td>{% if m.eksik %}<span class="etiket durum-iptal">{{ m.eksik }} eksik</span>{% else %}<span class="soluk">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
+  {% else %}<p class="soluk">Şu an stok için montajı devam eden iş emri yok.</p>{% endif %}
 </section>
-{% endif %}
 
 {% if cikanlar %}
 <details class="bolum stok-cikanlar">

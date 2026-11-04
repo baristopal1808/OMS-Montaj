@@ -7,14 +7,33 @@
   <title>{% block baslik %}{% endblock %} · OMS Montaj</title>
   <link rel="icon" href="{{ url_for('static', filename='simge.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ statik('uygulama.css') }}">
-  {# Sol menü sabitlendiyse sayfa açılırken hemen açık gelsin (seçim tarayıcıda saklanır) #}
-  <script>try { if (localStorage.getItem("omsMenuSabit") === "1") document.documentElement.classList.add("menu-sabit"); } catch (e) {}</script>
+  {# Sol menü sabitlendiyse sayfa açılırken hemen açık gelsin; tema (aydınlık ya da karanlık) sayfa çizilmeden
+     seçilsin. İkisi de tarayıcıda saklanır; tema seçilmemişse bilgisayarın ya da telefonun ayarı izlenir. #}
+  <script>
+    (function () {
+      try {
+        var kok = document.documentElement, tema = localStorage.getItem("omsTema");
+        if (localStorage.getItem("omsMenuSabit") === "1") kok.classList.add("menu-sabit");
+        if (tema !== "koyu" && tema !== "acik") tema = matchMedia("(prefers-color-scheme: dark)").matches ? "koyu" : "acik";
+        kok.dataset.tema = tema;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="{% block govde_sinifi %}{% endblock %}">
 {% macro bildirimler() -%}
   {% for mesaj in get_flashed_messages() %}
   <p class="bildirim" role="status">{{ mesaj }}</p>
   {% endfor %}
+{%- endmacro %}
+{# Aydınlık / karanlık tema düğmesi: güneş (aydınlık) ya da ay ve yıldız (karanlık); uygulama.js çalıştırır #}
+{% macro tema_dugmesi() -%}
+  <button type="button" class="tema-dugmesi" data-tema-dugmesi role="switch" aria-checked="false" aria-label="Karanlık tema" title="Karanlık temaya geç">
+    <span class="td-topuz" aria-hidden="true">
+      <svg class="td-gunes" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.3" fill="currentColor"/><path d="M12 2.6v2.5M12 18.9v2.5M2.6 12h2.5M18.9 12h2.5M5.35 5.35l1.8 1.8M16.85 16.85l1.8 1.8M5.35 18.65l1.8-1.8M16.85 7.15l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <svg class="td-ay" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/><path d="M18.2 3.2l.62 1.98 1.98.62-1.98.62-.62 1.98-.62-1.98-1.98-.62 1.98-.62z" fill="currentColor"/></svg>
+    </span>
+  </button>
 {%- endmacro %}
 {% if g.kullanici and not g.kullanici.sifre_degismeli %}
   {% from "_karsilama.html" import logo_blok with context %}
@@ -69,7 +88,9 @@
       <header class="ust-mobil">
         <button type="button" class="menu-dugme" aria-controls="yan-menu" aria-expanded="false" aria-label="Menüyü aç">{{ simge('menu') }}</button>
         <a class="ust-marka" href="{{ url_for('ozet.ana') }}">OMS Montaj</a>
+        {{ tema_dugmesi() }}
       </header>
+      <div class="ust-cubuk">{{ tema_dugmesi() }}</div>
       <main class="icerik {% block icerik_sinifi %}{% endblock %}">
         {{ bildirimler() }}
         {% block icerik %}{% endblock %}

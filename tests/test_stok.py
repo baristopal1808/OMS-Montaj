@@ -113,7 +113,11 @@ def test_stoktan_siparise_atama(istemci, uygulama, gonder, ekip, yukle):  # noqa
     assert "Stokta aynı üründen var (1)" in sayfa(istemci, f"/urun/{hedef}")
     assert "Stokta var (1)" in sayfa(istemci, "/siparisler/OZ-TS0001")
     assert "Stokta var: <strong>SVR-50-NF-BSP</strong>" in sutun(sayfa(istemci, "/siparisler"), "siparisler")
-    assert "OZ-TS0001" in sayfa(istemci, f"/urun/{svr['id']}")  # stok kartında atanabilecek sipariş
+    # Stok kartında ve Stok ekranında atanabilir sipariş: makine atanmadıkça o siparişe ait değil
+    assert "OZ-TS0001" in sayfa(istemci, f"/urun/{svr['id']}")
+    stok = sayfa(istemci, "/stok")
+    assert "Atanabilir sipariş" in stok and "OZ-TS0001 <small class=\"soluk\">atanmadı</small>" in stok
+    assert "Atanabilir" in sutun(sayfa(istemci, "/siparisler"), "sevke_hazir")
 
     gonder(f"/urun/{svr['id']}/not", metin="TEST NOT: depoda raf 3")
     gonder(f"/urun/{svr['id']}/numara/sasi_no", deger="TS-0001")
@@ -121,18 +125,18 @@ def test_stoktan_siparise_atama(istemci, uygulama, gonder, ekip, yukle):  # noqa
     assert yanit.headers["Location"].endswith(f"/urun/{hedef}#asama")
     assert not stok_kartlari(uygulama, "SVR-50-NF-BSP")
     atanan = sorgu(uygulama, "SELECT * FROM urunler WHERE id = ?", hedef)[0]
-    # Sevk deposundaki makine test edilmiş sayılır: Temizlik'ten devam eder; numara ve not taşınır
-    assert atanan["asama"] == "temizlik" and atanan["stoktan_atama"] and atanan["sasi_no"] == "TS-0001"
+    # Stoktaki makine (test edilmiş olsa da) tekrar test edilir: Teste hazır'dan devam eder; numara ve not taşınır
+    assert atanan["asama"] == "teste_hazir" and atanan["stoktan_atama"] and atanan["sasi_no"] == "TS-0001"
     urun = sayfa(istemci, f"/urun/{hedef}")
-    for beklenen in ("Stoktan atandı", "Stoktan bu siparişe atandı (Sevk deposu, test edildi).", "TEST NOT: depoda raf 3",
-                     "TS-0001"):
+    for beklenen in ("Stoktan atandı", "Stoktan bu siparişe atandı (Sevk deposu, test edildi); tekrar test edilecek.",
+                     "TEST NOT: depoda raf 3", "TS-0001"):
         assert beklenen in urun, beklenen
     assert "Stoktan atandı" in sayfa(istemci, "/siparisler/OZ-TS0001")
 
     # Sonraki yüklemelerde yeni stok kartı açılmaz (makine artık siparişin), iş emri dağıtımı ona dokunmaz
     hazirla(yukle)
     assert not stok_kartlari(uygulama, "SVR-50-NF-BSP")
-    assert sorgu(uygulama, "SELECT asama FROM urunler WHERE id = ?", hedef)[0]["asama"] == "temizlik"
+    assert sorgu(uygulama, "SELECT asama FROM urunler WHERE id = ?", hedef)[0]["asama"] == "teste_hazir"
     # Atanamaz: iş emri açılmış ya da stoktan atanmış ürün
     pp = stok_kartlari(uygulama, "PP-540C-NF-T4")[0]
     gonder(f"/stok/{pp['id']}/ata", hedef=hedef)
@@ -184,6 +188,69 @@ def test_depoda_azalinca_ve_elle(istemci, uygulama, gonder, ekip, yukle):  # noq
     kart = stok_kartlari(uygulama, "KCN-60")[0]
     gonder(f"/stok/{kart['id']}/is-emri", is_emri_no="900101")
     assert "başka bir ürünün" in sayfa(istemci, f"/urun/{kart['id']}")
+
+
+def test_elle_eklenen_baska_depoda(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    """Depo raporlarından önce elle eklenen makine, rapor onu başka depoda gösterse de eşleşir; ikinci kart açılmaz
+    (kullanıcı, 04/11/2026: elle girilen kabinler sevk deposunda çıktı, iki kez girilmiş oldu)."""
+    yukle(excel(makine_siparisi()))
+    yukle(excel(is_emirleri(), basliklar=IE_BASLIKLAR), ad="acik kapali is emirleri.xlsx")
+    gonder("/stok/ekle", urun_kodu="KCN-60", depo="montaj_uretim", test="bekliyor")
+    gonder("/stok/ekle", urun_kodu="SVR-50-NF-BSP", depo="", test="")
+    elle = {k["stok_kodu"]: k["id"] for k in stok_kartlari(uygulama)}
+    yukle(depo_raporu(SEVK), ad="sevk depo stok raporu.xlsx")
+    yukle(depo_raporu(MONTAJ_URETIM), ad="montaj üretim depo stok raporu.xlsx")
+    kcn = stok_kartlari(uygulama, "KCN-60")
+    assert len(kcn) == 3  # depoda 3 tane: elle eklenen birini tutar, 2 kart açılır
+    elle_kcn = next(k for k in kcn if k["id"] == elle["KCN-60"])
+    assert elle_kcn["depo"] == "sevk" and not elle_kcn["depoda_yok"] and elle_kcn["test_durumu"] == "bekliyor"
+    svr = stok_kartlari(uygulama, "SVR-50-NF-BSP")
+    assert [(k["id"], k["depo"]) for k in svr] == [(elle["SVR-50-NF-BSP"], "sevk")]
+    # Ekleme kutusu sağ üstte; önerilen kodlarda depo raporundaki kodlar da var
+    stok = sayfa(istemci, "/stok")
+    assert 'class="stok-ekle" id="ekle"' in stok and '<option value="KCN-60">' in stok
+
+
+def test_atamada_test_ve_stoktan_karsilanmayacak(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    hazirla(yukle)
+    svr = stok_kartlari(uygulama, "SVR-50-NF-BSP")[0]
+    hedef = sorgu(uygulama, "SELECT u.id FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id"
+                  " WHERE k.urun_kodu = 'SVR-50-NF-BSP'")[0]["id"]
+    assert "Bu ürün stoktan karşılanmayacak" in sayfa(istemci, f"/urun/{hedef}")
+    # Sipariş farklı bir makine istiyor: stoktaki makine bu siparişe önerilmez, "Stokta var" yazmaz
+    gonder(f"/stok/karsilanmayacak/{hedef}", deger="1")
+    urun = sayfa(istemci, f"/urun/{hedef}")
+    assert "stoktan karşılanmayacak</strong>" in urun and "İşareti kaldır" in urun and "Bu makineyi ata" not in urun
+    assert "Stoktan karşılanmayacak olarak işaretlendi" in urun  # zaman akışında
+    assert "OZ-TS0001" not in sayfa(istemci, f"/urun/{svr['id']}")
+    assert "Stokta var (1)" not in sayfa(istemci, "/siparisler/OZ-TS0001")
+    assert "Stokta var: <strong>SVR-50-NF-BSP" not in sutun(sayfa(istemci, "/siparisler"), "siparisler")
+    gonder(f"/stok/{svr['id']}/ata", hedef=hedef)
+    assert stok_kartlari(uygulama, "SVR-50-NF-BSP")  # atanmadı
+    # İşaret kaldırılır; atarken test gerekmiyorsa Temizlik'ten devam eder
+    gonder(f"/stok/karsilanmayacak/{hedef}", deger="0")
+    assert "OZ-TS0001" in sayfa(istemci, f"/urun/{svr['id']}")
+    gonder(f"/stok/{svr['id']}/ata", hedef=hedef, test="gerekmiyor")
+    assert sorgu(uygulama, "SELECT asama FROM urunler WHERE id = ?", hedef)[0]["asama"] == "temizlik"
+    assert "(Sevk deposu, test edildi); test gerekmiyor." in sayfa(istemci, f"/urun/{hedef}")
+
+
+def test_stok_icin_montaji_devam_edenler(istemci, uygulama, ekip, yukle):  # noqa: F811
+    """Stok ekranında ERP'de stok için açılmış, montajı devam eden makineler (kullanıcı, 04/11/2026)."""
+    acik = [
+        ie(900112, 0, "PP-540C-NF-T4", aciklama="Stok için üretilecektir.", plan=2, gercek=1),
+        ie(900112, 10, "CP0003", "PP Yag Tanki Montaji", envanter="Yarı Mamul", durum="Kapalı", gercek=1),
+        ie(900112, 20, "CP0004", "PP Pompa Montaji", envanter="Yarı Mamul"),
+        ie(900113, 0, "CP0005", "Disli Kutusu Montaji", envanter="Yarı Mamul", aciklama="Stok için"),  # alt montaj
+        ie(900114, 0, "KCN-60", aciklama="Stok için", plan=1, gercek=1),  # bitti, depoda
+    ]
+    yukle(excel(makine_siparisi()))
+    yukle(excel(is_emirleri() + acik, basliklar=IE_BASLIKLAR), ad="acik kapali is emirleri.xlsx")
+    stok = sayfa(istemci, "/stok")
+    bolum = stok.split('id="montajda"')[1]
+    assert "PP-540C-NF-T4" in bolum and "900112" in bolum and "1/2 tamamlandı" in bolum
+    assert "(1 stoğa girdi)" in bolum and "/is-emri/900112" in bolum
+    assert "900113" not in bolum and "900114" not in bolum and "900101" not in bolum
 
 
 def test_erpde_siparise_baglanan_stok_makinesi(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811

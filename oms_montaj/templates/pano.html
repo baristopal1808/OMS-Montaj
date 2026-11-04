@@ -1,10 +1,10 @@
 {% extends "taban.html" %}
 {% block baslik %}Siparişler{% endblock %}
-{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik_sinifi %}tam{% endblock %}
 {% block icerik %}
-{# Siparişler panosu (pano.py): Planner'daki gibi aşama sütunları. Etikete ya da kişiye tıklayınca pano ona
-   süzülür; birden çok etiket birlikte seçilebilir. Kartın menüsünden aşama değişir. Tamamlanan ve iptal
-   siparişler süzgeçten liste olarak. #}
+{# Siparişler panosu (pano.py): Planner'daki gibi aşama sütunları; ekranın bütün genişliğini kullanır, sütunlar
+   genişler. Etikete ya da kişiye tıklayınca pano ona süzülür; birden çok etiket birlikte seçilebilir. Kartın
+   menüsünden aşama değişir. Tamamlanan ve iptal siparişler süzgeçten liste olarak. #}
 {% from "_siparis_suzgeci.html" import siparis_suzgeci with context %}
 {% from "_siparis_kutusu.html" import siparis_kutusu with context %}
 {% from "_kisi.html" import kisi_baloncugu with context %}

@@ -37,6 +37,17 @@ def test_yan_menu_giristen_sonra_gorunur(istemci, ekle, giris):
     assert istemci.get("/pano").headers["Location"].endswith("/siparisler")
 
 
+def test_tema_dugmesi_sag_ustte(istemci, ekle, giris):
+    # Bilgisayarda sağ üstte, telefonda üst çubukta; seçim tarayıcıda saklanır, sayfa çizilmeden uygulanır
+    ekle()
+    giris()
+    sayfa = istemci.get("/stok").get_data(as_text=True)
+    assert sayfa.count("data-tema-dugmesi") == 2
+    assert '<div class="ust-cubuk">' in sayfa
+    assert 'localStorage.getItem("omsTema")' in sayfa
+    assert 'html[data-tema="koyu"]' in istemci.get("/static/uygulama.css").get_data(as_text=True)
+
+
 def test_gecici_sifreyle_menu_gosterilmez(istemci, ekle, giris):
     ekle(degismeli=True)
     giris()

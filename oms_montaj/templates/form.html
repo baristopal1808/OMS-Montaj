@@ -1,13 +1,16 @@
 {% extends "taban.html" %}
-{% block baslik %}{{ tur_adi }} · {{ urun.urun_kodu }} · {{ urun.siparis_no }}{% endblock %}
+{% block baslik %}{{ tur_adi }} · {{ urun.urun_kodu }} · {{ urun.siparis_no or 'Stok' }}{% endblock %}
 {% block icerik %}
 {# Montaj formunun hazırlanması (formlar.py): uygulamanın yazacağı bilgiler gösterilir, ekip kontrol eder ve PDF'i
-   hazırlar. Motor bilgisi güç ünitesinin ürün koduna göre bir kez girilir. Motor seri no teyit edilmeden form basılmaz. #}
+   hazırlar. Motor bilgisi güç ünitesinin ürün koduna göre bir kez girilir. Motor seri no teyit edilmeden form basılmaz.
+   Stoktaki güç ünitesinde yalnızca proje takip kartı basılır; sipariş no yerine STOK yazar. Bakım-onarım için gelen
+   güç ünitesinde makinenin seri no'su ve opsiyonel ekipmanı burada girilir (10/11/2026). #}
 {% set urun_adresi = url_for('urunler.sayfa', urun_id=urun.id) %}
 {% set ekip = g.kullanici.rol == 'ekip' %}
-<p class="geri"><a href="{{ urun_adresi }}#asama">← {{ urun.urun_kodu }} · {{ urun.siparis_no }}</a></p>
+{% set yer = 'Stok makinesi' if stokta else urun.siparis_no %}
+<p class="geri"><a href="{{ urun_adresi }}{{ '#stok' if stokta else '#asama' }}">← {{ urun.urun_kodu }} · {{ yer }}</a></p>
 <h1>{{ tur_adi }}</h1>
-<p class="soluk">{{ urun.urun_kodu }} · {{ urun.siparis_no }}{% if urun.musteri %} · {{ urun.musteri }}{% endif %}</p>
+<p class="soluk">{{ urun.urun_kodu }} · {{ yer }}{% if urun.musteri %} · {{ urun.musteri }}{% endif %}{% if bakim %} · <strong>Bakım-onarım</strong>{% endif %}</p>
 
 {% if teyitsiz %}
 <div class="kutu uyari-kutusu">
@@ -34,7 +37,7 @@
 {%- endmacro %}
 
 <section class="bolum">
-  <h2>Motor bilgisi <small class="soluk">· {{ urun.urun_kodu }} için bir kez girilir</small></h2>
+  <h2>Motor bilgisi <small class="soluk">· {{ makine_kodu }} için bir kez girilir</small></h2>
   <div class="kutu">
     {% if motor %}
     <dl class="form-bilgileri">
@@ -47,7 +50,7 @@
       <summary>Motor bilgisini düzelt</summary>
       <form method="post" class="form">
         <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="motor">
-        <p class="uyari-metni">Düzeltme {{ urun.urun_kodu }} kodlu bütün güç ünitelerinin bundan sonraki formlarına yansır.</p>
+        <p class="uyari-metni">Düzeltme {{ makine_kodu }} kodlu bütün güç ünitelerinin (bakıma gelenler dahil) bundan sonraki formlarına yansır.</p>
         {{ motor_alanlari(motor) }}
         <button type="submit" class="dugme">Motor bilgisini kaydet</button>
       </form>
@@ -64,12 +67,17 @@
   <h2>Forma yazılacak bilgiler</h2>
   <div class="kutu">
     <dl class="form-bilgileri">
-      <div><dt>Sipariş no</dt><dd>{{ urun.siparis_no }}</dd></div>
-      {% if urun.seri_no %}<div><dt>Seri no</dt><dd>{{ urun.seri_no }}</dd></div>{% endif %}
-      <div><dt>Makine modeli</dt><dd>{{ urun.urun_kodu }}</dd></div>
-      <div><dt>İş emri no</dt><dd>{{ ie_no or 'Açılmadı' }}</dd></div>
+      <div><dt>Sipariş no</dt><dd>{% if stokta %}{{ STOK_BASLIGI }} <small class="soluk">(stok makinesi)</small>{% else %}{{ urun.siparis_no }}{% endif %}</dd></div>
+      {% if urun.seri_no and not (bakim and tur == 'kodlama') %}<div><dt>Seri no</dt><dd>{{ urun.seri_no }}</dd></div>{% endif %}
+      <div><dt>Makine modeli</dt><dd>{{ makine_kodu }}{% if bakim %} <small class="soluk">(bakım-onarım: {{ urun.urun_kodu }})</small>{% endif %}</dd></div>
+      <div><dt>{{ 'Stok giriş no' if kayit and kayit.tur == 'stok_giris' else 'İş emri no' }}</dt><dd>{% if kayit %}{{ kayit.no }}{% if not kayit.erp and kayit.tur == 'is_emri' %} <small class="soluk">(ERP listelerinde yok)</small>{% endif %}
+        {%- else %}{{ 'Bilinmiyor' if stokta else 'Açılmadı' }}{% if stokta %} <small class="soluk">(<a href="{{ urun_adresi }}#stok-numara">iş emri ya da stok giriş no girin</a>)</small>{% endif %}{% endif %}</dd></div>
       <div><dt>Motor seri no</dt><dd>{% for no in seriler %}{{ no or '—' }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd></div>
+      {% if tur == 'kodlama' and not stokta and not bakim %}
+      <div><dt>Opsiyonel ekipman</dt><dd>{% for kod in ekipman %}{{ PP_EKLENTILERI[kod] }}{% if not loop.last %}<br>{% endif %}{% else %}Siparişte yok <small class="soluk">(kartta satırı görünmez)</small>{% endfor %}</dd></div>
+      {% endif %}
     </dl>
+    {% if stokta %}<p class="soluk kucuk">Stok makinesinin kartı: makine siparişe atanınca sipariş no'lu kart yeniden basılır.</p>{% endif %}
     {% if ekip %}
     <form method="post" class="form form-hazirla" data-form-hazirla>
       <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
@@ -84,26 +92,43 @@
       <p class="uyari-metni">{{ urun.urun_kodu }} için {{ tur_adi | lower }} formlar klasöründe yok. Form hazırlanınca "OMS Veri/uygulama/formlar" klasörüne eklenmeli.</p>
       {% endif %}
       {% endif %}
+      {% if tur == 'kodlama' and bakim %}
+      {# Bakıma gelen makinenin kendi seri no'su: ERP'de çoğunlukla yok; yazılan makinede saklanır (10/11/2026) #}
+      <label class="alan"><span>Makinenin seri no'su <small class="soluk">bakıma gelen makinenin; kartta basılır</small></span>
+        <input type="text" name="seri_no" value="{{ urun.seri_no or '' }}" autocomplete="off"
+          placeholder="Servis talebinin notunda ya da makinenin etiketinde yazan numara"></label>
+      {% endif %}
       {% if tur != 'kurulum' %}
       <div class="form-izgarasi">
         <label class="alan"><span>Test yapılacak vibro çakıcı</span>
-          <input type="text" name="vibro" list="vibrolar" value="{{ vibrolar[0].ad if vibrolar else '' }}" autocomplete="off"
-            placeholder="{{ 'Siparişte vibro çakıcı yok; yazın' if not vibrolar else '' }}" data-vibro></label>
+          <input type="text" name="vibro" list="vibrolar" value="{{ vibrolar[0].ad if vibrolar else onceki.vibro or '' }}" autocomplete="off"
+            placeholder="{{ ('Stok makinesi; biliniyorsa yazın' if stokta else 'Test vibrosunu yazın' if bakim else 'Siparişte vibro çakıcı yok; yazın') if not vibrolar else '' }}" data-vibro></label>
         <label class="alan"><span>Vibro çakıcı seri no <small class="soluk">varsa</small></span>
-          <input type="text" name="vibro_seri" value="{{ vibrolar[0].seri_no if vibrolar else '' }}" autocomplete="off" data-vibro-seri></label>
+          <input type="text" name="vibro_seri" value="{{ vibrolar[0].seri_no if vibrolar else onceki.vibro_seri or '' }}" autocomplete="off" data-vibro-seri></label>
       </div>
+      {% if tur == 'kodlama' %}<p class="soluk kucuk">Birden çok vibro yazılacaksa aralarına / koyun (SVR-25-NF/OVF-300); kartta tek satıra sığmazsa alt alta basılır.</p>{% endif %}
       <datalist id="vibrolar">{% for v in vibrolar %}<option value="{{ v.ad }}" data-seri="{{ v.seri_no }}">{{ v.urun_kodu }}</option>{% endfor %}</datalist>
       {% if vibrolar | length > 1 %}<p class="soluk kucuk">Siparişte {{ vibrolar | length }} vibro çakıcı var; testte kullanılacak olanı seçin.</p>{% endif %}
       {% endif %}
+      {% if tur == 'kodlama' and (stokta or bakim) %}
+      {# Stok makinesinde sipariş talebi yok, bakım makinesinin ekipmanı servis talebinde yazmaz: makineye bağlı
+         opsiyonel ekipman işaretlenir (10/11/2026) #}
+      <fieldset class="ekipman-secimi">
+        <legend>Opsiyonel ekipman <small class="soluk">makineye bağlı olanları işaretleyin; kartta basılır</small></legend>
+        {% for kod, ad in PP_EKLENTILERI.items() %}
+        <label class="secenek"><input type="checkbox" name="ekipman" value="{{ kod }}"{% if kod in ekipman %} checked{% endif %}><span>{{ ad }}</span></label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
       {% if tur == 'kodlama' %}
-      <label class="alan"><span>Yağ <small class="soluk">sipariş talebinden; kontrol edin</small></span>
-        <input type="text" name="yag" value="{{ yag_onerisi }}" autocomplete="off" list="yag-secenekleri"
-          placeholder="Sipariş talebinde yağ bilgisi yok; yazın (yağın modeli, Yağlı sevk ya da Yağsız sevk)"></label>
+      <label class="alan"><span>Yağ <small class="soluk">{{ 'stok makinesi; biliniyorsa yazın' if stokta else 'bakıma gelen makine; biliniyorsa yazın' if bakim and not yag_onerisi else 'sipariş talebinden; kontrol edin' }}</small></span>
+        <input type="text" name="yag" value="{{ yag_onerisi or onceki.yag or '' }}" autocomplete="off" list="yag-secenekleri"
+          placeholder="{{ 'Yağ' if stokta or bakim else 'Sipariş talebinde yağ bilgisi yok; yazın' }} (yağın modeli, Yağlı sevk ya da Yağsız sevk)"></label>
       <datalist id="yag-secenekleri"><option value="Yağsız sevk"><option value="Yağlı sevk"></datalist>
       {% endif %}
       <label class="alan alan-dar"><span>Form veriliş tarihi</span><input type="date" name="tarih" value="{{ bugun }}" required></label>
       <button type="submit" class="dugme"{% if teyitsiz or (tur != 'kodlama' and not adaylar) %} disabled{% endif %}>PDF'i hazırla</button>
-      <p class="soluk kucuk">Hazırlanan PDF saklanır; ürün sayfasında aşama kutusundaki düğmeden yeniden açılıp yazdırılır.</p>
+      <p class="soluk kucuk">Hazırlanan PDF saklanır; ürün sayfasında {{ 'Stok' if stokta else 'aşama' }} kutusundaki düğmeden yeniden açılıp yazdırılır.</p>
     </form>
     {% endif %}
   </div>

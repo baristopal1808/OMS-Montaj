@@ -58,7 +58,7 @@
           <td class="sayisal">{% for alan, ad, deger, kaynak in numaralar[m.id] %}{% if loop.length > 1 %}<span class="numara-satiri"><small class="soluk">{{ ad | replace(' seri no', '') }}:</small> {{ numara_degeri(deger, kaynak, '—', kalin=False) }}</span>{% else %}<span title="{{ ad }}">{{ numara_degeri(deger, kaynak, '—', kalin=False) }}</span>{% endif %}{% endfor %}</td>
           <td><span class="etiket asama">{{ ASAMALAR[m.asama] }}</span></td>
           <td>{{ m.erp_urun_durumu or 'Belirtilmemiş' }}</td>
-          <td class="sayisal">{% if m.is_emri_no %}{{ m.is_emri_no }}<br><span class="etiket ie-{{ is_emri_durumlari[m.id][1] }}">{{ is_emri_durumlari[m.id][0] }}</span>{% else %}—{% endif %}</td>
+          <td class="sayisal">{% if m.is_emri_no %}{{ m.is_emri_no }}<br><span class="etiket ie-{{ is_emri_durumlari[m.id][1] }}">{{ is_emri_durumlari[m.id][0] }}</span>{% elif m.elle_no %}{% if m.elle_no_turu == 'stok_giris' %}<small class="soluk">Stok giriş</small> {% endif %}{{ m.elle_no }}{% else %}—{% endif %}</td>
           <td class="sayisal">{{ m.teslim_tarihi | tarih }}</td>
         </tr>
         {% endfor %}

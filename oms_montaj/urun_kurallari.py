@@ -40,7 +40,8 @@ SERI_NOSUZ_PARCA = {"OVF", "WD"}
 
 # Güç ünitesinin opsiyonel ekipmanları (soru 21): dışarıdan alınıp güç ünitesine entegre edilir; makine
 # siparişinde montaj durumu izlenir. Kod listesi 6. adımda Ayarlar'a taşınır.
-PP_EKLENTILERI = {"OZ04314": "Kablosuz kumanda seti", "OZ04082": "Uzaktan erişim modülü"}
+# Adlar ürün adı gibi kelimelerin ilk harfi büyük yazılır (kullanıcı istedi, 10/11/2026).
+PP_EKLENTILERI = {"OZ04314": "Kablosuz Kumanda Seti", "OZ04082": "Uzaktan Erişim Modülü"}
 EKLENTI_DURUMLARI = {
     "talep_acilacak": "Sipariş talebi açılacak",
     "talep_acildi": "Sipariş talebi açıldı, bekleniyor",
@@ -101,6 +102,12 @@ def satir_turu(urun_kodu, detay_turu=None, planlama_bilgisi=None):
     if aile:
         return "kart", aile
     return "aksesuar", None
+
+
+def makine_kodu(urun_kodu):
+    """Bakım-onarım kodunun makinesi: 'PP-536-NF-MNT' → 'PP-536-NF'. Bakıma gelen güç ünitesinin formu ve motor
+    bilgisi bu koddan bulunur (10/11/2026)."""
+    return re.sub(r"-MNT$", "", urun_kodu or "", flags=re.IGNORECASE)
 
 
 def model(urun_kodu):

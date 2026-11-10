@@ -171,13 +171,14 @@ def akis(vt, urun, numara_adlari):
                 durum = EKLENTI_DURUMLARI[k["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU]
                 ogeler.append(_oge(k["montaj_degisme"], "cevap", f"Opsiyonel ekipman {k['urun_kodu']}: {durum}", k["ad_soyad"] or ""))
 
-    # Basılan montaj formları (PDF'iyle)
+    # Basılan montaj formları (PDF'iyle); siparişe atanan stok makinesinde stoktayken basılanlar ayrıca belirtilir
     for f in vt.execute(
-        "SELECT f.id, f.tur, f.zaman, k.ad_soyad FROM urun_formlari f LEFT JOIN kullanicilar k ON k.id = f.kullanici_id"
+        "SELECT f.id, f.tur, f.zaman, f.stokta, k.ad_soyad FROM urun_formlari f LEFT JOIN kullanicilar k ON k.id = f.kullanici_id"
         " WHERE f.urun_id = ? ORDER BY f.id",
         (urun["id"],),
     ):
-        oge = _oge(f["zaman"], "form", f"{FORM_TURLERI.get(f['tur'], f['tur'])} basıldı", f["ad_soyad"] or "")
+        stoktayken = " (stoktayken)" if f["stokta"] and urun["kalem_id"] is not None else ""
+        oge = _oge(f["zaman"], "form", f"{FORM_TURLERI.get(f['tur'], f['tur'])} basıldı{stoktayken}", f["ad_soyad"] or "")
         oge["form"] = f["id"]
         ogeler.append(oge)
 

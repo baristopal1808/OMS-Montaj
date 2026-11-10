@@ -19,12 +19,12 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from .asamalar import ASAMALAR, SIRA, geri_mi
 from .erp_aktarim import IPTAL, kapali_mi
-from .form_kurallari import FORM_TURLERI, basilan_formlar, eksik_formlar, form_durumlari, forma_tabi_mi
+from .form_kurallari import FORM_TURLERI, basilan_formlar, eksik_formlar, form_durumlari, forma_tabi_mi, formlu_mu
 from .is_emri_aktarim import BAGLANTILAR, is_emri_durumu, kirilim_durumu
 from .kimlik import ekip_gerekli, guvenli_adres
 from .numaralar import (
-    KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, numara_alanlari, numara_degistir, numara_gecmisi, numara_yaz, sablon,
-    urun_numaralari,
+    KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, kayit_numarasi, numara_alanlari, numara_degistir, numara_gecmisi,
+    numara_yaz, sablon, urun_numaralari,
 )
 from .pano import siparis_bagli_kalemleri
 from .siparisler import TIPLER, teslim_bilgisi, yakin_revizyon
@@ -107,6 +107,7 @@ def sayfa(urun_id):
         urun=urun,
         ie=ie,
         ie_durumu=is_emri_durumu(ie) if ie else None,
+        kayit=kayit_numarasi(urun, ie["is_emri_no"] if ie else None),  # iş emri ya da stok giriş no
         kirilimlar=kirilimlar,
         tamamlanan=sum(1 for k in kirilimlar if k["durum"][1] == "kapali"),
         numaralar=numaralar,
@@ -130,7 +131,8 @@ def sayfa(urun_id):
         imalatta=imalatta_uyarilari(vt, urun_id=urun_id),
         # Bu makineyle gelenler: çene, kiriş, aksesuarlar (vibroda; vibrosuz siparişte makinede)
         bagli=None if stokta else siparis_bagli_kalemleri(vt, urun["siparis_id"]).get(urun_id),
-        formlar=form_durumlari(vt, urun) if not stokta and urun["aile"] == "PP" and urun["tur"] == "kart" else None,
+        # Çıktılar: güç ünitesinde (bakım-onarım için gelende de); stoktaki güç ünitesinde (stoktan çıkarılmadıysa) yalnızca proje takip kartı
+        formlar=form_durumlari(vt, urun) if formlu_mu(urun) and not urun["stok_cikis"] else None,
         # Stok kartı: atanabileceği siparişler; iş emri açılmamış sipariş ürünü: stoktaki aynı kodlu makineler
         stokta=stokta,
         atanabilecek=atanabilecekler(vt, urun["urun_kodu"]) if stokta else [],

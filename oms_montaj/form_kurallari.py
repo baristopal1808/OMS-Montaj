@@ -6,7 +6,15 @@ Form basılmadan ürün sonraki aşamaya geçmez: proje takip kartı ve test ön
 tamamlandı"ya, test formu olmadan "Test"e, kurulum formu olmadan "Sevke hazır"a. Kural hem ekibin aşama değişikliğinde hem ERP yüklemesinde
 geçerlidir: iş emri ERP'de tamamlansa da ürün Montaj'da bekler; formlar basılınca ERP'nin gösterdiği aşamaya
 kendiliğinden geçer. Kural başladığında Montaj tamamlandı ya da daha ileri aşamada olan ürünler muaftır
-(urunler.form_muaf). Servis kartları kurala girmez.
+(urunler.form_muaf).
+
+Bakım-onarım için gelen güç ünitesinde (servis kartı, ürün kodu "-MNT" ile biter) de aynı dört form ve aynı
+kural geçerlidir (kullanıcı, 10/11/2026); form ve motor bilgisi makinenin kodundan ("-MNT" atılarak) bulunur.
+Kural başladığında sevk edilmiş bakım kartları muaftır (göç 23).
+
+Stoktaki güç ünitesinde yalnızca proje takip kartı basılır; kartta sipariş no yerine STOK yazar (kullanıcı,
+10/11/2026). Stoktayken basılan form (urun_formlari.stokta) makine siparişe atanınca zaman akışında kalır ama
+siparişin formu sayılmaz: sipariş no'lu kart yeniden basılır.
 """
 
 from .asamalar import ASAMALAR, SIRA, ileri
@@ -28,21 +36,28 @@ GECIS_FORMLARI = (
     ("sevke_hazir", ("kurulum",)),
 )
 FORMLU_AILELER = ("PP",)
+FORMLU_TURLER = ("kart", "servis")  # sipariş satırının türü: makine ya da bakım-onarım
+STOK_FORMLARI = ("kodlama",)  # stoktaki güç ünitesinde basılan formlar
+
+
+def formlu_mu(urun):
+    """Ürünün çıktıları var mı (güç ünitesi ya da bakıma gelen güç ünitesi)? Muaf üründe de çıktı alınabilir."""
+    return urun["aile"] in FORMLU_AILELER and urun["tur"] in FORMLU_TURLER
 
 
 def forma_tabi_mi(urun):
     """urun: aile, tur (sipariş satırının türü) ve form_muaf alanları olan bir satır."""
-    return urun["aile"] in FORMLU_AILELER and urun["tur"] == "kart" and not urun["form_muaf"]
+    return formlu_mu(urun) and not urun["form_muaf"]
 
 
 def basilan_formlar(vt, urun_idleri=None):
-    """{ürün id: {form türü, …}}; urun_idleri verilmezse bütün ürünler."""
-    sorgu, degerler = "SELECT DISTINCT urun_id, tur FROM urun_formlari", ()
+    """{ürün id: {form türü, …}}; urun_idleri verilmezse bütün ürünler. Stoktayken basılan formlar sayılmaz."""
+    sorgu, degerler = "SELECT DISTINCT urun_id, tur FROM urun_formlari WHERE stokta = 0", ()
     if urun_idleri is not None:
         idler = list(urun_idleri)
         if not idler:
             return {}
-        sorgu += f" WHERE urun_id IN ({', '.join('?' * len(idler))})"
+        sorgu += f" AND urun_id IN ({', '.join('?' * len(idler))})"
         degerler = idler
     sonuc = {}
     for r in vt.execute(sorgu, degerler):
@@ -82,12 +97,14 @@ def urun_formlari(vt, urun_id):
 
 def form_durumlari(vt, urun):
     """Ürün sayfasının aşama kutusundaki çıktılar: [{"tur", "ad", "kisa", "asama", "son"}] ve ERP'nin ilerisini
-    gösterdiği ama formlar basılmadığı için beklenen aşama (yoksa None)."""
-    formlar = urun_formlari(vt, urun["id"])
-    durumlar = [{"tur": tur, "ad": ad, "kisa": KISA_ADLAR[tur], "asama": ASAMALAR[FORM_ASAMALARI[tur]],
-                 "son": next((f for f in formlar if f["tur"] == tur), None)} for tur, ad in FORM_TURLERI.items()]
+    gösterdiği ama formlar basılmadığı için beklenen aşama (yoksa None). Stok kartında yalnızca stoktayken
+    basılan proje takip kartı; sipariş ürününde yalnızca siparişteyken basılanlar."""
+    stokta = urun["kalem_id"] is None
+    formlar = [f for f in urun_formlari(vt, urun["id"]) if bool(f["stokta"]) == stokta]
+    durumlar = [{"tur": tur, "ad": FORM_TURLERI[tur], "kisa": KISA_ADLAR[tur], "asama": ASAMALAR[FORM_ASAMALARI[tur]],
+                 "son": next((f for f in formlar if f["tur"] == tur), None)} for tur in (STOK_FORMLARI if stokta else FORM_TURLERI)]
     bekleyen = None
-    if forma_tabi_mi(urun) and urun["erp_asama"]:
+    if not stokta and forma_tabi_mi(urun) and urun["erp_asama"]:
         hedef = ileri(urun["asama"], urun["erp_asama"])
         if hedef != urun["asama"] and sinirla(hedef, {f["tur"] for f in formlar}) != hedef:
             bekleyen = hedef

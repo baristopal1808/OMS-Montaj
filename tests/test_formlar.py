@@ -1,19 +1,24 @@
 """Montaj çıktıları: proje takip kartı, test öncesi kontrol, test ve kurulum formu; çıktıların aşama kuralı.
 Şablonlar ve veriler uydurmadır (gerçek formlar testlere girmez); PDF'e çevirme sahte bir çeviriciyle yapılır."""
 
+import sqlite3
 from datetime import datetime
 from html import unescape
 from pathlib import Path
 
 import pytest
 from openpyxl import Workbook, load_workbook
-from test_is_emirleri import IE_BASLIKLAR, is_emirleri
-from test_siparisler import ekip, excel, makine_siparisi, yukle  # noqa: F401 (pytest fikstürleri)
-from test_urunler import urun_id, yuklenmis
+from test_is_emirleri import IE_BASLIKLAR, ie, is_emirleri
+from test_siparisler import ekip, excel, makine_siparisi, satir, yukle  # noqa: F401 (pytest fikstürleri)
+from test_stok import stok_kartlari
+from test_urunler import motorlu_is_emirleri, urun_id, yuklenmis
 
-from oms_montaj.formlar import _sablon_oku, pp_modeli, sablonu_doldur, uygun_sablonlar, vibro_adi
+from oms_montaj.formlar import (
+    _sablon_oku, kayit_alanlari, pp_modeli, sablonu_doldur, uygun_sablonlar, vibro_adi, vibro_satirlari, yag_iki_dilli,
+)
+from oms_montaj.numaralar import kayit_numarasi
 from oms_montaj.urun_kurallari import yag_metni
-from oms_montaj.veritabani import baglanti
+from oms_montaj.veritabani import GOCLER, baglanti
 
 TARIH_ETIKETI = "Form Veriliş Tarihi / Form Submission Date:"
 
@@ -122,8 +127,12 @@ def test_formlar_ve_asama_kurali(istemci, uygulama, gonder, ekip, yukle, formlar
     kayit, s = son_form(uygulama, tmp_path)
     assert yanit.headers["Location"].endswith(f"/urun/{pp}?form={kayit['id']}#asama")
     assert (s["C1"].value, s["A4"].value, s["C4"].value, s["B6"].value, s["B7"].value, s["B8"].value, s["B9"].value) == (
-        "PROJE TAKİP KARTI", "OZ-TS0001", "OZ-TS0001-PP-01", "SVR-50-NF", "VOLVO 0000 111 101", "900101", "Yağsız sevk")
+        "PROJECT TRACKING CARD", "OZ-TS0001", "OZ-TS0001-PP-01", "SVR-50-NF", "VOLVO 0000 111 101", "900101",
+        "Without oil\nYağsız sevk")
+    # İki dilli: etiketler ve sabit değerler üstte İngilizce, altta Türkçe (kullanıcı, 10/11/2026)
+    assert (s["A5"].value, s["A8"].value) == ("POWER PACK\nGüç ünitesi", "WORK\nORDER NO\nİş emri no")
     assert "PP-536-NF" in str(s["B5"].value) and "TEST-MOTOR-1" in str(s["B5"].value)
+    assert s["A10"].value.startswith("Issue date")  # siparişte opsiyonel ekipman yok: satırı da yok
     # Ürün sayfasında düğmesi yeşil; hazır olduğu ve PDF'in bağlantısı görünür
     urun = sayfa(istemci, f"/urun/{pp}?form={kayit['id']}")
     assert "Proje takip kartı hazır." in urun and urun.count("cikti basildi") == 1
@@ -170,6 +179,161 @@ def test_formlar_ve_asama_kurali(istemci, uygulama, gonder, ekip, yukle, formlar
     yanit = istemci.get(f"/urun/{pp}/form-dosyasi/{kayit['id']}")
     assert yanit.status_code == 200 and yanit.mimetype == "application/pdf"
     assert istemci.get(f"/urun/{pp}/form-dosyasi/9999").status_code == 404
+
+
+def test_kartta_vibro_ve_yag():
+    # Birden çok test vibrosu: yalnızca tek satıra sığmıyorsa ve ayraçtan sonra yeni model kodu başlıyorsa bölünür
+    assert vibro_satirlari("SVR-50-NF") == ["SVR-50-NF"] and vibro_satirlari(" ") == []
+    assert vibro_satirlari("SVR-25-NF/OVF-300-4-BF-CS") == ["SVR-25-NF", "OVF-300-4-BF-CS"]
+    assert vibro_satirlari("SVR-25-NF ve OVF-300-4-BF-CS") == ["SVR-25-NF", "OVF-300-4-BF-CS"]
+    assert vibro_satirlari("SVR-25-NF/VM") == ["SVR-25-NF/VM"]  # kodun kendi eğik çizgisi
+    assert vibro_satirlari("SVR-25-NF/VM-TEST-UZUN-KOD-OVF") == ["SVR-25-NF/VM-TEST-UZUN-KOD-OVF"]  # bölünmez, küçülür
+    # Yağ: sabit değerler iki dilli, yağın modeli tek dilli
+    assert yag_iki_dilli("YAĞSIZ SEVK") == ("Without oil", "Yağsız sevk")
+    assert yag_iki_dilli("YAĞSIZ") == yag_iki_dilli("yağsız sevk edilecektir") == ("Without oil", "Yağsız sevk")
+    assert yag_iki_dilli("Yağlı sevk") == ("With oil", "Yağlı sevk")
+    assert yag_iki_dilli("") == ("Not specified", "Belirtilmedi")
+    assert yag_iki_dilli("TEST YAG 46") == ("TEST YAG 46", None)
+
+
+def test_proje_takip_kartinda_opsiyonel_ekipman(istemci, uygulama, gonder, ekip, yukle, formlar_hazir, tmp_path):  # noqa: F811
+    # Sipariş talebinde ayrı kalem olan uzaktan erişim modülü ve kablosuz kumanda seti kartta alt alta, sipariş
+    # talebindeki sırayla yazar; aynı ekipman iki kez yazmaz
+    siparis = makine_siparisi() + [satir(6, "OZ04082", "Uzaktan Erisim Modulu"), satir(7, "OZ04314", "PP Kablosuz Kumanda Seti"),
+                                   satir(8, "OZ04314", "PP Kablosuz Kumanda Seti", durum="İptal")]
+    yukle(excel(siparis))
+    yukle(excel(motorlu_is_emirleri(), basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    pp = urun_id(uygulama, "PP-536-NF")
+    gonder(f"/urun/{pp}/numara/motor_seri_no/teyit", deger="0000 111 101", teyit="1")
+    form = sayfa(istemci, f"/urun/{pp}/form/kodlama")
+    assert "Opsiyonel ekipman" in form and "Uzaktan Erişim Modülü<br>Kablosuz Kumanda Seti" in form
+    gonder(f"/urun/{pp}/form/kodlama", **MOTOR, vibro="SVR-50-NF", yag="Yağsız sevk", tarih="2026-11-10")
+    _, s = son_form(uygulama, tmp_path)
+    assert (s["A10"].value, s["B10"].value) == (
+        "OPTIONAL\nEQUIPMENT\nOpsiyonel ekipman",
+        "Remote Access Module\nUzaktan Erişim Modülü\nWireless Remote Control Set\nKablosuz Kumanda Seti")
+    assert s["A11"].value.startswith("Issue date")
+    # Kurulum formunda uzaktan erişim "Var"
+    gonder(f"/urun/{pp}/form/kurulum", sablon="FR-MT-903_R01_Güç Ünitesi Kurulum Formu.xlsx", tarih="2026-11-10")
+    _, s = son_form(uygulama, tmp_path)
+    assert s["M9"].value == "Var"
+
+
+def test_stoktaki_guc_unitesinin_proje_takip_karti(istemci, uygulama, gonder, ekip, yukle, formlar_hazir, tmp_path):  # noqa: F811
+    # Stoktaki güç ünitesinde yalnızca proje takip kartı basılır; sipariş no yerine STOK yazar, aşama değişmez
+    yukle(excel(makine_siparisi()))  # güç ünitesinin iş emri açılmadı: stoktan atanabilir
+    gonder("/stok/ekle", urun_kodu="PP-536-NF", depo="sevk", test="")
+    stok = stok_kartlari(uygulama, "PP-536-NF")[0]["id"]
+    gonder(f"/urun/{stok}/numara/motor_seri_no", deger="0000 111 101")
+    # ERP'ye geçmeden önce stoğa alınmış makine: iş emri yerine stok giriş no (kullanıcı, 10/11/2026)
+    gonder(f"/stok/{stok}/is-emri", tur="stok_giris", is_emri_no="SG-0001")
+    urun = sayfa(istemci, f"/urun/{stok}")
+    assert f"/urun/{stok}/form/kodlama" in urun and "Kartta sipariş no yerine STOK yazar" in urun
+    assert f"/urun/{stok}/form/test_oncesi" not in urun
+    assert istemci.get(f"/urun/{stok}/form/test_oncesi").status_code == 404
+    form = sayfa(istemci, f"/urun/{stok}/form/kodlama")
+    assert "STOK <small" in form and "Stok makinesi" in form and "<dt>Opsiyonel ekipman</dt>" not in form
+    assert "<dt>Stok giriş no</dt><dd>SG-0001</dd>" in form
+    # Sipariş talebi olmadığı için opsiyonel ekipman işaretlenir; sonraki basımda işaretli gelir (10/11/2026)
+    assert 'name="ekipman" value="OZ04082">' in form and 'name="ekipman" value="OZ04314">' in form
+    yanit = gonder(f"/urun/{stok}/form/kodlama", **MOTOR, vibro="", yag="", ekipman="OZ04082", tarih="2026-11-10")
+    kayit, s = son_form(uygulama, tmp_path)
+    assert yanit.headers["Location"].endswith(f"/urun/{stok}?form={kayit['id']}#stok") and kayit["stokta"] == 1
+    assert (s["A4"].value, s["B6"].value, s["B7"].value, s["B9"].value) == (
+        "STOCK\nStok", "—", "VOLVO 0000 111 101", "Not specified\nBelirtilmedi")
+    assert (s["A8"].value, s["B8"].value) == ("STOCK\nENTRY NO\nStok giriş no", "SG-0001")
+    assert s["B10"].value == "Remote Access Module\nUzaktan Erişim Modülü"
+    assert 'name="ekipman" value="OZ04082" checked>' in sayfa(istemci, f"/urun/{stok}/form/kodlama")
+    # Birden çok test vibrosu tek satıra sığmıyorsa alt alta basılır (kullanıcı, 10/11/2026)
+    gonder(f"/urun/{stok}/form/kodlama", **MOTOR, vibro="SVR-25-NF/OVF-300-4-BF-CS", yag="", ekipman="OZ04082",
+           tarih="2026-11-10")
+    kayit, s = son_form(uygulama, tmp_path)
+    assert s["B6"].value == "SVR-25-NF\nOVF-300-4-BF-CS"
+    # Yeniden basarken son karttaki test vibrosu hazır gelir
+    assert 'name="vibro" list="vibrolar" value="SVR-25-NF/OVF-300-4-BF-CS"' in sayfa(istemci, f"/urun/{stok}/form/kodlama")
+    assert asama(uygulama, stok) == "stokta"
+    urun = sayfa(istemci, f"/urun/{stok}?form={kayit['id']}")
+    assert "Proje takip kartı hazır." in urun and urun.count("cikti basildi") == 1
+    assert istemci.get(f"/urun/{stok}/form-dosyasi/{kayit['id']}").headers["Content-Disposition"].count("Stok PP-536-NF") == 1
+    # Siparişe atanınca stoktayken basılan kart siparişin kartı sayılmaz: sipariş no'lu kart yeniden basılır
+    hedef = urun_id(uygulama, "PP-536-NF")
+    gonder(f"/stok/{stok}/ata", hedef=hedef)
+    urun = sayfa(istemci, f"/urun/{hedef}")
+    assert "Proje takip kartı basıldı (stoktayken)" in urun
+    assert "cikti basildi" not in urun and f'<a class="cikti" href="/urun/{hedef}/form/kodlama"' in urun
+    # Stok giriş no siparişin ürününe geçer; sipariş no'lu kartta da basılır, Excel formlarına "Stok giriş no …" yazar
+    assert "<dt>Stok giriş no</dt><dd>SG-0001</dd>" in sayfa(istemci, f"/urun/{hedef}/form/kodlama")
+    assert kayit_alanlari(kayit_numarasi({"elle_no": "SG-0001", "elle_no_turu": "stok_giris"}))["is_emri_no"] == "Stok giriş no SG-0001"
+    assert kayit_alanlari(kayit_numarasi({"elle_no": None}, "900101")) == {"is_emri_no": "900101", "kayit_no": "900101", "kayit_turu": "is_emri"}
+
+
+def test_bakim_onarim_guc_unitesinin_formlari(istemci, uygulama, gonder, ekip, yukle, formlar_hazir, tmp_path):  # noqa: F811
+    # Bakım-onarım için gelen güç ünitesinde de dört form ve aynı aşama kuralı (kullanıcı, 10/11/2026); şablon,
+    # makine modeli ve motor bilgisi "-MNT"siz koddan
+    yukle(excel([satir(1, "PP-536-NF-MNT", "Guc Unitesi Bakim Onarim", siparis_no="OZ-TS0009", detay="SERVİS",
+                       is_emri=900110)]))
+    liste = [ie(900110, 0, "PP-536-NF-MNT", aciklama="OZ-TS0009 bakim onarim")]
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    bakim = urun_id(uygulama, "PP-536-NF-MNT")
+    gonder(f"/urun/{bakim}/numara/motor_seri_no", deger="0000 111 101")
+    assert sayfa(istemci, f"/urun/{bakim}").count('<a class="cikti" href=') == 4
+    form = sayfa(istemci, f"/urun/{bakim}/form/kodlama")
+    assert "<strong>Bakım-onarım</strong>" in form and "PP-536-NF için bir kez girilir" in form
+    # Makinenin seri no'su ve opsiyonel ekipmanı form ekranında girilir (servis talebinde yok)
+    assert 'name="seri_no" value=""' in form and 'name="ekipman" value="OZ04082">' in form
+    assert "<dt>Opsiyonel ekipman</dt>" not in form
+    gonder(f"/urun/{bakim}/form/kodlama", **MOTOR, seri_no=" OZ-TS0001-PP-01 ", vibro="SVR-50-NF", yag="Yağsız sevk",
+           ekipman="OZ04082", tarih="2026-11-10")
+    _, s = son_form(uygulama, tmp_path)
+    # Bant antrasit, başlığın altında MAINTENANCE & REPAIR; satırlar bir aşağıda
+    assert s["A1"].fill.fgColor.rgb.endswith("383E42") and s["C1"].value == "PROJECT TRACKING CARD"
+    assert str(s["C3"].value) == "MAINTENANCE & REPAIR · Bakım-onarım" and s["C3"].fill.fgColor.rgb.endswith("383E42")
+    assert (s["A5"].value, s["C5"].value, s["B7"].value, s["B9"].value) == (
+        "OZ-TS0009", "OZ-TS0001-PP-01", "SVR-50-NF", "900110")
+    assert str(s["B6"].value).startswith("PP-536-NF ·") and "MNT" not in str(s["B6"].value)
+    assert s["B11"].value == "Remote Access Module\nUzaktan Erişim Modülü"
+    with uygulama.app_context():
+        assert baglanti().execute("SELECT urun_kodu FROM motor_bilgileri").fetchone()[0] == "PP-536-NF"
+    # Seri no makinede saklanır, zaman akışına yazılır; yeniden açınca seri no, vibro, yağ ve ekipman hazır gelir
+    assert "Makinenin seri no'su girildi: OZ-TS0001-PP-01." in sayfa(istemci, f"/urun/{bakim}")
+    form = sayfa(istemci, f"/urun/{bakim}/form/kodlama")
+    assert 'name="seri_no" value="OZ-TS0001-PP-01"' in form and 'name="yag" value="Yağsız sevk"' in form
+    assert 'name="ekipman" value="OZ04082" checked>' in form
+    # Test öncesi formu makinenin kodundan seçilir; test vibrosu son formdan gelir
+    form = sayfa(istemci, f"/urun/{bakim}/form/test_oncesi")
+    assert "FR-MT-901_R00_PP-536 NF Test Öncesi Kontrol Formu" in form
+    assert 'name="vibro" list="vibrolar" value="SVR-50-NF"' in form
+    # Aşama kuralı: iş emri ERP'de tamamlansa da test öncesi formu basılmadan Montaj'da bekler
+    liste[0].update({"Gerçek Mkt.": 1, "Kalan Mkt.": 0, "* Durumu": "Kapalı", "İşEmri Kapatma Tarihi": datetime(2026, 10, 20),
+                     "İlk Stok Giriş Tar.": datetime(2026, 10, 20)})
+    yukle(excel(liste, basliklar=IE_BASLIKLAR), ad="is emirleri.xlsx")
+    assert asama(uygulama, bakim) == "montaj"
+    gonder(f"/urun/{bakim}/form/test_oncesi", sablon="FR-MT-901_R00_PP-536 NF Test Öncesi Kontrol Formu.xlsx",
+           vibro="SVR-50-NF", vibro_seri="", tarih="2026-11-10")
+    assert asama(uygulama, bakim) == "montaj_tamamlandi"
+    # Kurulum formunda makine modeli "-MNT"siz; uzaktan erişim işaretlenen ekipmandan
+    gonder(f"/urun/{bakim}/form/kurulum", sablon="FR-MT-903_R01_Güç Ünitesi Kurulum Formu.xlsx", tarih="2026-11-10")
+    _, s = son_form(uygulama, tmp_path)
+    assert (s["D7"].value, s["M7"].value, s["M9"].value) == ("OZ-TS0009", "PP-536-NF", "Var")
+    # Panoda bakım kartında da çıktı sayısı
+    assert "3/4" in sayfa(istemci, "/siparisler")
+
+
+def test_bakim_kartlarinin_muafiyeti():
+    # Göç 23: kural başladığında Montaj tamamlandı ya da ileri aşamadaki (sevk edilmiş) bakım kartları muaftır;
+    # erken aşamadaki bakım kartı ve makine kartları değişmez
+    vt = sqlite3.connect(":memory:")
+    for goc in GOCLER[:22]:
+        vt.executescript(goc)
+    vt.execute("INSERT INTO siparisler (id, siparis_no) VALUES (1, 'OZ-TS0009')")
+    for kalem, kod, tur in ((1, "PP-536-NF-MNT", "servis"), (2, "PP-536-VM-MNT", "servis"), (3, "PP-536-NF", "kart")):
+        vt.execute("INSERT INTO siparis_kalemleri (id, siparis_id, sira_no, urun_kodu, miktar, tur) VALUES (?, 1, ?, ?, 1, ?)",
+                   (kalem, kalem, kod, tur))
+    for urun, kalem, asama_ in ((1, 1, "sevk_edildi"), (2, 2, "malzeme_hazirlik"), (3, 3, "sevk_edildi")):
+        vt.execute("INSERT INTO urunler (id, kalem_id, adet_sira, asama) VALUES (?, ?, 1, ?)", (urun, kalem, asama_))
+    vt.executescript(GOCLER[22])
+    assert dict(vt.execute("SELECT id, form_muaf FROM urunler")) == {1: 1, 2: 0, 3: 0}
+    vt.close()
 
 
 def test_form_kurali_vibroda_ve_muafta_yok(istemci, uygulama, gonder, ekip, yukle, formlar_hazir):  # noqa: F811

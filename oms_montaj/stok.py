@@ -8,7 +8,9 @@ Bir ürün kodunun iki depodaki adedinden, açık siparişlerin stoğa girmiş a
 düşülür; kalan kadar "Stok" kartı açılır (kullanıcı: adet kadar kart). Stok kartı bir urunler satırıdır ama
 sipariş satırı yoktur (kalem_id boş): ürün kodu, adı ve ailesi kartın kendisinde durur. Numaralarını (motor seri
 no, şasi no) ekip girer; ERP'de "stok için" açılıp stoğa girmiş aynı kodlu bir iş emri varsa karta kendiliğinden
-bağlanır (motor seri no açıklamasından okunur, teyit bekler). ERP'de bulunamayan makine elle eklenir.
+bağlanır (motor seri no açıklamasından okunur, teyit bekler). ERP'de bulunamayan makine elle eklenir. Ekip iş emri
+no'sunu ya da (ERP'ye geçmeden önce stoğa alınan makinede) stok giriş no'sunu yazabilir; yüklenen listelerde olmayan
+iş emri yazıldığı gibi saklanır, ileride bir listede görünürse karta bağlanır (kullanıcı, 10/11/2026).
 
 Sevk deposundaki makine test edilmiş sayılır; montaj üretim deposundakinde "Testi yapıldı mı?" sorulur. Stok
 kartı siparişe atanınca bilgileri (numaralar, iş emri, notlar, zaman akışı) o siparişin ürün kartına geçer. Uzun
@@ -37,7 +39,7 @@ from .asamalar import ASAMALAR, ileri
 from .erp_aktarim import IPTAL, KAPALI, kapali_mi
 from .is_emri_aktarim import kirilim_durumu
 from .kimlik import ekip_gerekli
-from .numaralar import urun_numaralari
+from .numaralar import KAYIT_TURLERI, kayit_numarasi, urun_numaralari
 from .urun_kurallari import AILE_ADLARI, AILE_SIRASI, AILELER, ANA_URUNLER, SERI_NOSUZ_PARCA, onek, sade
 from .uyarilar import eksik_ozetleri
 from .veritabani import baglanti
@@ -165,13 +167,16 @@ def _siparisteki_stoklar(vt):
 
 
 def bilgi_var_mi(vt, kart):
-    """Ekip karta bir bilgi girdi mi (numara, test cevabı, iş emri, not)? Böyle kart kendiliğinden silinmez."""
+    """Ekip karta bir bilgi girdi mi (numara, test cevabı, iş emri, not, basılan proje takip kartı)? Böyle kart
+    kendiliğinden silinmez."""
     if kart["stok_kaynagi"] == "elle" or kart["is_emri_elle"] or kart["test_durumu"]:
         return True
     if any(kart[a] for a in ("motor_seri_no", "motor2_seri_no", "sasi_no")):
         return True
     return vt.execute(
-        "SELECT 1 FROM urun_olaylari WHERE urun_id = ? AND kullanici_id IS NOT NULL LIMIT 1", (kart["id"],)
+        "SELECT 1 FROM urun_olaylari WHERE urun_id = ? AND kullanici_id IS NOT NULL"
+        " UNION ALL SELECT 1 FROM urun_formlari WHERE urun_id = ? LIMIT 1",
+        (kart["id"], kart["id"]),
     ).fetchone() is not None
 
 
@@ -194,6 +199,7 @@ def stoklari_esle(vt):
     """Stok kartlarını depo raporlarıyla ve iş emirleriyle eşler; depo, sipariş ve iş emri yüklemelerinden sonra
     çalışır. Ne yapıldığını sayan bir Counter döndürür."""
     sayac = Counter()
+    _elle_is_emirlerini_bagla(vt, sayac)
     _erpde_atananlar(vt, sayac)
     raporlar = {r["depo"]: r["zaman"] for r in vt.execute("SELECT depo, zaman FROM depo_raporlari")}
     if all(d in raporlar for d in STOK_DEPOLARI):
@@ -304,6 +310,22 @@ def _is_emirlerini_bagla(vt, sayac):
             sayac["is_emri"] += 1
 
 
+def _elle_is_emirlerini_bagla(vt, sayac):
+    """Ekibin yazdığı, yüklenen listelerde olmayan iş emri sonradan bir listede görünürse (aynı ürün, başka kartta
+    değil) stok kartına bağlanır; yazılan numara ERP iş emrine dönüşür."""
+    for k in vt.execute(
+        "SELECT u.id, u.stok_kodu, i.id AS ie_id, i.urun_kodu FROM urunler u JOIN is_emirleri i ON i.is_emri_no = u.elle_no"
+        " WHERE u.kalem_id IS NULL AND u.stok_cikis IS NULL AND u.elle_no_turu = 'is_emri' AND u.is_emri_id IS NULL"
+    ).fetchall():
+        if (k["urun_kodu"] or "").upper() != k["stok_kodu"].upper():
+            continue
+        if vt.execute("SELECT 1 FROM urunler WHERE is_emri_id = ?", (k["ie_id"],)).fetchone():
+            continue
+        vt.execute("UPDATE urunler SET is_emri_id = ?, elle_no = NULL, elle_no_turu = NULL WHERE id = ?",
+                   (k["ie_id"], k["id"]))
+        sayac["is_emri"] += 1
+
+
 def _erpde_atananlar(vt, sayac):
     """İş emri ERP'de bir siparişe bağlanmış (planlama stok makinesini siparişe vermiş) stok kartları o siparişin
     ürün kartına kendiliğinden atanır."""
@@ -354,13 +376,14 @@ def stoktan_ata(vt, stok, hedef, kullanici_id, tekrar_test=True):
     vt.execute("DELETE FROM imalatta_cevaplari WHERE urun_id = ?", (stok["id"],))
     zaman = _simdi()
     vt.execute(
-        "UPDATE urunler SET is_emri_id = COALESCE(?, is_emri_id), motor_seri_no = COALESCE(?, motor_seri_no),"
+        "UPDATE urunler SET is_emri_id = COALESCE(?, is_emri_id), elle_no = COALESCE(?, elle_no),"
+        " elle_no_turu = COALESCE(?, elle_no_turu), motor_seri_no = COALESCE(?, motor_seri_no),"
         " motor2_seri_no = COALESCE(?, motor2_seri_no), sasi_no = COALESCE(?, sasi_no),"
         " numara_degisme = COALESCE(?, numara_degisme), numara_degistiren_id = COALESCE(?, numara_degistiren_id),"
         " stok_kodu = ?, stok_adi = ?, stok_aile = ?, stok_kaynagi = ?, depo = ?, test_durumu = ?, test_degisme = ?,"
         " test_degistiren_id = ?, is_emri_elle = ?, stoktan_atama = ?, stoktan_atayan_id = ?, asama = ?,"
         " erp_asama = 'montaj_tamamlandi' WHERE id = ?",
-        (stok["is_emri_id"], stok["motor_seri_no"], stok["motor2_seri_no"], stok["sasi_no"], stok["numara_degisme"],
+        (stok["is_emri_id"], stok["elle_no"], stok["elle_no_turu"], stok["motor_seri_no"], stok["motor2_seri_no"], stok["sasi_no"], stok["numara_degisme"],
          stok["numara_degistiren_id"], stok["stok_kodu"], stok["stok_adi"], stok["stok_aile"], stok["stok_kaynagi"],
          stok["depo"], test, stok["test_degisme"], stok["test_degistiren_id"], stok["is_emri_elle"], zaman,
          kullanici_id, yeni, hedef["id"]),
@@ -450,7 +473,7 @@ def karsilanmaz_kaydi(vt, urun_id):
 @bp.app_context_processor
 def sablon_degiskenleri():
     return {"DEPOLAR": DEPOLAR, "TEST_DURUMLARI": TEST_DURUMLARI, "TEST_SECIMLERI": TEST_SECIMLERI,
-            "stok_test_durumu": test_durumu}
+            "stok_test_durumu": test_durumu, "KAYIT_TURLERI": KAYIT_TURLERI, "kayit_numarasi": kayit_numarasi}
 
 
 @bp.route("/stok")
@@ -555,30 +578,44 @@ def test(urun_id):
 @bp.route("/stok/<int:urun_id>/is-emri", methods=["POST"])
 @ekip_gerekli
 def is_emri(urun_id):
-    """Stok kartının iş emrini girer, değiştirir ya da kaldırır (iş emri listelerinde olmalı)."""
+    """Stok kartının iş emrini ya da stok giriş no'sunu girer, değiştirir ya da kaldırır (boş numara). Yüklenen
+    listelerdeki iş emri karta bağlanır; listelerde olmayan iş emri ve stok giriş no yazıldığı gibi saklanır
+    (kullanıcı, 10/11/2026). Makinede ikisinden yalnızca biri olur."""
     vt = baglanti()
     kart = _stok_karti(vt, urun_id)
-    no = "".join((request.form.get("is_emri_no") or "").split())
+    tur = request.form.get("tur") or "is_emri"
+    if tur not in KAYIT_TURLERI:
+        abort(400)
+    ham = request.form.get("is_emri_no") or ""
+    no = "".join(ham.split()) if tur == "is_emri" else " ".join(ham.split())
     ie = None
-    if no:
+    if no and tur == "is_emri":
         ie = vt.execute("SELECT id, urun_kodu FROM is_emirleri WHERE is_emri_no = ?", (no,)).fetchone()
-        if ie is None:
-            flash(f"İş emri {no} yüklenen iş emri listelerinde yok; numarayı kontrol edin.")
-            return _geri(urun_id, "#stok")
-        if (ie["urun_kodu"] or "").upper() != kart["stok_kodu"].upper():
+        if ie and (ie["urun_kodu"] or "").upper() != kart["stok_kodu"].upper():
             flash(f"İş emri {no} başka bir ürünün ({ie['urun_kodu']}); bu kartın ürünü {kart['stok_kodu']}.")
             return _geri(urun_id, "#stok")
-        sahibi = vt.execute("SELECT id FROM urunler WHERE is_emri_id = ? AND id != ?", (ie["id"], urun_id)).fetchone()
-        if sahibi:
+        if ie and vt.execute("SELECT 1 FROM urunler WHERE is_emri_id = ? AND id != ?", (ie["id"], urun_id)).fetchone():
             flash(f"İş emri {no} başka bir kartta kayıtlı.")
             return _geri(urun_id, "#stok")
+    elle = no if no and ie is None else None
+    if not no:
+        metin = mesaj = "İş emri / stok giriş no kaldırıldı."
+    elif tur == "stok_giris":
+        metin, mesaj = f"Stok giriş no girildi: {no}.", f"Stok giriş no {no} kaydedildi."
+    elif ie:
+        metin, mesaj = f"İş emri girildi: {no}.", f"İş emri {no} kaydedildi."
+    else:
+        metin = f"İş emri girildi: {no} (yüklenen ERP listelerinde yok)."
+        mesaj = (f"İş emri {no} yüklenen iş emri listelerinde yok; yazdığınız gibi kaydedildi. Numarayı bir kez daha"
+                 " kontrol edin. İş emri ileride bir listede görünürse karta kendiliğinden bağlanır.")
     with vt:
-        vt.execute("UPDATE urunler SET is_emri_id = ?, is_emri_elle = 1 WHERE id = ?", (ie["id"] if ie else None, urun_id))
+        vt.execute("UPDATE urunler SET is_emri_id = ?, elle_no = ?, elle_no_turu = ?, is_emri_elle = 1 WHERE id = ?",
+                   (ie["id"] if ie else None, elle, tur if elle else None, urun_id))
         vt.execute(
             "INSERT INTO urun_olaylari (urun_id, tur, zaman, kullanici_id, metin) VALUES (?, 'not', ?, ?, ?)",
-            (urun_id, _simdi(), g.kullanici["id"], f"İş emri girildi: {no}." if ie else "İş emri kaldırıldı."),
+            (urun_id, _simdi(), g.kullanici["id"], metin),
         )
-    flash(f"İş emri {no} kaydedildi." if ie else "İş emri kaldırıldı.")
+    flash(mesaj)
     return _geri(urun_id, "#stok")
 
 

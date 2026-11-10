@@ -381,6 +381,30 @@ GOCLER = [
     ALTER TABLE urunler ADD COLUMN stoktan_karsilanmaz TEXT;  -- işaretlendiği zaman; boşsa stoktan karşılanabilir
     ALTER TABLE urunler ADD COLUMN stoktan_karsilanmaz_id INTEGER REFERENCES kullanicilar(id);
     """,
+    # 20: stoktaki güç ünitesinin proje takip kartı (10/11/2026): stoktayken basılan form, makine siparişe atanınca
+    # zaman akışında kalır ama siparişin formu sayılmaz (kartta sipariş no yerine STOK yazar)
+    """
+    ALTER TABLE urun_formlari ADD COLUMN stokta INTEGER NOT NULL DEFAULT 0;
+    """,
+    # 21: stok makinesinin elle yazılan numarası (10/11/2026): yüklenen ERP listelerinde olmayan iş emri no'su
+    # ya da ERP'ye geçmeden önce stoğa alınan makinenin stok giriş no'su (elle_no_turu: is_emri / stok_giris).
+    # Makinede ya ERP iş emri (is_emri_id) ya da bu numara olur; ikisi birden olmaz.
+    """
+    ALTER TABLE urunler ADD COLUMN elle_no TEXT;
+    ALTER TABLE urunler ADD COLUMN elle_no_turu TEXT;
+    """,
+    # 22: stok makinesinin opsiyonel ekipmanı (10/11/2026): sipariş talebi olmadığı için ekip proje takip kartı
+    # ekranında işaretler (uzaktan erişim modülü, kablosuz kumanda seti); ürün kodları virgülle
+    """
+    ALTER TABLE urunler ADD COLUMN elle_ekipman TEXT;
+    """,
+    # 23: bakım-onarım güç ünitesinin formları (10/11/2026): servis kartları da form kuralına girer; kural
+    # başladığında Montaj tamamlandı ya da daha ileri aşamadaki (sevk edilmiş) bakım kartlarından form istenmez
+    """
+    UPDATE urunler SET form_muaf = 1 WHERE form_muaf = 0 AND asama IN
+        ('montaj_tamamlandi', 'teste_hazir', 'test', 'temizlik', 'sevke_hazir', 'sevk_edildi', 'stokta')
+        AND kalem_id IN (SELECT id FROM siparis_kalemleri WHERE tur = 'servis');
+    """,
 ]
 
 

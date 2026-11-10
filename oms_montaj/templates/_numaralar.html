@@ -6,3 +6,12 @@
 {% if kaynak in TEYITSIZ %}<span class="teyit-isareti" title="ERP iş emri açıklamasından okundu; teyit edilmedi" aria-label="teyit edilmedi">!</span>{% endif %}
 {%- else %}{{ yoksa }}{% endif %}
 {%- endmacro %}
+
+{# İş emri ya da stok giriş no (numaralar.kayit_numarasi): "İş emri 900101" / "Stok giriş no 123". Ekibin yazdığı,
+   yüklenen ERP listelerinde olmayan iş emrinin yanında küçük bir not görünür (10/11/2026). #}
+{% macro kayit_degeri(kayit, yoksa='İş emri açılmadı', kisa=False) -%}
+{% if kayit -%}
+{{ kayit.kisa if kisa else kayit.ad }} <strong>{{ kayit.no }}</strong>
+{%- if not kayit.erp and kayit.tur == 'is_emri' %} <small class="soluk" title="Ekip yazdı; yüklenen ERP iş emri listelerinde yok">ERP listelerinde yok</small>{% endif %}
+{%- else %}<span class="soluk">{{ yoksa }}</span>{% endif %}
+{%- endmacro %}

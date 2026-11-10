@@ -4,7 +4,7 @@
 {% set s = ozet.siparis %}
 {% from "_durumlar.html" import durum_ozeti_kutusu, eklenti_durumu with context %}
 {% from "_uyarilar.html" import eksik_cipi, imalatta_bilgisi with context %}
-{% from "_numaralar.html" import numara_degeri with context %}
+{% from "_numaralar.html" import numara_degeri, kayit_degeri with context %}
 
 {% macro kalem_rozetleri(satir) -%}
   {% set k = satir.kalem %}
@@ -71,7 +71,7 @@
       {% set numaralar = satir.numaralar[u.id] %}
       <div class="urun-seri">
         {% if u.seri_no %}<span class="bilgi">Seri no <strong>{{ u.seri_no }}</strong></span>{% endif %}
-        <span class="bilgi">{% if satirdaki %}İş emri <a class="duz-baglanti" href="{{ url_for('urunler.is_emri', is_emri_no=satirdaki.is_emri_no) }}"><strong>{{ satirdaki.is_emri_no }}</strong></a>{% else %}<span class="soluk">İş emri açılmadı</span>{% endif %}</span>
+        <span class="bilgi">{% if satirdaki %}İş emri <a class="duz-baglanti" href="{{ url_for('urunler.is_emri', is_emri_no=satirdaki.is_emri_no) }}"><strong>{{ satirdaki.is_emri_no }}</strong></a>{% else %}{{ kayit_degeri(kayit_numarasi(u)) }}{% endif %}</span>
         {% if numaralar | length == 1 %}{% for alan, ad, deger, kaynak in numaralar %}<span class="bilgi">{% if deger %}{{ ad }} {{ numara_degeri(deger, kaynak) }}{% else %}<span class="soluk">{{ ad }} yok</span>{% endif %}</span>{% endfor %}{% endif %}
         {% if k.miktar > 1 %}<span class="bilgi soluk">{{ u.adet_sira }}. adet / {{ k.miktar | sayi }}</span>{% endif %}
         {% if u.stoktan_atama %}<span class="bilgi stokta-bilgi" title="{{ u.stoktan_atama | zaman }}">Stoktan atandı</span>

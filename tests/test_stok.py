@@ -268,3 +268,66 @@ def test_erpde_siparise_baglanan_stok_makinesi(istemci, uygulama, gonder, ekip, 
     assert ie_li["id"] not in {k["id"] for k in stok_kartlari(uygulama)}
     urun = sayfa(istemci, f"/urun/{atanan['id']}")
     assert "ERP'de stok iş emri bu siparişe bağlandı" in urun and "TEST NOT: stok makinesi" in urun
+
+
+def test_is_emri_ya_da_stok_giris_no(istemci, uygulama, gonder, ekip, yukle):  # noqa: F811
+    """Stok makinesine iş emri ya da stok giriş no yazılır (kullanıcı, 10/11/2026). Yüklenen listelerde olmayan iş
+    emri yazıldığı gibi saklanır, ileride bir listede görünürse karta bağlanır; ERP'ye geçmeden önce stoğa alınan
+    makinede stok giriş no yazılır. Makinede ikisinden biri olur; siparişe atanınca numara karta geçer."""
+    hazirla(yukle)
+    svr = stok_kartlari(uygulama, "SVR-50-NF-BSP")[0]
+    kcn = stok_kartlari(uygulama, "KCN-60")[0]
+
+    def kart(urun_id):
+        return sorgu(uygulama, "SELECT * FROM urunler WHERE id = ?", urun_id)[0]
+
+    # Stok giriş no: iş emri yerine; ürün sayfasında, Stok ekranında ve panoda görünür
+    assert "İş emri / stok giriş no" in sayfa(istemci, f"/urun/{svr['id']}")
+    gonder(f"/stok/{svr['id']}/is-emri", tur="stok_giris", is_emri_no=" SG-0001 ")
+    k = kart(svr["id"])
+    assert (k["elle_no"], k["elle_no_turu"], k["is_emri_id"], k["is_emri_elle"]) == ("SG-0001", "stok_giris", None, 1)
+    urun = sayfa(istemci, f"/urun/{svr['id']}")
+    for beklenen in ("Stok giriş no SG-0001 kaydedildi.", "Stok giriş no <strong>SG-0001</strong>",
+                     "Stok giriş no girildi: SG-0001.", "ERP'ye geçmeden önce stoğa alınmış",
+                     '<option value="stok_giris" selected>'):
+        assert beklenen in urun, beklenen
+    assert '<small class="soluk">Stok giriş</small> SG-0001' in sayfa(istemci, "/stok")
+    assert "Stok giriş <strong>SG-0001</strong>" in sutun(sayfa(istemci, "/siparisler"), "sevke_hazir")
+
+    # Listelerde olmayan iş emri yazıldığı gibi saklanır; yanında "ERP listelerinde yok" görünür
+    gonder(f"/stok/{kcn['id']}/is-emri", tur="is_emri", is_emri_no="900 150")
+    k = kart(kcn["id"])
+    assert (k["elle_no"], k["elle_no_turu"], k["is_emri_id"]) == ("900150", "is_emri", None)
+    urun = sayfa(istemci, f"/urun/{kcn['id']}")
+    assert "yazdığınız gibi kaydedildi" in urun and "ERP listelerinde yok" in urun
+    assert "İş emri girildi: 900150 (yüklenen ERP listelerinde yok)." in urun
+    # Listede olan ama başka ürünün iş emri hâlâ kabul edilmez; kartın numarası değişmez
+    gonder(f"/stok/{kcn['id']}/is-emri", tur="is_emri", is_emri_no="900101")
+    assert "başka bir ürünün" in sayfa(istemci, f"/urun/{kcn['id']}") and kart(kcn["id"])["elle_no"] == "900150"
+    # İş emri sonradan yüklenen listede görünür: karta bağlanır, yazılan numara ERP iş emrine dönüşür
+    yeni = ie(900150, 0, "KCN-60", durum="Kapalı", gercek=1, aciklama="Stok için",
+              kapatma=datetime(2026, 8, 1), ilk_giris=datetime(2026, 8, 1))
+    yukle(excel(is_emirleri() + [yeni], basliklar=IE_BASLIKLAR), ad="acik kapali is emirleri.xlsx")
+    k = kart(kcn["id"])
+    assert k["is_emri_id"] and k["elle_no"] is None and k["elle_no_turu"] is None
+    urun = sayfa(istemci, f"/urun/{kcn['id']}")
+    assert "ERP listelerinde yok</small>" not in urun and "İş emri 900150 ERP'de tamamlandı" in urun
+    # Stok giriş no'lu makineye ERP'deki stok iş emri kendiliğinden bağlanmaz
+    assert kart(svr["id"])["elle_no"] == "SG-0001"
+
+    # Siparişe atanınca stok giriş no siparişin ürününe geçer
+    hedef = sorgu(uygulama, "SELECT u.id FROM urunler u JOIN siparis_kalemleri k ON k.id = u.kalem_id"
+                  " WHERE k.urun_kodu = 'SVR-50-NF-BSP'")[0]["id"]
+    gonder(f"/stok/{svr['id']}/ata", hedef=hedef)
+    k = kart(hedef)
+    assert (k["elle_no"], k["elle_no_turu"]) == ("SG-0001", "stok_giris")
+    assert "Stok giriş no <strong>SG-0001</strong>" in sayfa(istemci, "/siparisler/OZ-TS0001")
+    assert "<dt>Stok giriş no</dt><dd>SG-0001</dd>" in sayfa(istemci, f"/urun/{hedef}")
+
+    # Boş numara kaydedilirse numara kalkar
+    pp = next(k for k in stok_kartlari(uygulama, "PP-540C-NF-T4") if not k["is_emri_id"])
+    gonder(f"/stok/{pp['id']}/is-emri", tur="stok_giris", is_emri_no="SG-0002")
+    gonder(f"/stok/{pp['id']}/is-emri", tur="stok_giris", is_emri_no="")
+    k = kart(pp["id"])
+    assert k["elle_no"] is None and k["is_emri_id"] is None
+    assert "İş emri / stok giriş no kaldırıldı." in sayfa(istemci, f"/urun/{pp['id']}")

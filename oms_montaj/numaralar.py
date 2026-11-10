@@ -122,6 +122,25 @@ def urun_numaralari(vt, urun, aile, siparis_id, urun_kodu):
     return sonuc
 
 
+# İş emri ya da stok giriş no (kullanıcı, 10/11/2026): stok makinesinde ERP'deki iş emri, yoksa ekibin yazdığı
+# numara. Yüklenen listelerde olmayan iş emri (örneğin listelerden eski) yazıldığı gibi saklanır; ERP'ye geçmeden
+# önce stoğa alınan makinede iş emri yoktur, stok giriş no yazılır. Makinede ikisinden yalnızca biri olur.
+KAYIT_TURLERI = {"is_emri": "İş emri", "stok_giris": "Stok giriş no"}
+KAYIT_KISA = {"is_emri": "İE", "stok_giris": "Stok giriş"}
+
+
+def kayit_numarasi(urun, ie_no=None):
+    """Makinenin iş emri ya da stok giriş numarası: {"tur", "ad", "kisa", "no", "erp"} ya da None. ie_no: makineye
+    bağlı ERP iş emrinin numarası (önce gelir); yoksa ekibin yazdığı numara (erp=False)."""
+    if ie_no:
+        tur, no, erp = "is_emri", ie_no, True
+    elif urun["elle_no"]:
+        tur, no, erp = urun["elle_no_turu"] if urun["elle_no_turu"] in KAYIT_TURLERI else "is_emri", urun["elle_no"], False
+    else:
+        return None
+    return {"tur": tur, "ad": KAYIT_TURLERI[tur], "kisa": KAYIT_KISA[tur], "no": no, "erp": erp}
+
+
 def numara_metni(deger, kaynak):
     """Asistan için: '0000 111 101 (ERP iş emri açıklamasından; teyit edilmedi)' ya da 'girilmedi'."""
     if not deger:

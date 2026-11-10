@@ -51,7 +51,7 @@
   <h3>{{ AILE_ADLARI.get(aile, aile) }} <span class="sayi-rozeti">{{ liste | length }}</span></h3>
   <div class="kaydirilabilir">
     <table class="tablo stok-tablosu">
-      <thead><tr><th>Ürün kodu</th><th>Depo</th><th>Test</th><th>İş emri</th><th>Numara</th><th>Atanabilir sipariş</th></tr></thead>
+      <thead><tr><th>Ürün kodu</th><th>Depo</th><th>Test</th><th>İş emri / stok giriş</th><th>Numara</th><th>Atanabilir sipariş</th></tr></thead>
       <tbody>
         {% for k in liste %}
         {% set adres = url_for('urunler.sayfa', urun_id=k.id) %}
@@ -61,7 +61,8 @@
           <td><a class="tablo-baglanti" href="{{ adres }}"><strong>{{ k.urun_kodu }}</strong></a>{% if k.stok_kaynagi == 'elle' %} <small class="soluk">elle eklendi</small>{% endif %}</td>
           <td>{% if k.depoda_yok %}<span class="etiket durum-iptal">Raporda görünmüyor</span>{% else %}{{ DEPOLAR.get(k.depo, '—') }}{% endif %}</td>
           <td>{% if test == 'edildi' %}Test edildi{% elif test %}<span class="etiket ud-acik">Test bekliyor</span>{% else %}<span class="etiket ud-acik">Sorulacak</span>{% endif %}</td>
-          <td class="sayisal">{{ k.is_emri_no or '—' }}</td>
+          {% set kayit = kayit_numarasi(k, k.is_emri_no) %}
+          <td class="sayisal">{% if kayit %}{% if kayit.tur == 'stok_giris' %}<small class="soluk">Stok giriş</small> {% endif %}{{ kayit.no }}{% if not kayit.erp and kayit.tur == 'is_emri' %} <small class="soluk" title="Ekip yazdı; yüklenen ERP iş emri listelerinde yok">listelerde yok</small>{% endif %}{% else %}—{% endif %}</td>
           <td>{% for ad, deger, kaynak in numaralar[k.id] %}{% if not loop.first %}<br>{% endif %}<small class="soluk">{{ ad }}</small> {% if deger %}{{ deger }}{% if kaynak in TEYITSIZ %} <span title="ERP'den okundu, teyit edilmedi">!</span>{% endif %}{% else %}<span class="soluk">girilmedi</span>{% endif %}{% else %}—{% endfor %}</td>
           <td>{% if siparisler %}{{ siparisler[0].siparis_no }}{% if siparisler | length > 1 %} +{{ siparisler | length - 1 }}{% endif %} <small class="soluk">atanmadı</small>{% else %}<span class="soluk">—</span>{% endif %}</td>
         </tr>

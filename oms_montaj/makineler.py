@@ -29,6 +29,7 @@ PLANLAMA_SECENEKLERI = [*PLANLAMA_RENKLERI, BELIRTILMEMIS]
 def sevk_edilecek_makineler(vt):
     satirlar = vt.execute(
         "SELECT u.id, u.seri_no, u.asama, u.adet_sira, u.sasi_no, u.motor_seri_no, u.motor2_seri_no, u.is_emri_id,"
+        " u.elle_no, u.elle_no_turu,"
         " k.aile, k.urun_kodu,"
         " k.urun_adi, k.miktar, k.teslim_tarihi, k.erp_urun_durumu, k.bagli_is_emri_no, k.erp_durum, k.erp_genel_durum,"
         " k.siparis_id, s.siparis_no, s.musteri, s.tip, s.erp_listede,"

@@ -25,7 +25,7 @@ from .asamalar import ASAMALAR
 from .erp_aktarim import IPTAL
 from .is_emri_aktarim import is_emri_durumu
 from .makineler import sevk_edilecek_makineler
-from .numaralar import numara_metni, urun_numaralari
+from .numaralar import kayit_numarasi, numara_metni, urun_numaralari
 from .siparisler import (
     DURUMLAR, TIPLER, URUN_DURUMLARI, ozetle, siparis_durum_ozeti, teslim_bilgisi, urun_is_emri_sinifi,
 )
@@ -130,7 +130,7 @@ def siparis_bilgisi(siparis_no: str) -> str:
                 "adet": f'{u["adet_sira"]}/{k["miktar"]:g}', "asama": ASAMALAR[u["asama"]],
                 "is_emri": {"no": ie["is_emri_no"], "durum": is_emri_durumu(ie)[0], "acilis": ie["acilis_tarihi"],
                             "tahmini_bitis": ie["tahmini_bitis"], "kapanis": ie["kapatma_tarihi"],
-                            "stoga_giren": ie["gercek_miktar"], "planlanan": ie["plan_miktar"]} if ie else None,
+                            "stoga_giren": ie["gercek_miktar"], "planlanan": ie["plan_miktar"]} if ie else _elle_numara(u),
                 "is_emri_durumu": URUN_DURUMLARI[urun_is_emri_sinifi(u["asama"], k, ie)],
                 "planlama_birimi_urun_durumu": k["erp_urun_durumu"],
                 "numaralar": {ad: numara_metni(deger, kaynak)
@@ -150,6 +150,16 @@ def siparis_bilgisi(siparis_no: str) -> str:
         "urunler": urunler, "opsiyonel_ekipmanlar": eklentiler, "diger_kalemler": diger,
         "alt_montaj_is_emirleri": alt,
     })
+
+
+def _elle_numara(u):
+    """Ekibin yazdığı iş emri ya da stok giriş no (ERP iş emri yoksa); yoksa None."""
+    kayit = kayit_numarasi(u)
+    if kayit is None:
+        return None
+    if kayit["tur"] == "stok_giris":
+        return f"stok giriş no {kayit['no']} (ERP'ye geçmeden önce stoğa alınmış; iş emri yok)"
+    return f"{kayit['no']} (ekip yazdı; yüklenen ERP listelerinde yok)"
 
 
 def makine_ara(metin: str) -> str:
@@ -194,7 +204,7 @@ def sevk_edilecek_makineler_listesi(sadece_gecikenler: bool = False) -> str:
         ie = {"durum": m["ie_durum"], "gercek_miktar": m["ie_gercek"]} if m["is_emri_no"] else None
         sonuc.append({"siparis_no": m["siparis_no"], "musteri": m["musteri"], "urun": m["urun_kodu"],
                       "seri_no": m["seri_no"], "teslim_tarihi": m["teslim_tarihi"], "asama": ASAMALAR[m["asama"]],
-                      "is_emri": f'{m["is_emri_no"]} ({is_emri_durumu(ie)[0]})' if ie else "açılmadı",
+                      "is_emri": f'{m["is_emri_no"]} ({is_emri_durumu(ie)[0]})' if ie else _elle_numara(m) or "açılmadı",
                       "planlama_birimi_urun_durumu": m["erp_urun_durumu"]})
     return _json({"makine_sayisi": len(sonuc), "makineler": sonuc})
 

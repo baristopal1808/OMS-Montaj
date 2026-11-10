@@ -24,11 +24,12 @@ from .asamalar import ASAMALAR, SIRA
 from .atama import atama_grubu, kisi, varsayilan_atananlar
 from .erp_aktarim import IPTAL, kapali_mi
 from .form_kurallari import FORM_TURLERI, basilan_formlar, forma_tabi_mi
-from .numaralar import TEYITSIZ, urun_numaralari
+from .numaralar import TEYITSIZ, kayit_numarasi, urun_numaralari
 from .siparisler import teslim_bilgisi
 from .stok import DEPOLAR, atanabilecekler, stok_kartlari, stok_sayilari, test_durumu
 from .urun_kurallari import (
-    ANA_URUNLER, PP_EKLENTILERI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER, model, onek, pp_eklentisi_mi, renk, yag_metni,
+    ANA_URUNLER, PP_EKLENTILERI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER, makine_kodu, model, onek, pp_eklentisi_mi, renk,
+    yag_metni,
 )
 from .uyarilar import eksik_ozetleri
 
@@ -228,7 +229,7 @@ def _cene_etiketleri(ceneler):
 
 
 def _eklenti_cumlesi(ad, durum):
-    """Opsiyonel ekipmanın tek cümlelik durumu ve rengi: 'Uzaktan erişim modülü montajı tamamlandı' (yeşil)."""
+    """Opsiyonel ekipmanın tek cümlelik durumu ve rengi: 'Uzaktan Erişim Modülü montajı tamamlandı' (yeşil)."""
     return {
         "montaj_edildi": (f"{ad} montajı tamamlandı", "hazir"),
         "montaj_edilmedi": (f"{ad} geldi, montaj bekliyor", "bekliyor"),
@@ -250,7 +251,7 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
         etiketler.append(_etiket(ASAMA_ETIKETLERI.get(u["asama"], ASAMALAR[u["asama"]]), "asama"))
     if servis:
         etiketler.append(_etiket(BAKIM, "bakim"))
-    motor = motorlar.get(u["urun_kodu"]) if aile == "PP" else None
+    motor = motorlar.get(makine_kodu(u["urun_kodu"])) if aile == "PP" else None  # bakımda "-MNT"siz kodun motoru
     bilgiler = []
     if u["seri_no"] and servis:
         bilgiler.append(("Seri no", u["seri_no"], ""))
@@ -266,9 +267,9 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
             if pp_eklentisi_mi(k["urun_kodu"], u["tip"]) and k["erp_durum"] != IPTAL:
                 ad = PP_EKLENTILERI.get((k["urun_kodu"] or "").upper(), _kisa_ad(k["urun_adi"]))
                 bilgiler.append((None, *_eklenti_cumlesi(ad, k["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU)))
-        if forma_tabi_mi(u):
-            alinan = len(basilan.get(u["id"], set()))
-            bilgiler.append(("Çıktılar", f"{alinan}/{len(FORM_TURLERI)}", "hazir" if alinan == len(FORM_TURLERI) else ""))
+    if forma_tabi_mi(u):  # bakıma gelen güç ünitesinde de (10/11/2026)
+        alinan = len(basilan.get(u["id"], set()))
+        bilgiler.append(("Çıktılar", f"{alinan}/{len(FORM_TURLERI)}", "hazir" if alinan == len(FORM_TURLERI) else ""))
     eksik = eksikler.get(u["is_emri_no"]) if u["is_emri_no"] else None
     return {
         "tur": "urun",
@@ -279,6 +280,7 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
         "asama": u["asama"],
         "motor": motor["model"] if motor else None,
         "is_emri": u["is_emri_no"],
+        "kayit": kayit_numarasi(u, u["is_emri_no"]),  # iş emri ya da stok giriş no
         "etiketler": etiketler,
         "sicak": any(e["sinif"] == "sicak" for e in etiketler),
         "bilgiler": bilgiler,
@@ -320,6 +322,7 @@ def _stok_karti(vt, u, motorlar, atananlar):
         "asama": "stokta",
         "motor": motor["model"] if motor else None,
         "is_emri": u["is_emri_no"],
+        "kayit": kayit_numarasi(u, u["is_emri_no"]),  # iş emri ya da stok giriş no
         "etiketler": etiketler,
         "sicak": False,
         "bilgiler": bilgiler,

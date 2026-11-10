@@ -54,9 +54,9 @@
   {% elif ekip %}{{ asama_menusu(k) }}{% endif %}
   <a class="kart-baslik-baglanti" href="{{ url_for('urunler.sayfa', urun_id=k.id) }}"><strong>{{ k.baslik }}</strong>{% if k.motor %} <span class="kart-motor">· {{ k.motor }}</span>{% endif %}</a>
   {% if k.tur == 'stok' %}
-  <span class="kart-numaralar"><strong>Stok</strong>{% if k.is_emri %} · İE <strong>{{ k.is_emri }}</strong>{% else %} · <span class="soluk">İş emri bilinmiyor</span>{% endif %}</span>
+  <span class="kart-numaralar"><strong>Stok</strong>{% if k.kayit %} · {{ k.kayit.kisa }} <strong>{{ k.kayit.no }}</strong>{% else %} · <span class="soluk">İş emri bilinmiyor</span>{% endif %}</span>
   {% else %}
-  <span class="kart-numaralar"><strong>{{ k.siparis_no }}</strong>{% if k.is_emri %} · İE <strong>{{ k.is_emri }}</strong>{% else %} · <span class="soluk">İş emri açılmadı</span>{% endif %}</span>
+  <span class="kart-numaralar"><strong>{{ k.siparis_no }}</strong>{% if k.kayit %} · {{ k.kayit.kisa }} <strong>{{ k.kayit.no }}</strong>{% else %} · <span class="soluk">İş emri açılmadı</span>{% endif %}</span>
   {% endif %}
   {% if k.bilgiler %}
   <ul class="kart-bilgileri">

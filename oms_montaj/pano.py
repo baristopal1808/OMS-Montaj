@@ -24,6 +24,7 @@ from .asamalar import ASAMALAR, SIRA
 from .atama import atama_grubu, kisi, varsayilan_atananlar
 from .erp_aktarim import IPTAL, kapali_mi
 from .form_kurallari import FORM_TURLERI, basilan_formlar, forma_tabi_mi
+from .kontrol_listesi import kontrol_listeleri, ozet as kontrol_ozeti
 from .numaralar import TEYITSIZ, kayit_numarasi, urun_numaralari
 from .siparisler import teslim_bilgisi
 from .stok import DEPOLAR, atanabilecekler, stok_kartlari, stok_sayilari, test_durumu
@@ -144,6 +145,8 @@ def pano_verisi(vt, ozetler, secim):
     basilan = basilan_formlar(vt)
     ie_nolari = [u["is_emri_no"] for liste in urunler.values() for u in liste if u["is_emri_no"]]
     eksikler = eksik_ozetleri(vt, ie_nolari) if ie_nolari else {}
+    stoklar = stok_kartlari(vt)
+    kontroller = kontrol_listeleri(vt, [u for liste in urunler.values() for u in liste] + list(stoklar))
     bugun = date.today().isoformat()
     sevk_siniri = (date.today() - timedelta(days=SEVK_GUN)).isoformat()
 
@@ -170,7 +173,7 @@ def pano_verisi(vt, ozetler, secim):
                 siparis_bekleyenler.append(u)
                 continue
             kart = _urun_karti(vt, u, ozet, bagli.get(u["id"], {}), motorlar, basilan, eksikler, atananlar,
-                               kalemler[siparis_id])
+                               kalemler[siparis_id], kontroller.get(u["id"]))
             kartlar[SUTUN.get(u["asama"], "malzeme")].append(kart)
         if ozet and (siparis_bekleyenler or not any(
                 u["tur"] == "servis" or u["aile"] in ANA_URUNLER or u["aile"] in YARDIMCI for u in liste)):
@@ -180,9 +183,9 @@ def pano_verisi(vt, ozetler, secim):
         if siparis_id not in urunler:
             kartlar["siparisler"].append(_siparis_karti(ozet, [], [], atananlar, stokta))
     # Stoktaki makineler (çene ve kiriş Stok ekranında)
-    for u in stok_kartlari(vt):
+    for u in stoklar:
         if u["aile"] in ANA_URUNLER:
-            kartlar["sevke_hazir"].append(_stok_karti(vt, u, motorlar, atananlar))
+            kartlar["sevke_hazir"].append(_stok_karti(vt, u, motorlar, atananlar, kontroller.get(u["id"])))
 
     secili = set(secim.get("etiketler") or ())
     kisi = secim.get("kisi")
@@ -237,7 +240,18 @@ def _eklenti_cumlesi(ad, durum):
     }.get(durum, (f"{ad} için sipariş talebi açılacak", "uyari"))
 
 
-def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kalemler):
+def _kontrol_satirlari(kontrol):
+    """Kartın kontrol listesi satırları: 'Kontrol 3/5' (tamamsa yeşil) ve eksper bekleniyorsa tek cümle."""
+    if not kontrol:
+        return []
+    tamam, toplam, eksper = kontrol_ozeti(kontrol)
+    satirlar = [("Kontrol", f"{tamam}/{toplam}", "hazir" if tamam == toplam else "")] if toplam else []
+    if eksper:
+        satirlar.append((None, "Motor eksperi bekleniyor", "uyari-sari"))
+    return satirlar
+
+
+def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kalemler, kontrol=None):
     """Ürün kartı. Bilgiler her kartta aynı sırada ve tek satırda: [(ad ya da None, değer, sınıf)]; adı
     olmayan satır tek cümledir (opsiyonel ekipman)."""
     aile = u["aile"]
@@ -270,6 +284,7 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
     if forma_tabi_mi(u):  # bakıma gelen güç ünitesinde de (10/11/2026)
         alinan = len(basilan.get(u["id"], set()))
         bilgiler.append(("Çıktılar", f"{alinan}/{len(FORM_TURLERI)}", "hazir" if alinan == len(FORM_TURLERI) else ""))
+    bilgiler += _kontrol_satirlari(kontrol)
     eksik = eksikler.get(u["is_emri_no"]) if u["is_emri_no"] else None
     return {
         "tur": "urun",
@@ -292,7 +307,7 @@ def _urun_karti(vt, u, ozet, bagli, motorlar, basilan, eksikler, atananlar, kale
     }
 
 
-def _stok_karti(vt, u, motorlar, atananlar):
+def _stok_karti(vt, u, motorlar, atananlar, kontrol=None):
     """Stoktaki makinenin kartı: etiketleri (model, Stok, test durumu), numaraları, deposu ve atanabilir siparişler."""
     aile = u["aile"]
     etiketler = [_etiket(model(u["urun_kodu"]), "aile", aile), _etiket(STOK, "stok")]
@@ -312,6 +327,7 @@ def _stok_karti(vt, u, motorlar, atananlar):
     if atanabilir:
         nolar = list(dict.fromkeys(b["siparis_no"] for b in atanabilir))
         bilgiler.append(("Atanabilir", ", ".join(nolar[:2]) + (f" +{len(nolar) - 2}" if len(nolar) > 2 else ""), ""))
+    bilgiler += _kontrol_satirlari(kontrol)
     motor = motorlar.get(u["urun_kodu"]) if aile == "PP" else None
     return {
         "tur": "stok",

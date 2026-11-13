@@ -405,6 +405,23 @@ GOCLER = [
         ('montaj_tamamlandi', 'teste_hazir', 'test', 'temizlik', 'sevke_hazir', 'sevk_edildi', 'stokta')
         AND kalem_id IN (SELECT id FROM siparis_kalemleri WHERE tur = 'servis');
     """,
+    # 24: kontrol listesi (11/11/2026): her işaret ve geri alma bir satır, maddenin son satırı geçerli. Kontrol
+    # listesi tamamlanmadan ürün Sevke hazır'a geçmez; kural başladığında Sevke hazır ya da Sevk edildi aşamasındaki
+    # ürünler muaftır
+    """
+    CREATE TABLE kontrol_isaretleri (
+        id INTEGER PRIMARY KEY,
+        urun_id INTEGER NOT NULL REFERENCES urunler(id),
+        madde TEXT NOT NULL,      -- motor_acilisi, metal_etiket, pompa_montaji, eksper, kabin_seri_no
+        deger TEXT,               -- 'yapildi'; eksper: yapilacak / yapilmayacak / yapildi; kabin seri no; NULL: geri alındı
+        tarih TEXT,               -- işin yapıldığı gün (motor açılışı, eksper), YYYY-AA-GG
+        zaman TEXT NOT NULL,
+        kullanici_id INTEGER REFERENCES kullanicilar(id)
+    );
+    CREATE INDEX kontrol_isaretleri_urun ON kontrol_isaretleri (urun_id, madde);
+    ALTER TABLE urunler ADD COLUMN kontrol_muaf INTEGER NOT NULL DEFAULT 0;
+    UPDATE urunler SET kontrol_muaf = 1 WHERE asama IN ('sevke_hazir', 'sevk_edildi');
+    """,
 ]
 
 

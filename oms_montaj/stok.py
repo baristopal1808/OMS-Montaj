@@ -167,16 +167,17 @@ def _siparisteki_stoklar(vt):
 
 
 def bilgi_var_mi(vt, kart):
-    """Ekip karta bir bilgi girdi mi (numara, test cevabı, iş emri, not, basılan proje takip kartı)? Böyle kart
-    kendiliğinden silinmez."""
+    """Ekip karta bir bilgi girdi mi (numara, test cevabı, iş emri, not, basılan proje takip kartı, kontrol
+    listesi işareti)? Böyle kart kendiliğinden silinmez."""
     if kart["stok_kaynagi"] == "elle" or kart["is_emri_elle"] or kart["test_durumu"]:
         return True
     if any(kart[a] for a in ("motor_seri_no", "motor2_seri_no", "sasi_no")):
         return True
     return vt.execute(
         "SELECT 1 FROM urun_olaylari WHERE urun_id = ? AND kullanici_id IS NOT NULL"
-        " UNION ALL SELECT 1 FROM urun_formlari WHERE urun_id = ? LIMIT 1",
-        (kart["id"], kart["id"]),
+        " UNION ALL SELECT 1 FROM urun_formlari WHERE urun_id = ?"
+        " UNION ALL SELECT 1 FROM kontrol_isaretleri WHERE urun_id = ? LIMIT 1",
+        (kart["id"], kart["id"], kart["id"]),
     ).fetchone() is not None
 
 
@@ -190,7 +191,7 @@ def _kart_ac(vt, kod, adi, aile, depo, kaynak, test=None, kullanici_id=None):
 
 def _karti_sil(vt, urun_id):
     """Ekibin bilgi girmediği stok kartını siler (ERP yüklemesinin olayları dahil)."""
-    for tablo in ("urun_olaylari", "numara_degisiklikleri", "imalatta_cevaplari", "urun_formlari"):
+    for tablo in ("urun_olaylari", "numara_degisiklikleri", "imalatta_cevaplari", "urun_formlari", "kontrol_isaretleri"):
         vt.execute(f"DELETE FROM {tablo} WHERE urun_id = ?", (urun_id,))
     vt.execute("DELETE FROM urunler WHERE id = ?", (urun_id,))
 
@@ -365,12 +366,12 @@ def esleme_ozeti(sayac):
 # Siparişe atama
 
 def stoktan_ata(vt, stok, hedef, kullanici_id, tekrar_test=True):
-    """Stok kartını siparişin ürün kartına atar: numaralar, iş emri, test durumu, notlar ve zaman akışı hedefe
-    geçer, stok kartı silinir. Tekrar test edilecekse Teste hazır, test gerekmiyorsa Temizlik aşamasından devam
-    eder. kullanici_id boşsa atamayı ERP yaptı (stok iş emri siparişe bağlandı)."""
+    """Stok kartını siparişin ürün kartına atar: numaralar, iş emri, test durumu, kontrol listesi, notlar ve zaman
+    akışı hedefe geçer, stok kartı silinir. Tekrar test edilecekse Teste hazır, test gerekmiyorsa Temizlik
+    aşamasından devam eder. kullanici_id boşsa atamayı ERP yaptı (stok iş emri siparişe bağlandı)."""
     test = test_durumu(stok)
     yeni = ileri(hedef["asama"], "teste_hazir" if tekrar_test else "temizlik")
-    for tablo in ("urun_olaylari", "numara_degisiklikleri", "urun_formlari"):
+    for tablo in ("urun_olaylari", "numara_degisiklikleri", "urun_formlari", "kontrol_isaretleri"):
         vt.execute(f"UPDATE {tablo} SET urun_id = ? WHERE urun_id = ?", (hedef["id"], stok["id"]))
     vt.execute("UPDATE OR IGNORE imalatta_cevaplari SET urun_id = ? WHERE urun_id = ?", (hedef["id"], stok["id"]))
     vt.execute("DELETE FROM imalatta_cevaplari WHERE urun_id = ?", (stok["id"],))

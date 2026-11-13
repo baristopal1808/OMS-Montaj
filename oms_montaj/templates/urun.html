@@ -254,6 +254,7 @@
     </ol>
     {% if formlar and formlar[1] %}<p class="uyari-metni">İş emri ERP'de ilerledi; çıktılar alınınca ürün kendiliğinden "{{ ASAMALAR[formlar[1]] }}" aşamasına geçecek.</p>{% endif %}
     {% if formlar and motor_eksik %}<p class="uyari-metni">Çıktı almak için önce {{ motor_eksik | join(', ') | lower }} <a href="#numaralar">teyit edilmeli</a>.</p>{% endif %}
+    {% if kontrol_kurali and kontrol_eksik and asama_sirasi['teste_hazir'] <= asama_sirasi[urun.asama] < asama_sirasi[KURAL_ASAMASI] %}<p class="uyari-metni">Sevke hazır'a geçmek için <a href="#kontrol">kontrol listesi</a> tamamlanmalı: {{ eksik_metni(kontrol_eksik) }}.</p>{% endif %}
     {% if g.kullanici.rol == 'ekip' %}
     <form method="post" action="{{ url_for('urunler.asama', urun_id=urun.id) }}" class="form asama-formu" autocomplete="off" data-asama-formu>
       <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
@@ -323,6 +324,90 @@
 </aside>
 
 <div class="urun-govde">
+{# Kontrol listesi (kontrol_listesi.py): tamamlanmadan ürün Sevke hazır'a geçmez; motor eksperi kurala girmez.
+   Pompa montajı ERP'nin pompa kırılımından da tamamlanır; opsiyonel ekipmanın montajı kendi bölümünden gelir. #}
+{% macro geri_al(madde, yazi='Geri al') -%}
+<form method="post" action="{{ url_for('urunler.kontrol', urun_id=urun.id, madde=madde) }}" class="kontrol-geri">
+  <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="geri_al">
+  <button type="submit" class="baglanti-dugmesi">{{ yazi }}</button>
+</form>
+{%- endmacro %}
+{% macro kim(i) -%}
+<span class="soluk">{% if i.tarih %}Yapıldığı gün {{ i.tarih | tarih }} · {% endif %}{{ i.ad_soyad or '' }}, {{ i.zaman | zaman }}</span>
+{%- endmacro %}
+{% macro gun_formu(madde, islem, dugme) -%}
+<form method="post" action="{{ url_for('urunler.kontrol', urun_id=urun.id, madde=madde) }}" class="kontrol-formu">
+  <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="{{ islem }}">
+  <label class="alan"><span>Yapıldığı gün</span><input type="date" name="tarih" value="{{ bugun }}" max="{{ bugun }}" required></label>
+  <button type="submit" class="dugme kucuk-dugme">{{ dugme }}</button>
+</form>
+{%- endmacro %}
+{% if kontrol %}
+<section class="bolum" id="kontrol">
+  <h2>Kontrol listesi</h2>
+  <div class="kutu kontrol-kutusu">
+    {% if not kontrol_eksik %}<p class="kontrol-tamam">{{ simge('onay') }} Kontrol listesi tamamlandı.</p>
+    {% elif kontrol_kurali %}<p class="uyari-metni">Sevke hazır'a geçmeden önce tamamlanmalı: {{ eksik_metni(kontrol_eksik) }}.</p>
+    {% else %}<p class="soluk kucuk">Bu ürün kural başlamadan Sevke hazır'a geçtiği için liste aşamaya bağlı değil.</p>{% endif %}
+    <ul class="kontrol-listesi">
+      {% for m in kontrol %}
+      {% set ekip = g.kullanici.rol == 'ekip' %}
+      <li class="kontrol-maddesi{% if m.tamam %} tamam{% elif m.madde == 'eksper' and m.durum == 'yapilacak' %} bekliyor{% endif %}">
+        <span class="kontrol-isareti" aria-hidden="true">{% if m.tamam %}{{ simge('onay') }}{% endif %}</span>
+        <div class="kontrol-govde">
+          {% if m.madde == 'ekipman' %}
+          <div class="kontrol-ust"><strong>{{ m.ad }}</strong> <span class="etiket ek-{{ m.kalem.montaj_durumu or 'talep_acilacak' }}">{{ m.durum }}</span></div>
+          <p class="soluk kucuk">Montaj durumu <a href="#ekipman">opsiyonel ekipmanlar</a> bölümünden değişir.</p>
+
+          {% elif m.madde == 'eksper' %}
+          <div class="kontrol-ust"><strong>{{ m.ad }}</strong>
+            {% if m.durum %}<span class="etiket{% if m.durum == 'yapilacak' %} ek-talep_acildi{% elif m.durum == 'yapildi' %} ek-montaj_edildi{% endif %}">{{ EKSPER_DURUMLARI[m.durum] }}</span>{% endif %}
+            <small class="soluk">aşamaya bağlı değil; sonradan da yapılabilir</small></div>
+          {% if m.isaret %}<div class="kontrol-kim">{{ kim(m.isaret) }}{% if ekip %} · {{ geri_al('eksper', 'Cevabı değiştir') }}{% endif %}</div>{% endif %}
+          {% if ekip and not m.durum %}
+          <form method="post" action="{{ url_for('urunler.kontrol', urun_id=urun.id, madde='eksper') }}" class="kontrol-formu">
+            <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+            <span>Eksper yapılacak mı?</span>
+            <button type="submit" name="islem" value="yapilacak" class="dugme kucuk-dugme ikincil">Yapılacak</button>
+            <button type="submit" name="islem" value="yapilmayacak" class="dugme kucuk-dugme ikincil">Yapılmayacak</button>
+          </form>
+          {% elif ekip and m.durum == 'yapilacak' %}{{ gun_formu('eksper', 'yapildi', 'Eksper yapıldı') }}{% endif %}
+
+          {% else %}
+          <div class="kontrol-ust"><strong>{{ m.ad }}</strong>
+            {% if m.erp %}<small class="{{ 'yesil-yazi' if m.erp[0] == m.erp[1] else 'soluk' }}">ERP: {{ m.erp[0] }}/{{ m.erp[1] }} pompa kırılımı stoğa girdi</small>{% endif %}</div>
+          {% if m.isaret %}<div class="kontrol-kim">{{ kim(m.isaret) }}{% if ekip %} · {{ geri_al(m.madde) }}{% endif %}</div>
+          {% elif m.tamam %}<p class="kontrol-kim soluk">ERP'de tamamlandı; işaretlemeye gerek yok.</p>
+          {% elif ekip %}
+          {% if m.madde == 'motor_acilisi' %}{{ gun_formu('motor_acilisi', 'yapildi', 'Motor açılışı yapıldı') }}
+          {% else %}
+          <form method="post" action="{{ url_for('urunler.kontrol', urun_id=urun.id, madde=m.madde) }}" class="kontrol-formu">
+            <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="yapildi">
+            <button type="submit" class="dugme kucuk-dugme">{{ 'Tamamlandı' if m.madde == 'pompa_montaji' else 'Yapıştırıldı' }}</button>
+          </form>
+          {% endif %}
+          {% else %}<p class="kontrol-kim soluk">Yapılmadı</p>{% endif %}
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if kabin_alani %}
+    <div class="kontrol-bilgi">
+      <span class="numara-ad">{{ KABIN_ADI }}</span>
+      {% if g.kullanici.rol == 'ekip' %}
+      <form method="post" action="{{ url_for('urunler.kontrol', urun_id=urun.id, madde='kabin_seri_no') }}" class="kontrol-formu">
+        <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+        <input type="text" name="deger" value="{{ kabin.deger if kabin else '' }}" autocomplete="off" aria-label="{{ KABIN_ADI }}" placeholder="Müşteri verdiyse">
+        <button type="submit" class="dugme kucuk-dugme ikincil">Kaydet</button>
+      </form>
+      {% else %}<span>{{ kabin.deger if kabin else 'yazılmadı' }}</span>{% endif %}
+      {% if kabin %}<small class="soluk">{{ kabin.ad_soyad or '' }}, {{ kabin.zaman | zaman }}</small>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 {# Makine numaraları kilitlidir: ERP'den okunan ya da bir kez girilen numara düz yazıdır; değiştirmek için
    "Değiştir" açılır, yeni numara ve sebep yazılır. Boş numara bir kez girilir, sonra kilitlenir. ERP'den okunan
    motor seri no "!" ile görünür; kutucuk işaretlenip teyit edilince nihai numara olur. #}
@@ -457,7 +542,7 @@
 {% if eksik %}{{ uyari_bolumleri(ie.is_emri_no, eksik_ozet, eksik, eksik_zamani, urun.aile, request.path, request.args.get('acik')) }}{% endif %}
 
 {% if eklentiler %}
-<section class="bolum">
+<section class="bolum" id="ekipman">
   <h2>Güç ünitesinin opsiyonel ekipmanları</h2>
   <ul class="urun-listesi">
     {% for k in eklentiler %}

@@ -7,7 +7,8 @@ düzeltebilir: önceki hâli not_duzeltmeleri tablosunda saklanır, not silinmez
 Hesaplananlar (saklanmaz, her açılışta ERP verisinden ve uygulamanın öbür kayıtlarından okunur; böylece geçmişi
 de ERP'deki tarihleriyle görünür): sipariş talebinin onayı, iş emrinin açılışı, ilk stok girişi ve tamamlanması,
 sipariş talebi revizyonları, ERP'deki sevk, makine numarası girişleri ve teyitleri, eksik malzeme ve "İmalatta"
-cevapları, yarı mamullerin "Hazır" işaretleri, opsiyonel ekipmanın montaj durumu ve basılan montaj formları.
+cevapları, yarı mamullerin "Hazır" işaretleri, opsiyonel ekipmanın montaj durumu, kontrol listesinin işaretleri
+ve basılan montaj formları.
 """
 
 from collections import defaultdict
@@ -18,6 +19,7 @@ from .bicim import tarih
 from .erp_aktarim import REVIZYON_ADLARI
 from .form_kurallari import FORM_TURLERI
 from .is_emri_aktarim import KAPALI
+from .kontrol_listesi import akis_kayitlari
 from .numaralar import TEYIT
 from .urun_kurallari import EKLENTI_DURUMLARI, VARSAYILAN_EKLENTI_DURUMU, pp_eklentisi_mi
 from .uyarilar import EKSIK_CEVAPLARI, IMALATTA_CEVAPLARI
@@ -170,6 +172,10 @@ def akis(vt, urun, numara_adlari):
             if pp_eklentisi_mi(k["urun_kodu"], urun["tip"]):
                 durum = EKLENTI_DURUMLARI[k["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU]
                 ogeler.append(_oge(k["montaj_degisme"], "cevap", f"Opsiyonel ekipman {k['urun_kodu']}: {durum}", k["ad_soyad"] or ""))
+
+    # Kontrol listesi: işaretler, geri almalar, motor eksperinin cevabı, müşterinin kabin seri no'su
+    for zaman, baslik, kim, metin in akis_kayitlari(vt, urun["id"]):
+        ogeler.append(_oge(zaman, "kontrol", baslik, kim, metin))
 
     # Basılan montaj formları (PDF'iyle); siparişe atanan stok makinesinde stoktayken basılanlar ayrıca belirtilir
     for f in vt.execute(

@@ -6,8 +6,8 @@ Sayfada makinenin bilgileri, numaraları (şasi no, motor seri no; kilitli), iş
 (alt montajlar: tamamlanan ve bekleyen) görünür. ERP'den okunan motor seri no teyit edilene kadar "!" ile
 görünür; teyit edilince nihai numara olur. İş emrinin eksik malzemeleri ve yarı mamulleri (kırılıma tıklayınca
 açılır) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı da burada görünür ve cevaplanır. Ekip aşamayı
-burada değiştirir ve not yazar; kartın zaman akışı (zaman_akisi.py) da burada görünür. Kontrol listesi ve
-fotoğraflar 4. adımın sonraki parçalarında.
+burada değiştirir, not yazar ve kontrol listesini (kontrol_listesi.py) işaretler; kartın zaman akışı
+(zaman_akisi.py) da burada görünür. Fotoğraflar 4. adımın sonraki parçasında.
 
 İş emri sayfası bir ürüne dağıtılmamış iş emirleri (alt montaj, yarı mamul, stok) için de aynı bilgileri verir.
 """
@@ -22,6 +22,11 @@ from .erp_aktarim import IPTAL, kapali_mi
 from .form_kurallari import FORM_TURLERI, basilan_formlar, eksik_formlar, form_durumlari, forma_tabi_mi, formlu_mu
 from .is_emri_aktarim import BAGLANTILAR, is_emri_durumu, kirilim_durumu
 from .kimlik import ekip_gerekli, guvenli_adres
+from .kontrol_listesi import (
+    EKSPER_DURUMLARI, GUNLU, ISARETLENEN, KABIN, KABIN_ADI, KISA_ADLAR, KURAL_ASAMASI, YAPILDI, eksik_maddeler,
+    eksik_metni, gecis_engeli, gun, isaretle, kabin_alani_var_mi, kontrol_listeleri, kurala_tabi_mi, son_isaretler,
+)
+from .kontrol_listesi import sablon as kontrol_sablonu
 from .numaralar import (
     KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, kayit_numarasi, numara_alanlari, numara_degistir, numara_gecmisi,
     numara_yaz, sablon, urun_numaralari,
@@ -102,6 +107,7 @@ def sayfa(urun_id):
         )
         if pp_eklentisi_mi(k["urun_kodu"], urun["tip"])
     ] if urun["aile"] == "PP" else []
+    kontrol = kontrol_listeleri(vt, [urun]).get(urun_id)
     return render_template(
         "urun.html",
         urun=urun,
@@ -142,6 +148,18 @@ def sayfa(urun_id):
         karsilanmaz=karsilanmaz_kaydi(vt, urun_id) if not stokta else None,  # "stoktan karşılanmayacak" işareti
         CIKIS_SEBEPLERI=CIKIS_SEBEPLERI,
         forma_tabi=forma_tabi_mi(urun),
+        # Kontrol listesi: tamamlanmadan Sevke hazır'a geçilmez (kurala tabi değilse yalnızca bilgi)
+        kontrol=kontrol,
+        kontrol_eksik=eksik_maddeler(kontrol),
+        kontrol_kurali=kurala_tabi_mi(urun),
+        kabin=son_isaretler(vt, [urun_id]).get(urun_id, {}).get(KABIN) if kabin_alani_var_mi(urun) else None,
+        kabin_alani=kabin_alani_var_mi(urun),
+        bugun=date.today().isoformat(),
+        EKSPER_DURUMLARI=EKSPER_DURUMLARI,
+        KISA_ADLAR=KISA_ADLAR,
+        KABIN_ADI=KABIN_ADI,
+        KURAL_ASAMASI=KURAL_ASAMASI,
+        eksik_metni=eksik_metni,
         motor_eksik=[ad for alan, ad, deger, kaynak in numaralar if alan in MOTOR_ALANLARI and (not deger or kaynak in TEYITSIZ)],
         yeni_form=request.args.get("form", type=int),
         AILE_ADLARI=AILE_ADLARI,
@@ -177,6 +195,9 @@ def asama(urun_id):
     ):
         flash(f"Aşama değişmedi: \"{ASAMALAR[yeni]}\" aşamasına geçmeden önce şu çıktılar alınmalı (aşama kutusundaki düğmeler): "
               f"{', '.join(FORM_TURLERI[t].lower() for t in eksik)}.")
+    elif engel := gecis_engeli(vt, urun, yeni):
+        flash(f"Aşama değişmedi: \"{ASAMALAR[yeni]}\" aşamasına geçmeden önce kontrol listesi tamamlanmalı: "
+              f"{eksik_metni(engel)}.")
     else:
         with vt:
             asama_degistir(vt, urun_id, urun["asama"], yeni, metin, g.kullanici["id"])
@@ -272,6 +293,58 @@ def numara_teyit(urun_id, alan):
             numara_degistir(vt, urun_id, alan, None, deger, TEYIT, g.kullanici["id"])
         flash(f"{ad} {deger} teyit edildi; artık nihai numara.")
     return redirect(url_for(".sayfa", urun_id=urun_id) + "#numaralar")
+
+
+@bp.route("/urun/<int:urun_id>/kontrol/<madde>", methods=["POST"])
+@ekip_gerekli
+def kontrol(urun_id, madde):
+    """Kontrol listesinin bir maddesini işaretler ya da işaretini geri alır (islem=geri_al). Motor açılışında ve
+    eksperin "yapıldı" cevabında yapıldığı gün sorulur. Eksper: yapilacak / yapilmayacak / yapildi. Müşterinin
+    kabin seri no'su: deger (boşsa silinir). Her işaret zaman akışına yazılır."""
+    vt = baglanti()
+    urun = urun_kaydi(vt, urun_id)
+    if urun is None:
+        abort(404)
+    maddeler = {m for m in kontrol_sablonu(urun) if m != "ekipman"} | ({KABIN} if kabin_alani_var_mi(urun) else set())
+    if madde not in maddeler:
+        abort(404)
+    simdiki = son_isaretler(vt, [urun_id]).get(urun_id, {}).get(madde)
+    islem = request.form.get("islem")
+    ad = KISA_ADLAR.get(madde, KABIN_ADI)
+    ad = ad[0].upper() + ad[1:]
+    yeni, gun_, mesaj = None, None, None
+    if madde == KABIN:
+        yeni = " ".join((request.form.get("deger") or "").split()) or None
+        if yeni == (simdiki["deger"] if simdiki else None):
+            flash(f"{KABIN_ADI} değişmedi.")
+            yeni = False
+        else:
+            mesaj = f"{KABIN_ADI} kaydedildi: {yeni}." if yeni else f"{KABIN_ADI} silindi."
+    elif islem == "geri_al":
+        if simdiki is None:
+            flash(f"{ad} zaten işaretli değil.")
+            yeni = False
+        else:
+            mesaj = f"{ad}: işaret geri alındı." if madde != "eksper" else "Motor eksperinin cevabı geri alındı."
+    elif (madde in ISARETLENEN and islem == YAPILDI) or (madde == "eksper" and islem in EKSPER_DURUMLARI):
+        yeni = islem
+        if simdiki and simdiki["deger"] == yeni:
+            flash(f"{ad} zaten işaretli.")
+            yeni = False
+        elif madde in GUNLU or (madde == "eksper" and yeni == YAPILDI):
+            gun_ = gun(request.form.get("tarih"))
+            if gun_ is None:
+                flash(f"{ad} kaydedilmedi: yapıldığı günü yazın (bugünden ileri bir gün olamaz).")
+                yeni = False
+        if yeni:
+            mesaj = f"{ad}: {EKSPER_DURUMLARI[yeni].lower()}." if madde == "eksper" else f"{ad} işaretlendi."
+    else:
+        abort(400)
+    if yeni is not False:
+        with vt:
+            isaretle(vt, urun_id, madde, yeni, gun_, g.kullanici["id"])
+        flash(mesaj)
+    return redirect(url_for(".sayfa", urun_id=urun_id) + "#kontrol")
 
 
 @bp.route("/is-emri/<is_emri_no>")

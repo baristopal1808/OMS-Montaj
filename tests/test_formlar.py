@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook, load_workbook
 from test_is_emirleri import IE_BASLIKLAR, ie, is_emirleri
+from test_kontrol_listesi import kontrolu_tamamla
 from test_siparisler import ekip, excel, makine_siparisi, satir, yukle  # noqa: F401 (pytest fikstürleri)
 from test_stok import stok_kartlari
 from test_urunler import motorlu_is_emirleri, urun_id, yuklenmis
@@ -173,6 +174,7 @@ def test_formlar_ve_asama_kurali(istemci, uygulama, gonder, ekip, yukle, formlar
     _, s = son_form(uygulama, tmp_path)
     assert [s[h].value for h in ("D5", "Q5", "D7", "M7", "T7", "AA7", "M9")] == [
         "Güç Ünitesi", "04/11/2026", "OZ-TS0001", "PP-536-NF", "0000 111 101", "VOLVO TEST-MOTOR-1", "Yok"]
+    kontrolu_tamamla(gonder, pp)  # kontrol listesi de tamamlanmalı (test_kontrol_listesi.py)
     gonder(f"/urun/{pp}/asama", asama="sevke_hazir")
     assert asama(uygulama, pp) == "sevke_hazir"
     # PDF açılır; geri alırken form istenmez
@@ -339,6 +341,7 @@ def test_bakim_kartlarinin_muafiyeti():
 def test_form_kurali_vibroda_ve_muafta_yok(istemci, uygulama, gonder, ekip, yukle, formlar_hazir):  # noqa: F811
     yuklenmis(yukle)
     pp, svr = urun_id(uygulama, "PP-536-NF"), urun_id(uygulama, "SVR-50-NF-BSP")
+    kontrolu_tamamla(gonder, svr, ("metal_etiket",))  # kontrol listesi kuralı (test_kontrol_listesi.py)
     gonder(f"/urun/{svr}/asama", asama="sevke_hazir")
     assert asama(uygulama, svr) == "sevke_hazir"
     assert istemci.get(f"/urun/{svr}/form/kodlama").status_code == 404  # formlar yalnızca güç ünitesinde
@@ -346,7 +349,7 @@ def test_form_kurali_vibroda_ve_muafta_yok(istemci, uygulama, gonder, ekip, yukl
     with uygulama.app_context():
         vt = baglanti()
         with vt:
-            vt.execute("UPDATE urunler SET form_muaf = 1 WHERE id = ?", (pp,))
+            vt.execute("UPDATE urunler SET form_muaf = 1, kontrol_muaf = 1 WHERE id = ?", (pp,))
     gonder(f"/urun/{pp}/asama", asama="sevke_hazir")
     assert asama(uygulama, pp) == "sevke_hazir"
     assert "çıktılar isteğe bağlı" in sayfa(istemci, f"/urun/{pp}")

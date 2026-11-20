@@ -323,6 +323,19 @@ def yedek_parca_siparisi(**degisen):
             satir(2, "HZ0001", "Nakliye", siparis_no="OZ-TS0004", detay="YEDEK P.", **degisen)]
 
 
+def test_ozette_yedek_parca_ayri_tabloda(istemci, ekip, yukle):
+    # Kullanıcı, 19/11/2026: teslimi geçen ve yaklaşan siparişler makine ve yedek parça diye ayrı tablolarda
+    yukle(excel(gecikmis_ve_ileri_siparis() + yedek_parca_siparisi(teslim=datetime(2020, 2, 1))
+                + [satir(1, "OZ00002", "TEST PARCA", siparis_no="OZ-TS0005", detay="YEDEK P.")]))
+    sayfa = istemci.get("/").get_data(as_text=True)
+    makine = sayfa[sayfa.index("Makine · teslimi geçen"):sayfa.index("Yedek parça · teslimi geçen")]
+    yedek = sayfa[sayfa.index("Yedek parça · teslimi geçen"):]
+    assert "OZ-TS0003" in makine and "OZ-TS0004" not in makine
+    assert "OZ-TS0004" in yedek and "OZ-TS0003" not in yedek and "OZ-TS0005" not in yedek  # teslimi uzak
+    assert '<td class="sayisal">1</td>' in yedek  # nakliye satırı sayılmaz
+    assert '<span class="gosterge-deger">2</span>' in sayfa  # açık sipariş sayısına yedek parça girmez
+
+
 def test_yedek_parca_kendi_ekraninda(istemci, ekip, yukle):
     yukle(excel(makine_siparisi() + yedek_parca_siparisi()))
     ekran = istemci.get("/yedek-parca").get_data(as_text=True)

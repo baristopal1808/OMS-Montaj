@@ -1,6 +1,6 @@
 {% extends "taban.html" %}
 {% block baslik %}Özet{% endblock %}
-{% block icerik_sinifi %}genis{% endblock %}
+{% block icerik_sinifi %}tam{% endblock %}
 {% block icerik %}
 {% from "_grafik.html" import halka_grafigi with context %}
 <div class="baslik-satiri">
@@ -18,7 +18,7 @@
 {% set logo = logo_adresi() %}
 {% set logo_stili = ("--logo: url('" ~ logo ~ "')") if logo else "" %}
 <div class="gosterge-satiri">
-  <a class="gosterge{% if logo %} logolu{% endif %}" style="{{ logo_stili }}" href="{{ url_for('siparisler.liste') }}">
+  <a class="gosterge{% if logo %} logolu{% endif %}" style="{{ logo_stili }}" href="{{ url_for('siparisler.liste', durum='acik') }}">
     <span class="gosterge-ad">Açık sipariş</span>
     <span class="gosterge-deger">{{ sayilar.acik }}</span>
     <span class="gosterge-alt">onaylı, sevk edilmemiş</span>
@@ -83,10 +83,12 @@
   </section>
 </div>
 
+{# Teslimi geçen ve yaklaşan siparişler: solda makine, sağda yedek parça (kullanıcı, 19/11/2026) #}
+<div class="ozet-tablolari">
 <section class="pano-karti">
   <header>
-    <h2>Teslimi geçen ve {{ YAKLASAN_GUN }} gün içinde teslim edilecek siparişler</h2>
-    <span>{% if yaklasan_toplam > yaklasanlar | length %}{{ yaklasan_toplam }} siparişin en acil {{ yaklasanlar | length }}'sı · <a class="baslik-baglanti" href="{{ url_for('siparisler.liste') }}">tümü</a>{% else %}{{ yaklasan_toplam }} sipariş{% endif %}</span>
+    <h2>Makine · teslimi geçen ve {{ YAKLASAN_GUN }} gün içinde</h2>
+    <span>{% if yaklasan_toplam > yaklasanlar | length %}{{ yaklasan_toplam }} siparişin en acil {{ yaklasanlar | length }}'sı · <a class="baslik-baglanti" href="{{ url_for('siparisler.liste', durum='acik') }}">tümü</a>{% else %}{{ yaklasan_toplam }} sipariş{% endif %}</span>
   </header>
   {% if yaklasanlar %}
   <div class="kaydirilabilir">
@@ -110,8 +112,37 @@
     </table>
   </div>
   {% else %}
-  <p class="pano-icerik soluk">Teslimi geçen ya da {{ YAKLASAN_GUN }} gün içinde teslim edilecek sipariş yok.</p>
+  <p class="pano-icerik soluk">Teslimi geçen ya da {{ YAKLASAN_GUN }} gün içinde teslim edilecek makine siparişi yok.</p>
   {% endif %}
 </section>
+
+<section class="pano-karti">
+  <header>
+    <h2>Yedek parça · teslimi geçen ve {{ YAKLASAN_GUN }} gün içinde</h2>
+    <span>{% if yedek_toplam > yedekler | length %}{{ yedek_toplam }} siparişin en acil {{ yedekler | length }}'sı · {% else %}{{ yedek_toplam }} sipariş · {% endif %}<a class="baslik-baglanti" href="{{ url_for('yedek_parca.liste') }}">yedek parça ekranı</a></span>
+  </header>
+  {% if yedekler %}
+  <div class="kaydirilabilir">
+    <table class="tablo">
+      <thead><tr><th>Sipariş</th><th>Müşteri</th><th>Teslim</th><th>Durum</th><th class="sayisal">Kalem</th></tr></thead>
+      <tbody>
+        {% for o in yedekler %}
+        {% set adres = url_for('siparisler.kart', siparis_no=o.siparis.siparis_no) %}
+        <tr class="tiklanir" data-adres="{{ adres }}">
+          <td><a class="tablo-baglanti" href="{{ adres }}">{{ o.siparis.siparis_no }}</a></td>
+          <td>{{ o.siparis.musteri or '' }}</td>
+          <td class="sayisal">{{ o.teslim | tarih }}</td>
+          <td><span class="etiket {{ o.kalan[1] }}">{{ o.kalan[0] }}</span></td>
+          <td class="sayisal">{{ o.diger_kalem }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="pano-icerik soluk">Teslimi geçen ya da {{ YAKLASAN_GUN }} gün içinde teslim edilecek yedek parça siparişi yok.</p>
+  {% endif %}
+</section>
+</div>
 {% endif %}
 {% endblock %}

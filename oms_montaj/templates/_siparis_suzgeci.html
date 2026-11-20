@@ -1,7 +1,12 @@
 {# Siparişler ekranının süzgeç çubuğu (pano ve liste): arama, durum, sipariş tipi, ürün ailesi. Durum "Açık"
-   iken pano, başka bir durum seçilince liste görünür. sayilar: durum → sipariş sayısı (panoda yok). #}
-{% macro siparis_suzgeci(secim, sayilar=None) -%}
+   iken pano, başka bir durum seçilince liste görünür. sayilar: durum → sipariş sayısı (panoda yok).
+   s=1: seçim saklanır, başka ekrana geçip dönünce süzgeç yerinde kalır; panodaki etiket ve kişi süzgeçleri de
+   korunur. #}
+{% macro siparis_suzgeci(secim, sayilar=None, etiketler=(), kisi=None) -%}
 <form class="suzgec" method="get" role="search">
+  <input type="hidden" name="s" value="1">
+  {% for e in etiketler %}<input type="hidden" name="etiket" value="{{ e }}">{% endfor %}
+  {% if kisi %}<input type="hidden" name="kisi" value="{{ kisi }}">{% endif %}
   <input type="search" name="ara" value="{{ secim.ara }}" placeholder="Sipariş no, müşteri, ürün, seri no, iş emri no" aria-label="Ara">
   <select name="durum" aria-label="Durum">
     {% for anahtar, ad in DURUM_SUZGECLERI.items() %}

@@ -422,6 +422,16 @@ GOCLER = [
     ALTER TABLE urunler ADD COLUMN kontrol_muaf INTEGER NOT NULL DEFAULT 0;
     UPDATE urunler SET kontrol_muaf = 1 WHERE asama IN ('sevke_hazir', 'sevk_edildi');
     """,
+    # 25: uygulamanın Ayarlar'dan girilen değerleri (19/11/2026): motor açılışı için WhatsApp'tan haber verilecek
+    # kişinin hitabı, telefon numarası ve mesaj metni (motor_acilisi.py). Gerçek veri olduğu için git'e girmez.
+    """
+    CREATE TABLE ayarlar (
+        anahtar TEXT PRIMARY KEY,
+        deger TEXT,
+        zaman TEXT NOT NULL,
+        kullanici_id INTEGER REFERENCES kullanicilar(id)
+    );
+    """,
 ]
 
 

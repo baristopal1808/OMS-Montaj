@@ -49,6 +49,25 @@ def test_pano_kartlari_ve_suzgecler(istemci, uygulama, gonder, ekip, yukle):  # 
     assert "PP-536-NF" in sayfa(istemci, "/siparisler?etiket=Test aşamasında")
 
 
+def test_suzgec_baska_ekrana_gecince_kalir(istemci, uygulama, ekip, yukle):  # noqa: F811
+    # Kullanıcı, 19/11/2026: PP'ye süzülen pano, başka ekrana geçip menüden dönünce yine PP'ye süzülü açılır
+    yuklenmis(yukle)
+    secili = sayfa(istemci, "/siparisler?etiket=PP&s=1")
+    assert "SVR-50-NF-BSP</strong>" not in secili and "Süzgeçleri temizle" in secili
+    sayfa(istemci, "/")  # Özet'e geçildi
+    yanit = istemci.get("/siparisler")  # menüden dönüldü
+    assert yanit.status_code == 302 and yanit.headers["Location"].endswith("/siparisler?etiket=PP")
+    assert "SVR-50-NF-BSP</strong>" not in sayfa(istemci, yanit.headers["Location"])
+    # Özet'teki bağlantılar kendi süzgeciyle açılır, saklananı değiştirmez
+    assert istemci.get("/siparisler?teslim=gecikti").status_code == 200
+    assert istemci.get("/siparisler").headers["Location"].endswith("/siparisler?etiket=PP")
+    # Süzgeçlerin hepsi kaldırılınca saklanan da silinir; arama ve aile süzgeci de saklanır
+    assert "SVR-50-NF-BSP</strong>" in sayfa(istemci, "/siparisler?s=1")
+    assert istemci.get("/siparisler").status_code == 200
+    istemci.get("/siparisler?s=1&ara=&durum=acik&tip=&aile=PP")
+    assert istemci.get("/siparisler").headers["Location"].endswith("/siparisler?durum=acik&aile=PP")
+
+
 def test_varsayilan_atama(istemci, uygulama, gonder, ekle, ekip, yukle):  # noqa: F811
     yuklenmis(yukle)
     ekle("test.ikinci")

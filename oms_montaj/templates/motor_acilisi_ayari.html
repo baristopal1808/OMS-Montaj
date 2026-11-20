@@ -1,0 +1,21 @@
+{% extends "taban.html" %}
+{% block baslik %}Motor açılışı{% endblock %}
+{% block icerik %}
+<p class="geri"><a href="{{ url_for('ekranlar.ayarlar') }}">← Ayarlar</a></p>
+<h1>Motor açılışı bildirimi</h1>
+<p class="soluk">Volvo motorlu kabinin testi tamamlanınca uygulama motor açılışı için hazır bir WhatsApp mesajı önerir.
+  Mesaj, WhatsApp'ta yazılmış olarak açılır; yalnızca "Gönder"e basılır. Bu bilgiler yalnızca uygulamanın veritabanında durur.</p>
+{% set ekip = g.kullanici.rol == 'ekip' %}
+<form method="post" class="kutu dar form" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}">
+  <label class="alan"><span>Hitap <small class="soluk">(mesajın başında yazar; örneğin "Ad Bey")</small></span>
+    <input type="text" name="hitap" value="{{ ayar.hitap }}" maxlength="60"{% if not ekip %} disabled{% endif %}></label>
+  <label class="alan"><span>Telefon numarası <small class="soluk">(ülke koduyla; örneğin 90 5xx xxx xx xx)</small></span>
+    <input type="tel" name="telefon" value="{{ ayar.telefon }}" maxlength="25" inputmode="tel"{% if not ekip %} disabled{% endif %}></label>
+  <label class="alan"><span>Mesaj metni <small class="soluk">({hitap} kişinin hitabıyla, {motor} motor seri no'larıyla değişir)</small></span>
+    <textarea name="mesaj" rows="4"{% if not ekip %} disabled{% endif %}>{{ ayar.mesaj }}</textarea></label>
+  <p class="kucuk"><span class="soluk">Örnek:</span> {{ ornek }}</p>
+  {% if ekip %}<button type="submit" class="dugme">Kaydet</button>{% endif %}
+</form>
+<p class="soluk kucuk">Mesaj metnini silip kaydederseniz varsayılan metin geri gelir: {{ VARSAYILAN_MESAJ }}</p>
+{% endblock %}

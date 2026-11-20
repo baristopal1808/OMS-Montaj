@@ -21,7 +21,7 @@
 <p class="suzgec-notu">
   {% if teslim_suzgeci %}Yalnızca "{{ teslim_suzgeci }}" gösteriliyor{% endif %}
   {% if tarih_araligi %}Makine teslimi {{ tarih_araligi[0] | tarih }}{% if tarih_araligi[1] != '9999-12-31' %}–{{ tarih_araligi[1] | tarih }} arasında{% else %} ve sonrasında{% endif %} olan siparişler{% endif %}
-  · <a href="{{ url_for('siparisler.liste', ara=secim.ara or None, durum=secim.durum, tip=secim.tip or None, aile=secim.aile or None) }}">bütün siparişler</a>
+  · <a href="{{ url_for('siparisler.liste', ara=secim.ara or None, durum=secim.durum, tip=secim.tip or None, aile=secim.aile or None, s=1) }}">bütün siparişler</a>
 </p>
 {% endif %}
 {% if ozetler %}

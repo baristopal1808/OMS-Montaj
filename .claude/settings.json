@@ -27,5 +27,13 @@
   },
   "skillOverrides": {
     "kaydet": "user-invocable-only"
+  },
+  "permissions": {
+    "allow": [
+      "PowerShell(git push)",
+      "Bash(git push)",
+      "PowerShell(git push -u origin main)",
+      "Bash(git push -u origin main)"
+    ]
   }
 }

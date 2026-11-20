@@ -102,14 +102,15 @@
   <p class="soluk">ERP'den aldığınız "Sipariş talepleri" Excel'ini <a href="{{ url_for('erp.yukleme') }}">ERP yükleme</a> ekranından yükleyin.</p>
 </div>
 {% else %}
-{{ siparis_suzgeci(secim) }}
+{{ siparis_suzgeci(secim, etiketler=etiketler, kisi=kisi) }}
 <div class="pano-suzgecleri">
   <a class="suzgec-cip{% if kisi == ben %} secili{% endif %}" href="{{ pano_adresi(etiketler, None if kisi == ben else ben, **ortak) }}">Bana atananlar</a>
   {% for e in etiketler %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler | reject('equalto', e) | list, kisi, **ortak) }}" title="Süzgeçten çıkar">{{ e }} ×</a>{% endfor %}
   {% if kisi and kisi != ben %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, None, **ortak) }}" title="Süzgeçten çıkar">{{ kisi_adi or 'Kişi' }} ×</a>{% endif %}
   {% if teslim_suzgeci %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, kisi, **dict(ortak, teslim=None)) }}" title="Süzgeçten çıkar">{{ teslim_suzgeci }} ×</a>{% endif %}
   {% if tarih_araligi %}<a class="suzgec-cip secili" href="{{ pano_adresi(etiketler, kisi, **dict(ortak, bas=None, bit=None)) }}" title="Süzgeçten çıkar">Teslim {{ tarih_araligi[0] | tarih }}{% if tarih_araligi[1] != '9999-12-31' %}–{{ tarih_araligi[1] | tarih }}{% else %} ve sonrası{% endif %} ×</a>{% endif %}
-  <span class="soluk kucuk">Etikete ya da kişiye tıklayınca pano ona süzülür.{% if ekip %} Kartın ⋯ düğmesiyle aşama değişir.{% endif %}</span>
+  {% if etiketler or kisi or teslim_suzgeci or tarih_araligi or secim.ara or secim.tip or secim.aile %}<a class="suzgec-cip" href="{{ pano_adresi() }}" title="Bütün süzgeçleri kaldır">Süzgeçleri temizle</a>{% endif %}
+  <span class="soluk kucuk">Etikete ya da kişiye tıklayınca pano ona süzülür; süzgeç başka ekrana geçince de kalır.{% if ekip %} Kartın ⋯ düğmesiyle aşama değişir.{% endif %}</span>
 </div>
 
 <div class="pano">

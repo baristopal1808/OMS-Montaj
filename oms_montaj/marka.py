@@ -16,7 +16,9 @@ marka/musteri-KOD.png (ya da .svg) aranır. Sipariş kutularında zemin müşter
 döner, yazılar beyazlaşır, logo arkada beyaz bir filigran olarak görünür. Dosyada
 olmayan müşterilerde OMS logosu ve OMS kırmızısı kullanılır; "*;#renk" satırı bu rengi
 değiştirir. Satırın sonuna eklenen "vibro=VH" alanı, o müşterinin montaj formlarında SVR yerine
-VH yazdırır (formlar.py). Müşteri kodları gerçek müşteriyi tanıttığı için git'e girmez; bu dosyada durur.
+VH yazdırır (formlar.py); "kabin_seri=evet" alanı, o müşterinin güç ünitelerinde kontrol listesine
+"müşterinin kabin seri no'su"nu ekler. Müşteri kodları gerçek müşteriyi tanıttığı için git'e girmez;
+bu dosyada durur.
 """
 
 import io
@@ -78,12 +80,16 @@ def _marka_klasoru():
 
 
 VIBRO_ONEKI = re.compile(r"^vibro\s*=\s*([A-Za-z]{2,4})$", re.IGNORECASE)
+KABIN_SERI = re.compile(r"^kabin_seri\s*=\s*(evet|e|1)$", re.IGNORECASE)
 
 
 @lru_cache(maxsize=2)
 def _musteri_ayarlari(yol, _surum):
-    """{KOD: (renk, logo dosyasının adı ya da None, vibro öneki ya da None)}. Satırın sonundaki "vibro=VH"
-    alanı, o müşterinin formlarında (proje takip kartı, test formları) SVR yerine yazılacak öneki verir."""
+    """{KOD: (renk ya da None, logo dosyasının adı ya da None, vibro öneki ya da None, kabin seri no istenir mi)}.
+    Satırın sonundaki "vibro=VH" alanı, o müşterinin formlarında (proje takip kartı, test formları) SVR yerine
+    yazılacak öneki verir. "kabin_seri=evet" alanı, o müşterinin siparişindeki güç ünitesinde "müşterinin kabin seri
+    no'su" sorulsun diye yazılır (kullanıcı, 19/11/2026). Renk boş bırakılabilir ("KOD;;kabin_seri=evet"): müşteri
+    o zaman diğer müşterilerin rengiyle görünür."""
     ayarlar = {}
     for satir in Path(yol).read_text(encoding="utf-8-sig").splitlines():
         satir = satir.strip()
@@ -92,8 +98,9 @@ def _musteri_ayarlari(yol, _surum):
         kod, renk, *kalan = (p.strip() for p in satir.split(";"))
         logo = next((k for k in kalan if LOGO_ADI.match(k)), None)
         vibro = next((e.group(1).upper() for k in kalan if (e := VIBRO_ONEKI.match(k))), None)
-        if (kod == DIGERLERI or KOD.match(kod)) and RENK.match(renk):
-            ayarlar[kod.upper()] = (renk, logo, vibro)
+        kabin = any(KABIN_SERI.match(k) for k in kalan)
+        if (kod == DIGERLERI or KOD.match(kod)) and (RENK.match(renk) or (not renk and kod != DIGERLERI)):
+            ayarlar[kod.upper()] = (renk or None, logo, vibro, kabin)
     return ayarlar
 
 
@@ -127,11 +134,18 @@ def vibro_oneki(siparis_no):
     return ayar[2] if ayar else None
 
 
+def kabin_seri_istenir_mi(siparis_no):
+    """Müşteri, kabin için kendi seri no'sunu veriyor mu (musteriler.txt satırında "kabin_seri=evet")."""
+    kod = _musteri_kodu(siparis_no)
+    ayar = _musteriler().get(kod) if kod else None
+    return bool(ayar and ayar[3])
+
+
 def musteri_markasi(siparis_no):
     """Siparişin müşterisinin rengi ve logosu: {"renk", "logo"}. Müşteri tanımlı değilse OMS."""
     kod = _musteri_kodu(siparis_no)
     ayarlar = _musteriler()
-    renk = (ayarlar.get(kod) or ayarlar.get(DIGERLERI) or (VARSAYILAN_RENK,))[0]
+    renk = ((ayarlar.get(kod) or (None,))[0] or (ayarlar.get(DIGERLERI) or (None,))[0] or VARSAYILAN_RENK)
     dosya = musteri_logo_dosyasi(kod) if kod else None
     logo = url_for("marka.musteri_logosu", kod=kod, s=int(dosya.stat().st_mtime)) if dosya else logo_adresi()
     return {"renk": renk, "logo": logo}

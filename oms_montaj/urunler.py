@@ -6,8 +6,9 @@ Sayfada makinenin bilgileri, numaraları (şasi no, motor seri no; kilitli), iş
 (alt montajlar: tamamlanan ve bekleyen) görünür. ERP'den okunan motor seri no teyit edilene kadar "!" ile
 görünür; teyit edilince nihai numara olur. İş emrinin eksik malzemeleri ve yarı mamulleri (kırılıma tıklayınca
 açılır) ve "iş emri stoğa girmiş ama ERP İmalatta" uyarısı da burada görünür ve cevaplanır. Ekip aşamayı
-burada değiştirir, not yazar ve kontrol listesini (kontrol_listesi.py) işaretler; kartın zaman akışı
-(zaman_akisi.py) da burada görünür. Fotoğraflar 4. adımın sonraki parçasında.
+burada değiştirir, not yazar ve kontrol listesini (kontrol_listesi.py) işaretler; notlar ve kartın zaman akışı
+(zaman_akisi.py) başlıktaki düğmeyle açılan pencerede görünür (kullanıcı, 19/11/2026). Kabin testi bitince motor
+açılışı penceresi açılır (motor_acilisi.py). Fotoğraflar 4. adımın sonraki parçasında.
 
 İş emri sayfası bir ürüne dağıtılmamış iş emirleri (alt montaj, yarı mamul, stok) için de aynı bilgileri verir.
 """
@@ -25,8 +26,10 @@ from .kimlik import ekip_gerekli, guvenli_adres
 from .kontrol_listesi import (
     EKSPER_DURUMLARI, GUNLU, ISARETLENEN, KABIN, KABIN_ADI, KISA_ADLAR, KURAL_ASAMASI, YAPILDI, eksik_maddeler,
     eksik_metni, gecis_engeli, gun, isaretle, kabin_alani_var_mi, kontrol_listeleri, kurala_tabi_mi, son_isaretler,
+    test_bitti_mi,
 )
 from .kontrol_listesi import sablon as kontrol_sablonu
+from .motor_acilisi import asama_sonrasi as acilis_sorusu, bildirim as acilis_bildirimi
 from .numaralar import (
     KAYNAKLAR, MOTOR_ALANLARI, TEYIT, TEYITSIZ, kayit_numarasi, numara_alanlari, numara_degistir, numara_gecmisi,
     numara_yaz, sablon, urun_numaralari,
@@ -154,6 +157,7 @@ def sayfa(urun_id):
         kontrol_kurali=kurala_tabi_mi(urun),
         kabin=son_isaretler(vt, [urun_id]).get(urun_id, {}).get(KABIN) if kabin_alani_var_mi(urun) else None,
         kabin_alani=kabin_alani_var_mi(urun),
+        acilis=acilis_bildirimi(vt, urun),  # motor açılışı: test bitince WhatsApp mesajı (Volvo motorlu kabinde)
         bugun=date.today().isoformat(),
         EKSPER_DURUMLARI=EKSPER_DURUMLARI,
         KISA_ADLAR=KISA_ADLAR,
@@ -203,9 +207,10 @@ def asama(urun_id):
             asama_degistir(vt, urun_id, urun["asama"], yeni, metin, g.kullanici["id"])
         flash(f"{urun['urun_kodu']} ({urun['siparis_no']}): aşama değişti: "
               f"{ASAMALAR[urun['asama']]} → {ASAMALAR[yeni]}.")
+        acilis_sorusu(urun, urun["asama"], yeni)  # kabin testi bittiyse motor açılışı penceresi açılır
     # Panodaki kartın menüsünden gelindiyse panoya, ürün sayfasından gelindiyse ürün sayfasına döner
     sonra = request.form.get("sonra")
-    return redirect(guvenli_adres(sonra) if sonra else url_for(".sayfa", urun_id=urun_id) + "#akis")
+    return redirect(guvenli_adres(sonra) if sonra else url_for(".sayfa", urun_id=urun_id) + "#asama")
 
 
 @bp.route("/urun/<int:urun_id>/not", methods=["POST"])
@@ -330,6 +335,9 @@ def kontrol(urun_id, madde):
         yeni = islem
         if simdiki and simdiki["deger"] == yeni:
             flash(f"{ad} zaten işaretli.")
+            yeni = False
+        elif madde == "motor_acilisi" and not test_bitti_mi(urun):
+            flash("Motor açılışı kabin testi tamamlanınca (Temizlik aşamasından itibaren) işaretlenir.")
             yeni = False
         elif madde in GUNLU or (madde == "eksper" and yeni == YAPILDI):
             gun_ = gun(request.form.get("tarih"))

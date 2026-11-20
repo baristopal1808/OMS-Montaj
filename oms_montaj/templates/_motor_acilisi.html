@@ -1,0 +1,45 @@
+{# Motor açılışı (motor_acilisi.py): kabin testi bitince açılan pencere ve hazır WhatsApp mesajının düğmesi.
+   b: motor_acilisi.bildirim. Mesaj yalnızca Volvo motorlu kabinde önerilir; telefon numarası Ayarlar'dan girilir. #}
+{% macro whatsapp_dugmesi(b) -%}
+{% if b.telefon_var %}
+<span class="whatsapp-dugmeleri">
+  <a class="dugme whatsapp" href="{{ b.uygulama }}" data-acilis-haberi="{{ url_for('motor_acilisi.haber', urun_id=b.urun_id) }}"
+    data-csrf="{{ csrf_anahtari() }}" title="WhatsApp mesaj yazılmış olarak açılır; yalnızca Gönder'e basın">{{ simge('mesaj') }}WhatsApp'ta mesajı aç</a>
+  <a class="kucuk" href="{{ b.web }}" target="_blank" rel="noopener" data-acilis-haberi="{{ url_for('motor_acilisi.haber', urun_id=b.urun_id) }}"
+    data-csrf="{{ csrf_anahtari() }}">WhatsApp Web ile aç</a>
+</span>
+{% else %}
+<p class="soluk kucuk">Hazır WhatsApp mesajı için <a href="{{ url_for('motor_acilisi.ayar_ekrani') }}">Ayarlar &gt; Motor açılışı</a> ekranından telefon numarasını girin.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro haber_bilgisi(haber) -%}
+{% if haber %}<p class="kontrol-kim soluk">WhatsApp'tan haber verildi · {{ haber.ad_soyad or '' }}, {{ haber.zaman | zaman }}</p>{% endif %}
+{%- endmacro %}
+
+{% macro acilis_penceresi(b) -%}
+<dialog class="pencere acilis-penceresi" data-kendiliginden aria-labelledby="acilis-baslik">
+  <div class="pencere-ic">
+    <div class="pencere-ust">
+      <h2 id="acilis-baslik">Kabin testi tamamlandı: motor açılışı gerekli</h2>
+      <form method="dialog"><button type="submit" class="pencere-kapat" aria-label="Kapat">×</button></form>
+    </div>
+    <p class="soluk"><strong>{{ b.urun_kodu }}</strong>{% if b.siparis_no %} · {{ b.siparis_no }}{% endif %}</p>
+    {% if b.volvo %}
+    <p>Motor açılışı için haber verelim mi? WhatsApp mesaj yazılmış olarak açılır; yalnızca "Gönder"e basın.</p>
+    {% if b.hitap %}<p class="kucuk"><span class="soluk">Kime:</span> {{ b.hitap }}</p>{% endif %}
+    <blockquote class="mesaj-onizleme">{{ b.metin }}</blockquote>
+    {{ whatsapp_dugmesi(b) }}
+    {{ haber_bilgisi(b.haber) }}
+    {% else %}
+    <p>Motor açılışı yapıldı mı? Yapıldıysa gününü yazıp işaretleyin; yapılmadıysa sonra kontrol listesinden işaretleyebilirsiniz.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('urunler.kontrol', urun_id=b.urun_id, madde='motor_acilisi') }}" class="kontrol-formu pencere-formu">
+      <input type="hidden" name="csrf" value="{{ csrf_anahtari() }}"><input type="hidden" name="islem" value="yapildi">
+      <label class="alan"><span>Açılış yapıldıysa, yapıldığı gün</span><input type="date" name="tarih" max="{{ bugun_tarihi() }}" required></label>
+      <button type="submit" class="dugme ikincil kucuk-dugme">Motor açılışı yapıldı</button>
+    </form>
+    <form method="dialog" class="pencere-alt"><button type="submit" class="dugme ikincil">Şimdi değil</button></form>
+  </div>
+</dialog>
+{%- endmacro %}

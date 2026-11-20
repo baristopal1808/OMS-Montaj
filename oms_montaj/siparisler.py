@@ -14,8 +14,9 @@ başka açık kalem varsa sayılmaz.
 import json
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
+from urllib.parse import urlencode
 
-from flask import Blueprint, abort, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, g, redirect, render_template, request, session, url_for
 
 from .asamalar import ASAMALAR, SIRA
 from .erp_aktarim import BEKLEMEDE, IPTAL, REVIZYON_ADLARI, eksik_siralar, kapali_mi
@@ -216,8 +217,31 @@ def _arama(vt, metin):
     }
 
 
+SECIM_ANAHTARI = "siparisler_secimi"  # oturumda saklanan son süzgeç (adresin sorgu kısmı)
+SECIM_ISARETI = "s"  # ekranın kendi süzgeçlerinden gelen adres: seçim saklanır
+
+
+def _secimi_hatirla():
+    """Süzgeç başka ekrana geçince kaybolmasın (kullanıcı, 19/11/2026): ekranın kendi süzgeçleri (etiket, kişi,
+    arama, durum, tip, aile; adreste s=1) oturumda saklanır, menüden ya da "← Siparişler"den süzgeçsiz gelinince
+    saklanan süzgeç geri gelir. Özet'teki bağlantılar (teslimi geçen gibi) kendi süzgeciyle açılır, saklananı
+    değiştirmez. Süzgeçlerin hepsi kaldırılınca saklanan da silinir. Geri gelinecek adres ya da None döner."""
+    if not request.args:
+        kayitli = session.get(SECIM_ANAHTARI)
+        return f"{url_for('siparisler.liste')}?{kayitli}" if kayitli else None
+    if request.args.get(SECIM_ISARETI):
+        sorgu = urlencode([(k, v) for k, v in request.args.items(multi=True) if k != SECIM_ISARETI and v])
+        if sorgu:
+            session[SECIM_ANAHTARI] = sorgu
+        else:
+            session.pop(SECIM_ANAHTARI, None)
+    return None
+
+
 @bp.route("/siparisler")
 def liste():
+    if geri := _secimi_hatirla():
+        return redirect(geri)
     secim = {alan: request.args.get(alan, "").strip() for alan in ("ara", "durum", "tip", "aile", "teslim", "bas", "bit")}
     secim["durum"] = secim["durum"] if secim["durum"] in DURUM_SUZGECLERI else "acik"
     teslim_suzgeci = TESLIM_SUZGECLERI.get(secim["teslim"])
@@ -294,9 +318,9 @@ def _pano(vt, ozetler, secim, bulunan, tarih_araligi, teslim_suzgeci, toplam):
 
 
 def pano_adresi(etiketler=(), kisi=None, **digerleri):
-    """Pano adresi; boş değerler adrese yazılmaz."""
+    """Pano adresi; boş değerler adrese yazılmaz. s=1: ekranın kendi süzgeci, seçim saklanır (_secimi_hatirla)."""
     return url_for("siparisler.liste", etiket=list(etiketler) or None, kisi=kisi,
-                   **{k: v for k, v in digerleri.items() if v})
+                   **{k: v for k, v in digerleri.items() if v}, **{SECIM_ISARETI: 1})
 
 
 @bp.app_context_processor

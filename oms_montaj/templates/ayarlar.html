@@ -9,6 +9,12 @@
       <span class="soluk">Hesaplar, roller ve geçici şifreler</span>
     </div>
   </li>
+  <li>
+    <div class="satir-ana">
+      <a class="satir-baslik" href="{{ url_for('motor_acilisi.ayar_ekrani') }}">Motor açılışı</a>
+      <span class="soluk">Kabin testi bitince WhatsApp'tan haber verilecek kişinin hitabı, telefonu ve mesaj metni</span>
+    </div>
+  </li>
   {% for ad, aciklama in [
     ('Etiketler', 'Ürün grubu, kaynak, iş türü ve bekleme etiketleri'),
     ('Aşamalar', 'Kartların geçtiği aşamaların adı ve sırası'),

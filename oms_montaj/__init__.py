@@ -14,8 +14,8 @@ from pathlib import Path
 from flask import Flask, render_template, url_for
 
 from . import (
-    asistan, ekranlar, erp, formlar, kimlik, kullanicilar, makineler, marka, ozet, sevkiyat, siparisler, stok,
-    urunler, veritabani, yapilacaklar, yedek_parca,
+    asistan, ekranlar, erp, formlar, kimlik, kullanicilar, makineler, marka, motor_acilisi, ozet, sevkiyat, siparisler,
+    stok, urunler, veritabani, yapilacaklar, yedek_parca,
 )
 from .asamalar import ASAMALAR
 from .bicim import SUZGECLER
@@ -88,6 +88,7 @@ def uygulama_olustur(ayarlar=None):
     uygulama.register_blueprint(urunler.bp)
     uygulama.register_blueprint(stok.bp)
     uygulama.register_blueprint(formlar.bp)
+    uygulama.register_blueprint(motor_acilisi.bp)
     uygulama.register_blueprint(asistan.bp)
     uygulama.register_blueprint(yapilacaklar.bp)
     uygulama.register_blueprint(erp.bp)

@@ -655,29 +655,75 @@ details.kirilim .dugmeler { display: flex; flex-wrap: wrap; gap: .5rem; margin-t
 .numara-teyit { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; flex-basis: 100%; max-width: 36rem; padding: .55rem .8rem; background: var(--turuncu-soluk); border: 1px solid var(--turuncu-kenar); border-radius: 8px; }
 .numara-teyit .secenek { align-items: center; }
 .numara-teyit .secenek input { margin: 0; }
-/* Aşama ve zaman akışı (ürün sayfası): geçilen aşamalar yeşil, bulunulan kırmızı; akışta notlar mavi zeminli */
-/* Aşama yazıları ve çıktı düğmeleri büyük yazılır (kullanıcı, 10/11/2026) */
-.asama-cizgisi { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.1rem; padding: 0; list-style: none; }
-.asama-cizgisi li { padding: .35rem .9rem; font-size: 1.05rem; font-weight: 550; color: var(--soluk); background: var(--zemin); border: 1px solid var(--cizgi); border-radius: 99px; }
-.asama-cizgisi li.gecti { color: var(--yesil); background: var(--yesil-zemin); border-color: var(--yesil-kenar); }
-.asama-cizgisi li.simdiki { font-weight: 700; color: #fff; background: var(--vurgu); border-color: var(--vurgu); }
-/* Ürün sayfası: geniş ekranda solda ürünün kendisi, sağda notlar ve zaman akışı; dar ekranda tek sütun
-   (başlık, aşama, notlar ve zaman akışı, sonra gerisi). */
-.urun-duzeni { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 1.75rem; }
-@media (min-width: 1500px) {
-  .urun-duzeni {
-    grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
-    grid-template-areas: "ust yan" "asama yan" "govde yan";
-    grid-template-rows: auto auto 1fr;
-    align-items: start;
-  }
-  .urun-duzeni > .urun-bas { grid-area: ust; }
-  .urun-duzeni > .urun-asama { grid-area: asama; }
-  .urun-duzeni > .urun-yan { grid-area: yan; }
-  .urun-duzeni > .urun-govde { grid-area: govde; }
+/* Aşama (ürün sayfası): yalnızca bulunulan aşama görünür; üzerine gelince (dokununca) baloncukta bütün sıra,
+   geçilenler yeşil, bulunulan kırmızı (kullanıcı, 19/11/2026) */
+.asama-ust { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin-bottom: .8rem; }
+.asama-basligi { margin: 0; font-size: 1rem; }
+.asama-ozeti { position: relative; }
+.asama-hap { display: inline-flex; align-items: baseline; gap: .5rem; padding: .3rem .95rem; font: inherit; font-weight: 700; color: #fff; background: var(--vurgu); border: 0; border-radius: 99px; cursor: help; }
+.asama-hap small { font-size: .78rem; font-weight: 600; opacity: .8; }
+.asama-balonu {
+  position: absolute; z-index: 40; top: calc(100% + .55rem); left: 0; display: grid; gap: .1rem; min-width: 14rem;
+  margin: 0; padding: .65rem .9rem; list-style: none; background: var(--yuzey); border: 1px solid var(--cizgi);
+  border-radius: 10px; box-shadow: 0 12px 32px rgb(16 24 40 / 18%);
+  opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .15s ease, transform .15s ease, visibility .15s;
 }
-.urun-bas > .kutu:last-child { margin-bottom: 1.75rem; }
-.akis-kutusu h2 { margin: 0 0 .75rem; }
+.asama-balonu::before { content: ""; position: absolute; top: -6px; left: 1.4rem; width: 10px; height: 10px; background: var(--yuzey); border: 1px solid var(--cizgi); border-width: 1px 0 0 1px; transform: rotate(45deg); }
+.asama-ozeti:hover .asama-balonu, .asama-ozeti:focus-within .asama-balonu { opacity: 1; visibility: visible; transform: none; }
+.asama-balonu li { display: flex; align-items: center; gap: .6rem; padding: .15rem 0; font-size: .92rem; color: var(--soluk); white-space: nowrap; }
+.asama-balonu li::before { content: ""; flex: none; width: .65rem; height: .65rem; border: 2px solid var(--kenar); border-radius: 50%; }
+.asama-balonu li.gecti { color: var(--yesil); }
+.asama-balonu li.gecti::before { background: var(--yesil); border-color: var(--yesil); }
+.asama-balonu li.simdiki { font-weight: 700; color: var(--yazi); }
+.asama-balonu li.simdiki::before { background: var(--vurgu); border-color: var(--vurgu); box-shadow: 0 0 0 3px rgb(196 30 36 / 22%); }
+@media (prefers-reduced-motion: reduce) { .asama-balonu { transition: none; } }
+/* Ürün sayfası sade ve sıkı (kullanıcı, 19/11/2026): bilgisayarda yazılar küçük, iki sütun (solda aşama ve kontrol
+   listesi, sağda numaralar ve iş emri); notlar ve zaman akışı başlıktaki düğmeyle açılan pencerede. Telefonda
+   tek sütun ve yazılar her zamanki boyutta. */
+@media (min-width: 900px) { .icerik.urun-sayfasi { zoom: .88; } }
+.urun-duzeni { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 1.5rem; }
+@media (min-width: 1200px) {
+  .urun-duzeni { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "ust ust" "sol sag"; align-items: start; }
+  .urun-duzeni > .urun-bas { grid-area: ust; }
+  .urun-duzeni > .urun-sol { grid-area: sol; }
+  .urun-duzeni > .urun-sag { grid-area: sag; }
+}
+.urun-bas > .kutu:last-child { margin-bottom: 1.25rem; }
+.urun-sayfasi .bolum { margin-bottom: 1.25rem; }
+.urun-sayfasi .bolum h2 { font-size: 1.05rem; }
+.urun-sayfasi .kart-baslik h1 { font-size: 1.35rem; }
+.urun-sayfasi .kutu { padding-block: .9rem; }
+/* Başlıktaki "Notlar ve zaman akışı" düğmesi: renkli zeminde yarı saydam beyaz */
+.akis-dugmesi { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .8rem; font: inherit; font-size: .88rem; font-weight: 650; color: var(--yazi); background: var(--zemin); border: 1px solid var(--cizgi); border-radius: 99px; cursor: pointer; }
+.akis-dugmesi:hover { background: var(--zemin-2); }
+.kart-baslik.musterili .akis-dugmesi { color: #fff; background: rgb(255 255 255 / 16%); border-color: rgb(255 255 255 / 55%); }
+.kart-baslik.musterili .akis-dugmesi:hover { background: rgb(255 255 255 / 28%); }
+.akis-dugmesi .simge { width: 1rem; height: 1rem; }
+.akis-sayi { padding: 0 .45rem; font-size: .78rem; background: rgb(0 0 0 / 14%); border-radius: 99px; }
+/* Açılır pencereler (notlar ve zaman akışı, motor açılışı) */
+.pencere { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); padding: 0; color: var(--yazi); background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: 14px; box-shadow: 0 24px 60px rgb(0 0 0 / 30%); }
+.pencere::backdrop { background: rgb(15 17 21 / 55%); }
+.pencere-ic { padding: 1rem 1.3rem 1.3rem; }
+.pencere-ust { position: sticky; top: -1rem; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin: -1rem -1.3rem .8rem; padding: 1rem 1.3rem .6rem; background: var(--yuzey); border-bottom: 1px solid var(--cizgi); }
+.pencere-ust h2 { margin: 0; font-size: 1.1rem; }
+.pencere-ust h2 small { font-size: .85rem; font-weight: 500; }
+.pencere-ust form { margin: 0; }
+.pencere-kapat { padding: 0 .5rem; font: inherit; font-size: 1.6rem; line-height: 1.1; color: var(--soluk); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.pencere-kapat:hover { color: var(--yazi); background: var(--zemin); }
+.akis-penceresi { width: min(54rem, calc(100vw - 2rem)); }
+.pencere-formu { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--cizgi); }
+.pencere-alt { display: flex; justify-content: flex-end; margin: .9rem 0 0; }
+/* Motor açılışı: hazır WhatsApp mesajı */
+.mesaj-onizleme { margin: .6rem 0 .9rem; padding: .7rem .9rem; white-space: pre-line; background: var(--yesil-soluk); border-left: 3px solid #1f8a4c; border-radius: 0 8px 8px 0; }
+.whatsapp-dugmeleri { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
+.dugme.whatsapp { display: inline-flex; align-items: center; gap: .45rem; color: #fff; background: #1f8a4c; border-color: #1f8a4c; text-decoration: none; }
+.dugme.whatsapp:hover { background: #18703d; border-color: #18703d; }
+.dugme.whatsapp .simge { width: 1.1rem; height: 1.1rem; }
+.kontrol-maddesi.sirada { opacity: .7; }
+.urun-sayfasi :is(.cikti, .cikti.basildi a) { min-height: 42px; font-size: .98rem; }
+.urun-sayfasi .kontrol-ust { font-size: .98rem; }
+.urun-sayfasi .numara-deger { font-size: 1rem; }
+.urun-sayfasi .kontrol-maddesi { padding: .5rem .75rem; }
 .asama-formu { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); align-items: start; gap: .75rem 1rem; }
 .asama-formu .dugme { justify-self: start; }
 .asama-formu .zorunlu { color: var(--vurgu); font-weight: 600; }
@@ -1123,10 +1169,13 @@ a.gosterge:hover { box-shadow: 0 6px 18px rgb(16 24 40 / 12%); }
   margin-bottom: 1rem;
 }
 .sevk-izgara { display: grid; grid-template-columns: minmax(0, 26rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+/* Teslimi geçen ve yaklaşan siparişler: solda makine, sağda yedek parça (kullanıcı, 19/11/2026) */
+.ozet-tablolari { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 1350px) {
   .ozet-izgara { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ozet-izgara > :last-child { grid-column: 1 / -1; }
 }
+@media (max-width: 1100px) { .ozet-tablolari { grid-template-columns: 1fr; } }
 @media (max-width: 900px) {
   .ozet-izgara, .sevk-izgara { grid-template-columns: 1fr; }
 }

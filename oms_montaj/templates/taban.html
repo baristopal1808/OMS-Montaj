@@ -94,6 +94,9 @@
       <main class="icerik {% block icerik_sinifi %}{% endblock %}">
         {{ bildirimler() }}
         {% block icerik %}{% endblock %}
+        {# Kabin testi bitince (aşama değişikliğinden sonraki sayfada) motor açılışı penceresi açılır #}
+        {% set acilis_penceresi_bilgisi = motor_acilisi_penceresi() %}
+        {% if acilis_penceresi_bilgisi %}{% from "_motor_acilisi.html" import acilis_penceresi with context %}{{ acilis_penceresi(acilis_penceresi_bilgisi) }}{% endif %}
       </main>
     </div>
   </div>

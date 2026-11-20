@@ -4,15 +4,18 @@ Planner'daki kontrol listesinin "yapıldı mı?" soruları ürünün sayfasında
 seri no, renk, yağ) zaten kendi yerlerinde durur.
 
 Güç ünitesinde (PP; siparişteki yeni makine ve stoktaki makine), çalışma sırasıyla:
-- Pompa montajı: ERP'den okunur. İş emrinin pompa montajı kırılımları (adında POMPA ve MONTAJ geçen, motor-pompa
-  hattı olmayan) stoğa girince madde kendiliğinden tamamlanmış görünür. Kırılımı olmayan ya da ERP'si geride kalan
-  iş emrinde ekip işaretler.
 - Opsiyonel ekipmanların montajı (sipariş talebindeki uzaktan erişim modülü, kablosuz kumanda seti): ayrıca
   işaretlenmez; ürün sayfasındaki opsiyonel ekipman bölümünün montaj durumundan gelir.
-- Motor açılışı: yapıldığı gün sorulur ve kaydedilir. İki motorlu güç ünitesinde de tek maddedir.
+- Motor açılışı: kabin testi tamamlanınca sorulur (kullanıcı, 19/11/2026): siparişteki makinede Temizlik ve
+  sonrasında, stoktaki makinede test edildiyse. Yapıldığı gün sorulur ve kaydedilir. İki motorlu güç ünitesinde
+  de tek maddedir. Test bitince açılır pencerede motor açılışı için hazır WhatsApp mesajı önerilir
+  (motor_acilisi.py).
 - Motor eksperi: yapılacak mı? Yapılacaksa kartta "Eksper bekleniyor" yazar; yapılınca günü kaydedilir.
 - Metal etiket.
-Siparişteki güç ünitesinde müşterinin kabin için verdiği seri no da yazılır (bilgi; kurala girmez).
+Pompa montajı maddesi kalktı (kullanıcı, 19/11/2026): pompa ana montajı iş emrine tüketildiyse takılmıştır,
+tüketilmediyse eksik malzemede görünür; ayrıca sorulmaz. Eski işaretleri zaman akışında kalır.
+Müşterinin kabin için verdiği seri no yalnızca bunu isteyen müşterilerin siparişindeki güç ünitesinde yazılır
+(marka/musteriler.txt satırında "kabin_seri=evet"; bilgi, kurala girmez).
 
 Vibrohammerda (SVR, OVR) metal etiket. Diğer ailelerin ve bakım-onarım kartlarının şablonu ileride (soru 22).
 
@@ -29,11 +32,11 @@ from datetime import date, datetime
 from .asamalar import SIRA
 from .bicim import tarih
 from .erp_aktarim import IPTAL
-from .is_emri_aktarim import kirilim_durumu
+from .marka import kabin_seri_istenir_mi
 from .urun_kurallari import EKLENTI_DURUMLARI, PP_EKLENTILERI, VARSAYILAN_EKLENTI_DURUMU, VIBROHAMMER, pp_eklentisi_mi
 
 MADDELER = {
-    "pompa_montaji": "Pompa montajı tamamlandı",
+    "pompa_montaji": "Pompa montajı tamamlandı",  # kalktı (19/11/2026); eski işaretlerin zaman akışı için
     "motor_acilisi": "Motor açılışı yapıldı",
     "eksper": "Motor eksperi",
     "metal_etiket": "Metal etiket yapıştırıldı",
@@ -42,11 +45,13 @@ KISA_ADLAR = {"pompa_montaji": "pompa montajı", "motor_acilisi": "motor açıl�
               "metal_etiket": "metal etiket"}
 KABIN = "kabin_seri_no"
 KABIN_ADI = "Müşterinin kabin seri no'su"
-ISARETLENEN = ("pompa_montaji", "motor_acilisi", "metal_etiket")  # ekip "yapıldı" diye işaretler
+ACILIS_HABERI = "acilis_haberi"  # motor açılışı için WhatsApp'tan haber verildi (bilgi; kurala girmez)
+ISARETLENEN = ("motor_acilisi", "metal_etiket")  # ekip "yapıldı" diye işaretler
 GUNLU = ("motor_acilisi",)  # işaretlerken yapıldığı gün sorulur (eksperde "yapıldı" cevabında da)
 EKSPER_DURUMLARI = {"yapilacak": "Eksper bekleniyor", "yapilmayacak": "Eksper yapılmayacak", "yapildi": "Eksper yapıldı"}
 YAPILDI = "yapildi"
 KURAL_ASAMASI = "sevke_hazir"  # kontrol listesi tamamlanmadan bu aşamaya ve sonrasına geçilmez
+TEST_SONRASI = "temizlik"  # motor açılışı kabin testi bitince (Temizlik ve sonrasında) sorulur
 ILK_GUN = date(2020, 1, 1)  # yazılan günün alt sınırı (yanlış yıl yazılmasın)
 
 
@@ -60,15 +65,24 @@ def sablon(urun):
     if (urun["kalem_id"] is not None and urun["tur"] != "kart") or urun["stok_cikis"]:
         return ()
     if urun["aile"] == "PP":
-        return ("pompa_montaji", "ekipman", "motor_acilisi", "eksper", "metal_etiket")
+        return ("ekipman", "motor_acilisi", "eksper", "metal_etiket")
     if urun["aile"] in VIBROHAMMER:
         return ("metal_etiket",)
     return ()
 
 
+def test_bitti_mi(urun):
+    """Kabin testi tamamlandı mı: siparişteki makine Temizlik ya da sonrasında, stoktaki makine test edildiyse
+    (sevk deposundaki makine test edilmiş sayılır). Motor açılışı ancak o zaman sorulur."""
+    if urun["kalem_id"] is None:
+        return urun["test_durumu"] == "edildi" or (not urun["test_durumu"] and urun["depo"] == "sevk")
+    return urun["asama"] in SIRA and SIRA[urun["asama"]] >= SIRA[TEST_SONRASI]
+
+
 def kabin_alani_var_mi(urun):
-    """Müşterinin kabin seri no'su: siparişteki güç ünitesinde."""
-    return urun["kalem_id"] is not None and urun["aile"] == "PP" and bool(sablon(urun))
+    """Müşterinin kabin seri no'su: yalnızca bunu isteyen müşterinin siparişindeki güç ünitesinde (19/11/2026)."""
+    return (urun["kalem_id"] is not None and urun["aile"] == "PP" and bool(sablon(urun))
+            and kabin_seri_istenir_mi(urun["siparis_no"]))
 
 
 def kurala_tabi_mi(urun):
@@ -105,26 +119,6 @@ def son_isaretler(vt, urun_idleri):
     return sonuc
 
 
-def pompa_kirilimi_mi(ad):
-    ad = (ad or "").upper()
-    return "POMPA" in ad and "MONTAJ" in ad and "MOTOR" not in ad
-
-
-def pompa_kirilimlari(vt, is_emri_idleri):
-    """{iş emri id: (stoğa giren, toplam)}: iş emrinin pompa montajı kırılımları."""
-    idler = [i for i in dict.fromkeys(is_emri_idleri) if i]
-    if not idler:
-        return {}
-    sonuc = {}
-    for s in vt.execute(
-        f"SELECT * FROM is_emri_satirlari WHERE is_emri_id IN ({_yer(len(idler))}) ORDER BY is_emri_id, sira_no", idler,
-    ):
-        if pompa_kirilimi_mi(s["urun_adi"]):
-            giren, toplam = sonuc.get(s["is_emri_id"], (0, 0))
-            sonuc[s["is_emri_id"]] = (giren + (kirilim_durumu(s)[1] == "kapali"), toplam + 1)
-    return sonuc
-
-
 def _ekipmanlar(vt, siparis_idleri):
     """{sipariş id: [kalem]}: siparişin opsiyonel ekipmanları (iptal edilmemiş), sipariş talebindeki sırayla."""
     idler = [i for i in dict.fromkeys(siparis_idleri) if i]
@@ -144,14 +138,14 @@ def _ekipmanlar(vt, siparis_idleri):
 
 def kontrol_listeleri(vt, urunler):
     """{ürün id: [madde]}: kontrol listesi olan ürünlerin listesi. urunler: urunler satırları (aile, kalem_id, tur,
-    stok_cikis, is_emri_id ve sipariş ürününde siparis_id alanlarıyla). Madde: {"madde", "ad", "tamam", "zorunlu",
-    "isaret" (son işaret ya da None), "erp" ((stoğa giren, toplam) pompa kırılımı ya da None), "durum" (eksperin
-    cevabı ya da opsiyonel ekipmanın montaj durumu), "kalem" (opsiyonel ekipmanın sipariş satırı)}."""
+    stok_cikis, asama, test_durumu, depo ve sipariş ürününde siparis_id alanlarıyla). Madde: {"madde", "ad", "tamam",
+    "zorunlu", "isaret" (son işaret ya da None), "durum" (eksperin cevabı ya da opsiyonel ekipmanın montaj durumu),
+    "kalem" (opsiyonel ekipmanın sipariş satırı), "sirada" (motor açılışı: test bitmediği için henüz sorulmuyor),
+    "haber" (motor açılışı: WhatsApp'tan haber verildiyse son kaydı)}."""
     urunler = [u for u in urunler if sablon(u)]
     if not urunler:
         return {}
     isaretler = son_isaretler(vt, [u["id"] for u in urunler])
-    pompa = pompa_kirilimlari(vt, [u["is_emri_id"] for u in urunler if u["aile"] == "PP"])
     ekipman = _ekipmanlar(vt, [u["siparis_id"] for u in urunler if u["kalem_id"] is not None and u["aile"] == "PP"])
     sonuc = {}
     for u in urunler:
@@ -163,19 +157,19 @@ def kontrol_listeleri(vt, urunler):
                     ad = PP_EKLENTILERI.get((k["urun_kodu"] or "").upper(), k["urun_adi"])
                     durum = k["montaj_durumu"] or VARSAYILAN_EKLENTI_DURUMU
                     liste.append({"madde": "ekipman", "ad": f"{ad} montajı", "tamam": durum == "montaj_edildi",
-                                  "zorunlu": True, "isaret": None, "erp": None, "durum": EKLENTI_DURUMLARI[durum],
-                                  "kalem": k})
+                                  "zorunlu": True, "isaret": None, "durum": EKLENTI_DURUMLARI[durum],
+                                  "kalem": k, "sirada": False, "haber": None})
                 continue
             m = {"madde": madde, "ad": MADDELER[madde], "isaret": isaret.get(madde), "zorunlu": madde != "eksper",
-                 "erp": None, "durum": None, "kalem": None}
+                 "durum": None, "kalem": None, "sirada": False, "haber": None}
             if madde == "eksper":
                 m["durum"] = m["isaret"]["deger"] if m["isaret"] else None
                 m["tamam"] = m["durum"] in (YAPILDI, "yapilmayacak")
             else:
                 m["tamam"] = m["isaret"] is not None
-            if madde == "pompa_montaji" and u["is_emri_id"] in pompa:
-                m["erp"] = pompa[u["is_emri_id"]]
-                m["tamam"] = m["tamam"] or m["erp"][0] == m["erp"][1]
+            if madde == "motor_acilisi" and not m["tamam"]:
+                m["sirada"] = not test_bitti_mi(u)
+                m["haber"] = isaret.get(ACILIS_HABERI)
             liste.append(m)
         sonuc[u["id"]] = liste
     return sonuc
@@ -227,6 +221,8 @@ def akis_kayitlari(vt, urun_id):
         if madde == KABIN:
             baslik = (f"{KABIN_ADI} silindi (önceki: {eski})" if deger is None else
                       f"{KABIN_ADI} değiştirildi: {eski} → {deger}" if eski else f"{KABIN_ADI} girildi: {deger}")
+        elif madde == ACILIS_HABERI:
+            baslik = "Motor açılışı için WhatsApp'tan haber verildi"
         elif madde == "eksper":
             baslik = {"yapilacak": "Motor eksperi yapılacak (eksper bekleniyor)", "yapilmayacak": "Motor eksperi yapılmayacak",
                       YAPILDI: "Motor eksperi yapıldı"}.get(deger, "Kontrol listesi: motor eksperinin cevabı geri alındı")

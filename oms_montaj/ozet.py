@@ -3,7 +3,8 @@
 Bilgisayar ekranında kaydırmadan sığacak şekilde düzenlenir. Sevk edilecek ürün: açık
 siparişlerde, iptal edilmemiş ve ERP'de kapanmamış kalemlerin "Sevk edildi" aşamasında
 olmayan makineleri (ANA_URUNLER; çene ve kiriş sayılmaz). Yedek parça siparişleri kendi
-ekranında izlenir, buradaki sayılara girmez. Grafikler sunucuda çizilir.
+ekranında izlenir, buradaki sayılara girmez; teslimi geçen ve yaklaşanlar makine siparişlerinin
+tablosunun yanında ayrı tabloda görünür. Grafikler sunucuda çizilir.
 """
 
 from collections import Counter
@@ -63,14 +64,20 @@ def haftalik_takvim(urunler, bugun):
 def ana():
     vt = baglanti()
     bugun = date.today()
-    tumu = [o for o in tum_ozetler(vt) if acik_mi(o) and o["siparis"]["tip"] != "yedek_parca"]
+    ozetler = tum_ozetler(vt)
+    tumu = [o for o in ozetler if acik_mi(o) and o["siparis"]["tip"] != "yedek_parca"]
     # Onay bekleyen siparişler kesin olmadığından açık sipariş ve teslim sayılarına girmez.
     acik = [o for o in tumu if o["durum"] == "acik"]
     urunler = sevk_edilecek_makineler(vt)
-    yaklasanlar = sorted(
-        (o for o in acik if o["teslim"] and date.fromisoformat(o["teslim"]) <= bugun + timedelta(days=YAKLASAN_GUN)),
-        key=lambda o: o["teslim"],
-    )
+    sinir = bugun + timedelta(days=YAKLASAN_GUN)
+
+    def yaklasan_mi(o):
+        return o["durum"] == "acik" and o["teslim"] and date.fromisoformat(o["teslim"]) <= sinir
+
+    yaklasanlar = sorted((o for o in acik if yaklasan_mi(o)), key=lambda o: o["teslim"])
+    # Yedek parça siparişleri yanda ayrı tabloda (kullanıcı, 19/11/2026); sayılara ve grafiklere girmez.
+    yedekler = sorted((o for o in ozetler if o["siparis"]["tip"] == "yedek_parca" and yaklasan_mi(o)),
+                      key=lambda o: o["teslim"])
     takvim, tarihsiz = haftalik_takvim(urunler, bugun)
 
     aileler = Counter(u["aile"] for u in urunler)
@@ -102,6 +109,8 @@ def ana():
         tarihsiz=tarihsiz,
         yaklasanlar=yaklasanlar[:TABLO_SATIRI],
         yaklasan_toplam=len(yaklasanlar),
+        yedekler=yedekler[:TABLO_SATIRI],
+        yedek_toplam=len(yedekler),
         son_yukleme=son_siparis_yuklemesi(vt),
         YAKLASAN_GUN=YAKLASAN_GUN,
         TIPLER=TIPLER,

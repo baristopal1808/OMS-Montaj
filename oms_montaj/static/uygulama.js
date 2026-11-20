@@ -277,6 +277,34 @@ document.querySelectorAll("form[data-yerinde]").forEach(function (form) {
   });
 })();
 
+// Açılır pencereler: ürün sayfasındaki notlar ve zaman akışı (başlıktaki düğmeyle; adres #akis ise, örneğin not
+// kaydedildikten sonra, açık gelir) ve kabin testi bitince kendiliğinden açılan motor açılışı penceresi. Pencerenin
+// dışına tıklayınca kapanır.
+(function () {
+  function ac(pencere) {
+    if (pencere && typeof pencere.showModal === "function" && !pencere.open) pencere.showModal();
+  }
+  document.querySelectorAll("[data-pencere-ac]").forEach(function (dugme) {
+    dugme.addEventListener("click", function () { ac(document.getElementById(dugme.dataset.pencereAc)); });
+  });
+  document.querySelectorAll("dialog.pencere").forEach(function (pencere) {
+    pencere.addEventListener("click", function (olay) { if (olay.target === pencere) pencere.close(); });
+  });
+  var kendiliginden = document.querySelector("dialog[data-kendiliginden]");
+  if (kendiliginden) ac(kendiliginden);
+  else if (location.hash === "#akis") ac(document.getElementById("akis"));
+})();
+
+// Motor açılışı: "WhatsApp'ta mesajı aç"a basınca zaman akışına "haber verildi" yazılır; WhatsApp açılır.
+document.querySelectorAll("[data-acilis-haberi]").forEach(function (baglanti) {
+  baglanti.addEventListener("click", function () {
+    var veri = new FormData();
+    veri.append("csrf", baglanti.dataset.csrf);
+    if (navigator.sendBeacon) navigator.sendBeacon(baglanti.dataset.acilisHaberi, veri);
+    else fetch(baglanti.dataset.acilisHaberi, { method: "POST", body: veri, keepalive: true });
+  });
+});
+
 // Geri alınması zor işlemlerde (stok makinesini siparişe atamak gibi) gönderilmeden önce onay sorulur.
 document.addEventListener("submit", function (olay) {
   var form = olay.target;

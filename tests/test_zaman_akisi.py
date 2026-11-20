@@ -16,8 +16,9 @@ def sayfa(istemci, adres):
 
 
 def akis(istemci, urun):
+    """Notlar ve zaman akışı penceresinin içeriği (başlıktaki düğmeyle açılır; 19/11/2026)."""
     metin = sayfa(istemci, f"/urun/{urun}")
-    return metin[metin.index('id="asama"'):metin.index('id="numaralar"')]
+    return metin[metin.index('id="akis"'):]
 
 
 def asama(uygulama, urun):
@@ -32,7 +33,7 @@ def test_asama_ileri_ve_geri_alinir(istemci, uygulama, gonder, ekip, yukle):  # 
     assert asama(uygulama, pp) == "malzeme_hazirlik"
     yanit = gonder(f"/urun/{pp}/asama", asama="test")  # ileri alırken not isteğe bağlı
     assert asama(uygulama, pp) == "test"
-    assert yanit.headers["Location"].endswith(f"/urun/{pp}#akis")  # ürün sayfasına döner (Özet'e değil)
+    assert yanit.headers["Location"].endswith(f"/urun/{pp}#asama")  # ürün sayfasına döner (Özet'e değil)
     # Geri alırken sebep zorunlu
     gonder(f"/urun/{pp}/asama", asama="montaj", **{"not": "   "})
     assert asama(uygulama, pp) == "test"
@@ -44,7 +45,10 @@ def test_asama_ileri_ve_geri_alinir(istemci, uygulama, gonder, ekip, yukle):  # 
                      "İş emri 900102 açıldı", "Sipariş talebi onaylandı"):
         assert beklenen in metin, beklenen
     assert metin.index("Aşama: Test → Montaj") < metin.index("Aşama: Malzeme hazırlık → Test")  # yeniden eskiye
-    assert '<li class="simdiki" aria-current="step">Montaj</li>' in metin
+    # Aşama kutusunda yalnızca bulunulan aşama görünür; sıra baloncukta (geçilenler, bulunulan, önündekiler)
+    urun = sayfa(istemci, f"/urun/{pp}")
+    assert 'class="asama-hap" aria-describedby="asama-sirasi">Montaj <small>3/9</small>' in urun
+    assert '<li class="simdiki" aria-current="step">Montaj</li>' in urun and '<li class="gecti">Sipariş</li>' in urun
     # Aynı aşama değişiklik sayılmaz; "Stokta" seçilemez
     gonder(f"/urun/{pp}/asama", asama="montaj")
     assert "zaten \"Montaj\" aşamasında" in sayfa(istemci, f"/urun/{pp}")

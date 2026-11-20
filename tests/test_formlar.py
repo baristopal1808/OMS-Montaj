@@ -174,6 +174,7 @@ def test_formlar_ve_asama_kurali(istemci, uygulama, gonder, ekip, yukle, formlar
     _, s = son_form(uygulama, tmp_path)
     assert [s[h].value for h in ("D5", "Q5", "D7", "M7", "T7", "AA7", "M9")] == [
         "Güç Ünitesi", "04/11/2026", "OZ-TS0001", "PP-536-NF", "0000 111 101", "VOLVO TEST-MOTOR-1", "Yok"]
+    gonder(f"/urun/{pp}/asama", asama="temizlik")  # kabin testi bitti: motor açılışı artık işaretlenebilir
     kontrolu_tamamla(gonder, pp)  # kontrol listesi de tamamlanmalı (test_kontrol_listesi.py)
     gonder(f"/urun/{pp}/asama", asama="sevke_hazir")
     assert asama(uygulama, pp) == "sevke_hazir"
